@@ -1,3 +1,4 @@
+<!-- /autoplan restore point: /Users/kyusikkim/.gstack/projects/kkyu92-content-autopilot/main-autoplan-restore-20260401-065949.md -->
 # 콘텐츠 자동화 시스템 (Content Autopilot) - 구현 플랜
 
 ## Context
@@ -556,6 +557,29 @@ Phase 4 (관리 화면)       ░░░░░░░░░░░░░░░░�
 - Lane A (프론트 중심): 트렌드+크롤링 → 에디터
 - Lane B (백엔드 중심): AI+이미지 서비스 + 배포 서비스
 - 합류: Phase 4 관리 화면
+
+---
+
+### /autoplan 2차 리뷰 (2026-04-01)
+
+**Phase 1 CEO 결론: 플랜을 Approach B (경량 웹앱)으로 단순화.**
+- Next.js 풀스택 (API Routes) + SQLite + textarea 에디터
+- Instagram/Threads 제거, Redis/Supabase 제거, FastAPI 제거, Tiptap 제거
+- 핵심: 키워드 조회 → Claude 글 생성 → Blogger 발행
+
+<!-- AUTONOMOUS DECISION LOG -->
+## Decision Audit Trail
+
+| # | Phase | Decision | Classification | Principle | Rationale | Rejected |
+|---|-------|----------|---------------|-----------|-----------|----------|
+| 1 | CEO | FastAPI → Next.js API Routes | Mechanical | P5 (explicit) | 단일 사용자 도구에 두 서버 불필요 | FastAPI 유지 |
+| 2 | CEO | Supabase → SQLite | Mechanical | P5 (explicit) | 단일 사용자에 관리형 DB 과설계 | Supabase |
+| 3 | CEO | Tiptap → textarea + markdown | Mechanical | P3 (pragmatic) | 에디터 커스터마이징은 시간 블랙홀 | Tiptap |
+| 4 | CEO | Instagram 제거 | Mechanical | P3 (pragmatic) | Facebook 심사 1주, MVP 가치 낮음 | Instagram 포함 |
+| 5 | CEO | Redis 제거 | Mechanical | P5 (explicit) | SQLite + 인메모리 캐시로 충분 | Redis |
+| 6 | CEO | Claude 단일 API | Mechanical | P4 (DRY) | Claude + OpenAI 두 API 불필요 | 듀얼 API |
+| 7 | CEO | Bearer token 인증 추가 | Mechanical | P1 (completeness) | 인증 없이 배포 불가 | 인증 없음 |
+| 8 | CEO | 네이버 블로그 우선 검토 | Taste | P3 (pragmatic) | 한국 시장에서 Blogger만으로 불충분할 수 있음 | Blogger only |
 
 ---
 
