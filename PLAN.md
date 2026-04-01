@@ -14,7 +14,7 @@ AI 콘텐츠가 실제로 검색 트래픽을 만드는지 검증하는 것이 1
 
 | 항목 | 도구 | 이유 |
 |------|------|------|
-| 프레임워크 | Next.js 15 (App Router + API Routes) | 프론트+백엔드 통합, Vercel 배포 |
+| 프레임워크 | Next.js 15 (App Router + API Routes) | 프론트+백엔드 통합, 풀스택 |
 | DB | SQLite (better-sqlite3) | 단일 사용자, 설정 없이 즉시 사용 |
 | ORM | Drizzle ORM (SQLite driver) | 타입 안전, 마이그레이션 지원 |
 | 에디터 | textarea + Markdown | 단순, 시간 절약 (Tiptap 제거) |
@@ -23,6 +23,20 @@ AI 콘텐츠가 실제로 검색 트래픽을 만드는지 검증하는 것이 1
 | UI | shadcn/ui + Tailwind CSS v4 | 빠른 UI 구성 |
 | 상태관리 | TanStack Query v5 | 서버 상태 캐싱 |
 | 패키지매니저 | pnpm | 빠르고 디스크 효율적 |
+
+**핵심 의존성**:
+- `@anthropic-ai/sdk` — Claude API 클라이언트
+- `better-sqlite3` + `drizzle-orm` + `drizzle-kit` — DB
+- `marked` — Markdown → HTML 변환
+- `sanitize-html` — HTML 살균 (발행 전 XSS 방지)
+- `nanoid` — 테이블 PK 생성
+- `google-trends-api` — Google Trends 비공식 API (npm)
+- `@tanstack/react-query` — 서버 상태 캐싱
+
+**배포 전략**:
+- **MVP**: 로컬 실행 (`pnpm dev`). SQLite는 서버리스(Vercel) 비호환이므로 로컬 우선
+- **검증 후**: VPS(Fly.io/Railway) 또는 Turso(LibSQL) 전환 검토
+- Vercel 배포 시 DB를 Turso로 교체 필요 (Drizzle ORM이라 마이그레이션 용이)
 
 **제거된 것들** (MVP 이후 재검토):
 - ~~FastAPI~~ → Next.js API Routes로 통합
@@ -33,6 +47,11 @@ AI 콘텐츠가 실제로 검색 트래픽을 만드는지 검증하는 것이 1
 - ~~OpenAI API~~ → Claude 단일 API
 - ~~DALL-E/FLUX/Unsplash~~ → 이미지는 수동 (MVP)
 - ~~예약 발행~~ → 즉시 발행만 (MVP)
+
+**예상 비용** (월):
+- Claude API: ~$5-15 (하루 5-10건 생성 기준, Sonnet 사용 시)
+- 도메인/서버: $0 (로컬 MVP) → $5-7 (VPS 전환 시)
+- Blogger API: 무료
 
 ---
 
@@ -155,6 +174,10 @@ CREATE TABLE settings (
     value TEXT NOT NULL
 );
 -- 설정 예: claude_api_key, blogger_tokens (JSON), default_tone
+
+-- 초기화 시 실행:
+PRAGMA journal_mode = WAL;       -- 동시 읽기 성능
+PRAGMA foreign_keys = ON;        -- FK 제약 활성화
 ```
 
 ### 상태 머신
@@ -182,12 +205,14 @@ CREATE TABLE settings (
 - `GET /api/keywords/trending` — 페이지 로드 시 자동 호출. Google Trends 실시간 인기 키워드 반환
 - `GET /api/keywords/search?q=키워드` — 추가 검색이 필요할 때
 
-**Google Trends 연동**:
-- 실시간 인기 검색어 (Daily Trending Searches, Korea)를 자동으로 가져옴
-- 각 키워드의 관련 키워드, 트렌드 점수 함께 표시
+**Google Trends 연동** (`google-trends-api` npm 패키지):
+- `dailyTrends({ geo: 'KR' })` — 한국 실시간 인기 검색어
+- `interestOverTime({ keyword })` — 특정 키워드 트렌드 추이
+- `relatedQueries({ keyword })` — 관련 검색어
 - 5분 간격 자동 갱신 (TanStack Query refetchInterval)
 - 캐싱: DB에 24시간 TTL로 저장, 중복 API 호출 방지
 - **비공식 API 불안정 대비**: 실패 시 마지막 캐시 데이터 표시 + 수동 검색 fallback
+- **Rate limit 대비**: 요청 간 1초 딜레이, 실패 시 지수 백오프
 
 **UI**:
 - 페이지 상단: "지금 뜨는 키워드" 섹션 (자동 로드, 검색 불필요)
@@ -313,7 +338,7 @@ User:
 - **Bearer token 인증**: 환경변수 `AUTH_TOKEN`으로 설정, 모든 API 라우트에서 검증
 - **HTML 살균**: Claude 생성물에서 script, iframe, on* 이벤트 등 제거
 - **프롬프트 인젝션 방어**: 크롤링 텍스트는 HTML 태그 제거 후 길이 제한 + 구분자로 감싸서 Claude에 전달
-- **API 키 저장**: .env.local (로컬 개발), Vercel 환경변수 (배포)
+- **API 키 저장**: .env.local (로컬 개발), 배포 시 해당 플랫폼 환경변수
 - **CORS**: 같은 오리진만 허용 (Next.js 기본)
 
 ---
@@ -384,7 +409,7 @@ Phase 5: 마무리 (CC: ~30분)
   ├─ 설정 페이지
   ├─ 테스트 작성
   ├─ .env.example + README
-  └─ Vercel 배포 설정
+  └─ 로컬 실행 가이드 (배포는 검증 후)
 ```
 
 ---
@@ -405,38 +430,15 @@ Phase 5: 마무리 (CC: ~30분)
 - [x] #16: Claude 프롬프트 → MVP 개발과 동시에 반복 개선
 - [x] #20: Google Trends → 실시간 연동 확정. 대시보드+키워드 페이지에 자동 표시
 
-## 미확정 사항
+## 확정된 사항 (기존 미확정 → 확정)
 
-- [ ] 배포 환경 (Vercel Free vs 로컬 only)
-- [ ] API 비용 월 예산 (Claude API)
-- [ ] 커스텀 도메인
+- [x] 배포 환경: MVP는 로컬 실행, 검증 후 VPS 또는 Turso 전환
+- [x] API 비용: Claude Sonnet 기준 월 $5-15 (하루 5-10건)
+- [ ] 커스텀 도메인 — 배포 전환 시 결정
 
 ---
 
-## GSTACK REVIEW REPORT (autoplan 2차, 2026-04-01)
+## Review History
 
-| Review | Trigger | Runs | Status | 핵심 발견 |
-|--------|---------|------|--------|----------|
-| CEO Review | `/plan-ceo-review` | 2 | DONE | 단순화 채택 (Approach B). 검증 전 과투자 방지 |
-| Design Review | `/plan-design-review` | 2 | DONE | 플랜-스택 불일치 해소, 상태 패턴 추가, 온보딩 설계 |
-| Eng Review | `/plan-eng-review` | 2 | DONE | SQLite 스키마 재작성, 인증/살균 추가, 테스트 전략 |
-
-### Decision Audit Trail (24건)
-
-| # | Phase | Decision | Principle |
-|---|-------|----------|-----------|
-| 1 | CEO | FastAPI → Next.js API Routes | P5 (explicit) |
-| 2 | CEO | Supabase → SQLite | P5 (explicit) |
-| 3 | CEO | Tiptap → textarea + markdown | P3 (pragmatic) |
-| 4 | CEO | Instagram 제거 | P3 (pragmatic) |
-| 5 | CEO | Redis 제거 | P5 (explicit) |
-| 6 | CEO | Claude 단일 API | P4 (DRY) |
-| 7 | CEO | Bearer token 인증 추가 | P1 (completeness) |
-| 8 | CEO | 네이버 블로그 우선 검토 (Taste) | P3 (pragmatic) |
-| 9-16 | Design | 플랜 리라이트, SQLite 스키마, textarea→HTML, API Routes, 온보딩, streaming, 상태 패턴, 프롬프트 | P1/P5 |
-| 17-24 | Eng | 리라이트, 스키마, HTML 살균, Trends API, 예약발행 제거, 테스트, 인증, 부분재생성 제거 | P1/P3/P5 |
-
-**Taste Decisions (사용자 확인 대기)**:
-1. #8: 네이버 블로그 추후 지원 여부
-2. #16: Claude 프롬프트 템플릿 반복 최적화 시점
-3. #20: Google Trends 대신 수동 키워드 기본으로 할지
+3차례 리뷰 완료 (CEO → Design → Eng). 총 24건 결정, 3건 Taste Decision 확정.
+상세 로그는 git history 참조 (`git log --oneline`).

@@ -6,3 +6,7 @@ __pycache__/
 .venv/
 .next/
 dist/
+data/
+*.db
+*.db-wal
+*.db-shm
