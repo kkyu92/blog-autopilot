@@ -1,0 +1,68 @@
+
+  name: Issue Agent — 이슈 자동 처리
+
+  on:
+    issues:
+      types: [opened, edited]
+
+  jobs:
+    process-issue:
+      runs-on: ubuntu-latest
+      permissions:
+        contents: write
+        issues: write
+        pull-requests: write
+
+      steps:
+        - uses: actions/checkout@v4
+          with:
+            fetch-depth: 0
+
+        - uses: pnpm/action-setup@v4
+          with:
+            version: 9
+
+        - uses: actions/setup-node@v4
+          with:
+            node-version: 20
+            cache: pnpm
+
+        - run: pnpm install --frozen-lockfile
+
+        - name: Run Claude Code
+          uses: anthropics/claude-code-action@v1
+          with:
+            anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+            prompt: |
+              GitHub 이슈 #${{ github.event.issue.number }}이 등록/수정되었습니다.
+
+              제목: ${{ github.event.issue.title }}
+              내용: ${{ github.event.issue.body }}
+
+              ## 처리 방법
+
+              1. 이슈 내용을 분석하고 요구사항을 파악하세요
+              2. 관련 소스 코드를 읽고 이해하세요
+              3. 구현이 명확하면:
+                 - 코드를 수정하세요
+                 - `pnpm test`로 테스트 통과 확인
+                 - `pnpm build`로 빌드 성공 확인
+                 - 변경사항을 커밋하세요 (closes #${{ github.event.issue.number }} 포함)
+              4. 불명확하면:
+                 - 이슈에 질문 코멘트를 남기세요
+                 - 코드 수정하지 마세요
+
+              ## 규칙
+              - 테스트 실패하면 코드 수정하지 말고 이유를 코멘트로 남기세요
+              - 대규모 리팩토링이 필요하면 계획만 코멘트로 남기세요
+              - 한국어 커밋 메시지 OK
+              - 최소한의 변경만 하세요
+
+              ## 프로젝트 컨텍스트
+              Next.js 15 블로그 콘텐츠 자동화 도구
+              - SQLite + Drizzle ORM
+              - Claude API 콘텐츠 생성
+              - 멀티 플랫폼 발행 (Blogger, Naver, Medium, Substack)
+              - Vitest 146+ 테스트
+            allowed_tools: "Bash,Read,Write,Edit,Glob,Grep"
+            model: claude-sonnet-4-6
