@@ -1,0 +1,41 @@
+name: CI/CD — Test & Deploy
+
+  on:
+    push:
+      branches: [main]
+    pull_request:
+      branches: [main]
+
+  jobs:
+    test:
+      name: Test
+      runs-on: ubuntu-latest
+      steps:
+        - uses: actions/checkout@v4
+
+        - uses: pnpm/action-setup@v4
+          with:
+            version: 9
+
+        - uses: actions/setup-node@v4
+          with:
+            node-version: 20
+            cache: pnpm
+
+        - run: pnpm install --frozen-lockfile
+        - run: pnpm test
+        - run: pnpm build
+
+    deploy:
+      name: Deploy to Fly.io
+      needs: test
+      runs-on: ubuntu-latest
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      steps:
+        - uses: actions/checkout@v4
+
+        - uses: superfly/flyctl-actions/setup-flyctl@master
+
+        - run: flyctl deploy --remote-only
+          env:
+            FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
