@@ -254,6 +254,14 @@ function EditorContent() {
               AI 생성
             </Button>
           )}
+
+          <ImageSearch
+            keyword={keyword || title}
+            onInsert={(markdown) => {
+              const newText = streaming.text + "\n\n" + markdown;
+              handleBodyChange(newText);
+            }}
+          />
         </div>
       </div>
 
@@ -547,6 +555,104 @@ function SchedulePublish({
       <Button size="sm" variant="outline" onClick={handleSchedule} disabled={disabled || loading || !date || !time}>
         {loading ? "설정 중..." : "예약"}
       </Button>
+    </div>
+  );
+}
+
+// 이미지 검색 + 삽입 컴포넌트
+function ImageSearch({
+  keyword,
+  onInsert,
+}: {
+  keyword: string;
+  onInsert: (markdown: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [images, setImages] = useState<
+    { id: string; url: string; thumb: string; alt: string; credit: string }[]
+  >([]);
+  const [loading, setLoading] = useState(false);
+
+  const handleSearch = async () => {
+    const q = query || keyword;
+    if (!q) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/images?q=${encodeURIComponent(q)}`);
+      const data = await res.json();
+      setImages(data.images || []);
+      if (data.images?.length === 0) {
+        toast.error(data.message || "이미지를 찾지 못했습니다");
+      }
+    } catch {
+      toast.error("이미지 검색에 실패했습니다");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleInsert = (img: { url: string; alt: string; credit: string }) => {
+    const md = `![${img.alt}](${img.url})\n*${img.credit}*`;
+    onInsert(md);
+    setOpen(false);
+    toast.success("이미지가 삽입되었습니다");
+  };
+
+  if (!open) {
+    return (
+      <Button size="sm" variant="outline" onClick={() => { setOpen(true); setQuery(keyword); }}>
+        이미지
+      </Button>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+      <div className="bg-background rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+        <div className="p-4 border-b flex items-center gap-2">
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="이미지 검색..."
+            className="flex-1"
+            onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+          />
+          <Button size="sm" onClick={handleSearch} disabled={loading}>
+            {loading ? "검색 중..." : "검색"}
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>
+            닫기
+          </Button>
+        </div>
+        <div className="p-4 overflow-auto flex-1">
+          {images.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">
+              키워드를 입력하고 검색하세요
+            </p>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {images.map((img) => (
+                <div
+                  key={img.id}
+                  className="cursor-pointer rounded-md overflow-hidden border hover:border-primary transition-colors"
+                  onClick={() => handleInsert(img)}
+                >
+                  <img
+                    src={img.thumb}
+                    alt={img.alt}
+                    className="w-full h-28 object-cover"
+                    loading="lazy"
+                  />
+                  <p className="text-xs text-muted-foreground p-1 truncate">
+                    {img.alt}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
