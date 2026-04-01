@@ -357,6 +357,21 @@ function EditorContent() {
         </div>
       </div>
 
+      {/* 글자 수 카운터 */}
+      <div className="flex items-center gap-3 text-xs text-muted-foreground px-1">
+        <span>{streaming.text.length.toLocaleString()}자</span>
+        <span className="text-muted-foreground/50">/ 2,500자 목표</span>
+        <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden max-w-48">
+          <div
+            className="h-full bg-primary rounded-full transition-all"
+            style={{ width: `${Math.min((streaming.text.length / 2500) * 100, 100)}%` }}
+          />
+        </div>
+        {streaming.text.length >= 2500 && (
+          <span className="text-primary font-medium">목표 달성</span>
+        )}
+      </div>
+
       {/* SEO 섹션 (접힘) */}
       <div className="border rounded-md">
         <button
