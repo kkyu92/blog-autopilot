@@ -33,6 +33,7 @@
           uses: anthropics/claude-code-action@v1
           with:
             anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+            github_token: ${{ secrets.GITHUB_TOKEN }}
             prompt: |
               GitHub 이슈 #${{ github.event.issue.number }}이 등록/수정되었습니다.
 
