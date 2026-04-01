@@ -104,7 +104,7 @@ def close_github_issue(issue_url: str, comment: str) -> None:
 
 
 # ── Claude Code execution ──────────────────────────────────
-def run_claude(instruction: str) -> str:
+def run_claude(instruction: str, timeout_sec: int = 600) -> str:
     """Run Claude Code CLI with the given instruction."""
     cmd = [
         "claude", "--dangerously-skip-permissions",
@@ -116,14 +116,14 @@ def run_claude(instruction: str) -> str:
             cmd,
             capture_output=True, text=True,
             cwd=PROJECT_DIR,
-            timeout=600,  # 10 min max
+            timeout=timeout_sec,
         )
         output = result.stdout.strip()
         if result.returncode != 0 and result.stderr:
             output += f"\n\n[stderr]: {result.stderr.strip()}"
         return output if output else "(no output)"
     except subprocess.TimeoutExpired:
-        return "[error] Claude Code timed out (10 min limit)"
+        return f"[error] Claude Code timed out ({timeout_sec // 60} min limit)"
     except FileNotFoundError:
         return "[error] claude CLI not found. Is Claude Code installed?"
     except Exception as e:
@@ -191,8 +191,9 @@ def handle_command(text: str) -> str:
             "/ping - Check bot health\n"
             "/health - Detailed health info\n"
             "/push - Commit & push changes\n"
+            "/autoplan - Run full plan review (CEO+Design+Eng, ~30min)\n"
             "/loop N instruction - Run Claude in loop (max N iterations)\n"
-            "/stop - Stop running loop\n"
+            "/stop - Stop running loop/autoplan\n"
             "/help - This message\n\n"
             "Any other message = Claude Code instruction"
         )
@@ -207,11 +208,84 @@ def handle_command(text: str) -> str:
             return "Loop stop requested. Will stop after current iteration."
         return "No loop is running."
 
+    if text.lower().startswith("/autoplan"):
+        return "AUTOPLAN_CMD"
+
     if text.lower().startswith("/loop"):
         return "LOOP_CMD"  # Signal to run loop
 
     # Everything else goes to Claude Code
     return None  # Signal to run Claude
+
+
+AUTOPLAN_TIMEOUT = 1800  # 30 min — autoplan is a long-running operation
+
+AUTOPLAN_PROMPT = """You are running an automated plan review pipeline.
+
+STEP 1: Read the autoplan skill file:
+  Read the file at ~/.claude/skills/gstack/autoplan/SKILL.md
+
+STEP 2: Read the current plan:
+  Read PLAN.md in the project root.
+
+STEP 3: Follow the autoplan skill instructions at FULL DEPTH.
+  - Execute all phases sequentially: CEO Review → Design Review → Eng Review
+  - Auto-decide all intermediate questions using the 6 Decision Principles from the skill
+  - Produce ALL required outputs (diagrams, tables, registries, artifacts)
+  - Write all changes directly to PLAN.md
+  - For AskUserQuestion calls: auto-decide using the 6 principles (completeness, boil lakes, pragmatic, DRY, explicit over clever, bias toward action)
+  - For premise confirmation gates: accept reasonable premises, challenge only clearly wrong ones
+  - Skip the Preamble bash scripts and Telemetry sections (not applicable in headless mode)
+
+STEP 4: After all phases complete, write a summary of what was reviewed and changed.
+
+IMPORTANT:
+- This is running in headless mode. Do NOT use AskUserQuestion — auto-decide everything.
+- Do NOT use the Skill tool — read and follow the skill file instructions directly.
+- Write ALL outputs to PLAN.md.
+- Be thorough. This is the full review pipeline, not a summary.
+"""
+
+
+def run_autoplan() -> None:
+    """Run the full autoplan review pipeline via Claude Code."""
+    global LOOP_RUNNING
+    LOOP_RUNNING = True
+
+    send_message(
+        "*Autoplan started*\n"
+        "Running full CEO → Design → Eng review pipeline.\n"
+        f"Timeout: {AUTOPLAN_TIMEOUT // 60} min"
+    )
+
+    issue_url = create_github_issue(
+        title="[bot/autoplan] Full plan review pipeline",
+        body=(
+            f"**Source:** Telegram\n"
+            f"**Time:** {datetime.now().strftime('%Y-%m-%d %H:%M')}\n"
+            f"**Type:** autoplan (CEO → Design → Eng review)\n"
+            f"**Timeout:** {AUTOPLAN_TIMEOUT // 60} min"
+        ),
+    )
+    if issue_url:
+        send_message(f"Issue: {issue_url}")
+
+    result = run_claude(AUTOPLAN_PROMPT, timeout_sec=AUTOPLAN_TIMEOUT)
+
+    push_status = git_push()
+
+    if issue_url:
+        close_github_issue(issue_url, f"## Autoplan Result\n\n{result[:3000]}\n\n**Push:** {push_status}")
+
+    send_message(
+        f"*Autoplan complete!*\n\n"
+        f"{result[:3500]}\n\n"
+        f"*Git:* {push_status}"
+    )
+    if issue_url:
+        send_message(f"*Issue:* {issue_url}")
+
+    LOOP_RUNNING = False
 
 
 def parse_loop_command(text: str) -> tuple[int, str]:
@@ -340,6 +414,12 @@ def process_message(text: str) -> None:
 
     # Check for built-in command first
     builtin_result = handle_command(text)
+    if builtin_result == "AUTOPLAN_CMD":
+        if LOOP_RUNNING:
+            send_message("A task is already running. Send `/stop` first.")
+            return
+        run_autoplan()
+        return
     if builtin_result == "LOOP_CMD":
         max_iter, instruction = parse_loop_command(text)
         if not instruction:
