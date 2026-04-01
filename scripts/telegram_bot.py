@@ -8,6 +8,8 @@ Telegram Bot for Claude Code remote control.
 - Updates STATUS.md after completion
 """
 
+from __future__ import annotations
+
 import os
 import sys
 import json
@@ -16,6 +18,7 @@ import subprocess
 import requests
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 # ── Config ──────────────────────────────────────────────────
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "8754613586:AAHB3wPHdAdyas6Y2PIn3g7mHW9vK-hbwCg")
