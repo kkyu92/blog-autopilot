@@ -1,11 +1,11 @@
 
-  name: Issue Agent — 이슈 자동 처리
+name: Issue Agent — 이슈 자동 처리
 
-  on:
+on:
     issues:
       types: [opened, edited]
 
-  jobs:
+jobs:
     process-issue:
       runs-on: ubuntu-latest
       permissions:
