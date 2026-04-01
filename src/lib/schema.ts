@@ -30,6 +30,8 @@ export const contents = sqliteTable("contents", {
   seoDescription: text("seo_description"),
   seoTags: text("seo_tags"), // JSON array string
   sourceUrls: text("source_urls"), // JSON array string
+  scheduledAt: text("scheduled_at"), // ISO 8601 — 예약 발행 시간
+  scheduledPlatform: text("scheduled_platform"), // blogger | naver
   createdAt: text("created_at")
     .notNull()
     .default(sql`(datetime('now'))`),

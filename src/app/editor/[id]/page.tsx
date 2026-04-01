@@ -23,6 +23,8 @@ type ContentRow = {
   seoDescription: string | null;
   seoTags: string | null;
   sourceUrls: string | null;
+  scheduledAt: string | null;
+  scheduledPlatform: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -399,6 +401,15 @@ function EditorContent() {
         )}
       </div>
 
+      {/* 예약 발행 */}
+      <SchedulePublish
+        contentId={id}
+        scheduledAt={content?.scheduledAt || null}
+        scheduledPlatform={content?.scheduledPlatform || null}
+        disabled={streaming.isStreaming || !streaming.text}
+        onScheduled={() => refetch()}
+      />
+
       {publishResult && (
         <div
           className={`text-sm p-3 rounded-md ${
@@ -426,6 +437,116 @@ function EditorContent() {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+// 예약 발행 컴포넌트
+function SchedulePublish({
+  contentId,
+  scheduledAt,
+  scheduledPlatform,
+  disabled,
+  onScheduled,
+}: {
+  contentId: string;
+  scheduledAt: string | null;
+  scheduledPlatform: string | null;
+  disabled: boolean;
+  onScheduled: () => void;
+}) {
+  const [date, setDate] = useState("");
+  const [time, setTime] = useState("");
+  const [platform, setPlatform] = useState<"blogger" | "naver">("blogger");
+  const [loading, setLoading] = useState(false);
+
+  const handleSchedule = async () => {
+    if (!date || !time) {
+      toast.error("날짜와 시간을 선택해주세요");
+      return;
+    }
+    const scheduledAt = new Date(`${date}T${time}`).toISOString();
+    setLoading(true);
+    try {
+      const res = await fetch("/api/publish/schedule", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contentId, scheduledAt, platform }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error);
+      } else {
+        toast.success(`${platform === "blogger" ? "Blogger" : "네이버"}에 ${date} ${time} 발행 예약됨`);
+        onScheduled();
+      }
+    } catch {
+      toast.error("예약 발행 설정에 실패했습니다");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCancel = async () => {
+    setLoading(true);
+    try {
+      await fetch("/api/publish/schedule", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contentId }),
+      });
+      toast.success("예약이 취소되었습니다");
+      onScheduled();
+    } catch {
+      toast.error("예약 취소에 실패했습니다");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (scheduledAt) {
+    const dt = new Date(scheduledAt);
+    return (
+      <div className="flex items-center gap-2 text-sm bg-muted p-3 rounded-md">
+        <Badge variant="outline">예약됨</Badge>
+        <span>
+          {dt.toLocaleDateString("ko-KR")} {dt.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}
+          {" "}— {scheduledPlatform === "blogger" ? "Blogger" : "네이버"}
+        </span>
+        <Button size="sm" variant="ghost" onClick={handleCancel} disabled={loading}>
+          취소
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2 flex-wrap text-sm">
+      <span className="text-muted-foreground">예약 발행:</span>
+      <input
+        type="date"
+        value={date}
+        onChange={(e) => setDate(e.target.value)}
+        className="border rounded px-2 py-1 text-sm bg-background"
+        min={new Date().toISOString().split("T")[0]}
+      />
+      <input
+        type="time"
+        value={time}
+        onChange={(e) => setTime(e.target.value)}
+        className="border rounded px-2 py-1 text-sm bg-background"
+      />
+      <select
+        value={platform}
+        onChange={(e) => setPlatform(e.target.value as "blogger" | "naver")}
+        className="border rounded px-2 py-1 text-sm bg-background"
+      >
+        <option value="blogger">Blogger</option>
+        <option value="naver">네이버</option>
+      </select>
+      <Button size="sm" variant="outline" onClick={handleSchedule} disabled={disabled || loading || !date || !time}>
+        {loading ? "설정 중..." : "예약"}
+      </Button>
     </div>
   );
 }

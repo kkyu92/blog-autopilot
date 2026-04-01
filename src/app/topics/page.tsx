@@ -30,6 +30,8 @@ interface DomesticIssue {
 export default function TopicsPage() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedKeywords, setSelectedKeywords] = useState<Set<string>>(new Set());
+  const [bulkTone, setBulkTone] = useState("informative");
 
   // Google 실시간 트렌드
   const {
@@ -81,6 +83,37 @@ export default function TopicsPage() {
       return res.json();
     },
   });
+
+  // 벌크 생성
+  const bulkMutation = useMutation({
+    mutationFn: async (keywords: string[]) => {
+      const res = await fetch("/api/content/bulk-generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ keywords, tone: bulkTone }),
+      });
+      if (!res.ok) throw new Error("벌크 생성 실패");
+      return res.json();
+    },
+    onSuccess: (data) => {
+      toast.success(`${data.success}개 생성 완료, ${data.failed}개 실패`);
+      setSelectedKeywords(new Set());
+      router.push("/posts");
+    },
+    onError: () => {
+      toast.error("벌크 생성에 실패했습니다");
+    },
+  });
+
+  const toggleKeyword = (keyword: string) => {
+    setSelectedKeywords((prev) => {
+      const next = new Set(prev);
+      if (next.has(keyword)) next.delete(keyword);
+      else if (next.size < 10) next.add(keyword);
+      else toast.error("최대 10개까지 선택 가능합니다");
+      return next;
+    });
+  };
 
   // draft 생성 → 에디터 이동
   const createMutation = useMutation({
@@ -257,6 +290,52 @@ export default function TopicsPage() {
         </CardContent>
       </Card>
 
+      {/* 벌크 선택 액션 바 */}
+      {selectedKeywords.size > 0 && (
+        <div className="sticky top-0 z-10 bg-background border rounded-md p-3 flex items-center gap-3 flex-wrap shadow-sm">
+          <Badge variant="default">{selectedKeywords.size}개 선택됨</Badge>
+          <div className="flex flex-wrap gap-1">
+            {[...selectedKeywords].map((kw) => (
+              <Badge
+                key={kw}
+                variant="secondary"
+                className="cursor-pointer"
+                onClick={() => toggleKeyword(kw)}
+              >
+                {kw} &times;
+              </Badge>
+            ))}
+          </div>
+          <div className="flex items-center gap-2 ml-auto">
+            <select
+              value={bulkTone}
+              onChange={(e) => setBulkTone(e.target.value)}
+              className="text-sm border rounded px-2 py-1 bg-background"
+            >
+              <option value="informative">정보 전달형</option>
+              <option value="conversational">대화체</option>
+              <option value="expert">전문가</option>
+            </select>
+            <Button
+              size="sm"
+              onClick={() => bulkMutation.mutate([...selectedKeywords])}
+              disabled={bulkMutation.isPending}
+            >
+              {bulkMutation.isPending
+                ? `생성 중... (${selectedKeywords.size}개)`
+                : `일괄 생성 (${selectedKeywords.size}개)`}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setSelectedKeywords(new Set())}
+            >
+              초기화
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* 실시간 트렌드 탭 */}
       <Tabs defaultValue="google">
         <div className="flex items-center gap-3 mb-1">
@@ -282,11 +361,17 @@ export default function TopicsPage() {
               {googleData?.keywords?.map((item, i) => (
                 <Card
                   key={i}
-                  className="hover:border-primary/50 transition-colors"
+                  className={`hover:border-primary/50 transition-colors ${selectedKeywords.has(item.keyword) ? "border-primary bg-primary/5" : ""}`}
                 >
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between mb-1">
                       <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={selectedKeywords.has(item.keyword)}
+                          onChange={() => toggleKeyword(item.keyword)}
+                          className="rounded"
+                        />
                         <span className="text-xs text-muted-foreground font-mono w-5">
                           {i + 1}
                         </span>
@@ -359,10 +444,16 @@ export default function TopicsPage() {
               {domesticData?.keywords?.map((item, i) => (
                 <Card
                   key={i}
-                  className="hover:border-green-500/30 transition-colors"
+                  className={`hover:border-green-500/30 transition-colors ${selectedKeywords.has(item.keyword) ? "border-green-500 bg-green-500/5" : ""}`}
                 >
                   <CardContent className="p-4">
                     <div className="flex items-center gap-2 mb-1">
+                      <input
+                        type="checkbox"
+                        checked={selectedKeywords.has(item.keyword)}
+                        onChange={() => toggleKeyword(item.keyword)}
+                        className="rounded"
+                      />
                       <span className="text-xs text-muted-foreground font-mono w-5">
                         {item.rank}
                       </span>
