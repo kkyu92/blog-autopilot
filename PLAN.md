@@ -56,7 +56,8 @@ content-autopilot/
 │   │   │   └── page.tsx        # 첫 실행 위자드
 │   │   ├── api/
 │   │   │   ├── keywords/
-│   │   │   │   └── search/route.ts     # GET: 키워드 트렌드 조회
+│   │   │   │   ├── trending/route.ts   # GET: 실시간 인기 키워드 자동 조회
+│   │   │   │   └── search/route.ts     # GET: 키워드 수동 검색
 │   │   │   ├── content/
 │   │   │   │   ├── route.ts            # GET: 목록, POST: 생성
 │   │   │   │   ├── [id]/route.ts       # GET/PUT/DELETE: 개별 콘텐츠
@@ -173,20 +174,28 @@ CREATE TABLE settings (
 
 ## 핵심 파이프라인
 
-### 1. 키워드 조회 (`/topics`)
+### 1. 키워드 & 트렌드 (`/topics`)
 
-**API**: `GET /api/keywords/search?q=키워드`
+**실시간 트렌드 자동 표시** (사용자가 따로 검색하지 않아도 됨):
 
-- Google Trends 비공식 API 시도 → 실패 시 graceful degradation (수동 입력 허용)
-- 응답: 키워드, 관련 키워드, 트렌드 점수
-- 캐싱: 동일 키워드 24시간 내 재검색 시 DB 캐시 반환
+**API**:
+- `GET /api/keywords/trending` — 페이지 로드 시 자동 호출. Google Trends 실시간 인기 키워드 반환
+- `GET /api/keywords/search?q=키워드` — 추가 검색이 필요할 때
+
+**Google Trends 연동**:
+- 실시간 인기 검색어 (Daily Trending Searches, Korea)를 자동으로 가져옴
+- 각 키워드의 관련 키워드, 트렌드 점수 함께 표시
+- 5분 간격 자동 갱신 (TanStack Query refetchInterval)
+- 캐싱: DB에 24시간 TTL로 저장, 중복 API 호출 방지
+- **비공식 API 불안정 대비**: 실패 시 마지막 캐시 데이터 표시 + 수동 검색 fallback
 
 **UI**:
-- 검색 입력 → 키워드 카드 리스트 (기회 순 정렬)
-- 각 카드: 키워드, 트렌드 점수 배지, "이 주제로 생성" 버튼
-- **Empty state**: "키워드를 입력해서 블로그 주제를 찾아보세요"
-- **Loading state**: 스켈레톤 카드 3개
-- **Error state**: "트렌드 조회 실패. 키워드를 직접 입력해서 진행할 수 있습니다"
+- 페이지 상단: "지금 뜨는 키워드" 섹션 (자동 로드, 검색 불필요)
+- 각 카드: 키워드, 트렌드 점수 배지, 관련 키워드 태그, "이 주제로 생성" 버튼
+- 하단: 수동 검색 입력 (추가 탐색용)
+- **Loading state**: 스켈레톤 카드 3개 + "트렌드 불러오는 중..."
+- **Error state**: "실시간 트렌드를 가져오지 못했습니다. 아래에서 직접 검색하세요"
+- **Stale data state**: "5분 전 데이터" 배지 표시
 
 ### 2. AI 콘텐츠 생성 (`/editor/[id]`)
 
@@ -268,10 +277,10 @@ User:
 ## 페이지별 UI 사양
 
 ### 대시보드 (`/`)
-- **목적**: 파이프라인 현황 한눈에 보기 (허영 메트릭 아님)
-- 초안 N개 | 발행 완료 N개 | 실패 N개 (이번 주)
-- 최근 초안 리스트 (이어서 편집)
-- "새 주제 찾기" CTA 버튼
+- **목적**: 파이프라인 현황 + 실시간 트렌드 한눈에 보기
+- 상단: **지금 뜨는 키워드 TOP 5** (Google Trends 자동 로드, 클릭하면 바로 글 생성)
+- 중단: 초안 N개 | 발행 완료 N개 | 실패 N개 (이번 주)
+- 하단: 최근 초안 리스트 (이어서 편집)
 - **Empty state**: 첫 실행 시 온보딩 위자드로 리다이렉트
 
 ### 키워드 (`/topics`)
@@ -390,11 +399,16 @@ Phase 5: 마무리 (CC: ~30분)
 
 ---
 
+## 확정된 Taste Decisions
+
+- [x] #8: 네이버 블로그 → MVP 이후 지원 추가 확정
+- [x] #16: Claude 프롬프트 → MVP 개발과 동시에 반복 개선
+- [x] #20: Google Trends → 실시간 연동 확정. 대시보드+키워드 페이지에 자동 표시
+
 ## 미확정 사항
 
 - [ ] 배포 환경 (Vercel Free vs 로컬 only)
 - [ ] API 비용 월 예산 (Claude API)
-- [ ] 네이버 블로그 지원 여부 (Phase 2+)
 - [ ] 커스텀 도메인
 
 ---
