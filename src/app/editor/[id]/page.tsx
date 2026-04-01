@@ -171,6 +171,43 @@ function EditorContent() {
   }, [keyword, content]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 발행
+  // Medium/Substack 발행
+  const handlePublishExtended = useCallback(
+    async (platform: "medium" | "substack") => {
+      setPublishResult(null);
+      try {
+        await save(streaming.text);
+        const res = await fetch(`/api/publish/${platform}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contentId: id,
+            ...(platform === "medium" ? { publishStatus: "draft" } : { publish: false }),
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          setPublishResult({ error: data.error });
+          toast.error(`${platform} 발행 실패: ${data.error}`);
+        } else {
+          setPublishResult({ ok: true, url: data.externalUrl });
+          toast.success(`${platform === "medium" ? "Medium" : "Substack"}에 ${data.published ? "발행" : "초안 저장"} 완료!`, {
+            action: data.externalUrl
+              ? { label: "확인하기", onClick: () => window.open(data.externalUrl, "_blank") }
+              : undefined,
+          });
+          refetch();
+          queryClient.invalidateQueries({ queryKey: ["contents"] });
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Publish failed";
+        setPublishResult({ error: msg });
+        toast.error(`${platform} 발행 실패: ${msg}`);
+      }
+    },
+    [id, streaming.text, save, refetch, queryClient]
+  );
+
   const handlePublish = useCallback(
     async (platform: "blogger" | "naver") => {
       setAutoPublish(null); // 자동 발행 플래그 리셋
@@ -379,6 +416,22 @@ function EditorContent() {
         >
           네이버
         </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => handlePublishExtended("medium")}
+          disabled={streaming.isStreaming || !streaming.text}
+        >
+          Medium
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => handlePublishExtended("substack")}
+          disabled={streaming.isStreaming || !streaming.text}
+        >
+          Substack
+        </Button>
         {content?.status === "published" && (
           <Badge variant="default">발행됨</Badge>
         )}
@@ -465,7 +518,7 @@ function SchedulePublish({
 }) {
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
-  const [platform, setPlatform] = useState<"blogger" | "naver">("blogger");
+  const [platform, setPlatform] = useState<"blogger" | "naver" | "medium" | "substack">("blogger");
   const [loading, setLoading] = useState(false);
 
   const handleSchedule = async () => {
@@ -546,11 +599,13 @@ function SchedulePublish({
       />
       <select
         value={platform}
-        onChange={(e) => setPlatform(e.target.value as "blogger" | "naver")}
+        onChange={(e) => setPlatform(e.target.value as "blogger" | "naver" | "medium" | "substack")}
         className="border rounded px-2 py-1 text-sm bg-background"
       >
         <option value="blogger">Blogger</option>
         <option value="naver">네이버</option>
+        <option value="medium">Medium</option>
+        <option value="substack">Substack</option>
       </select>
       <Button size="sm" variant="outline" onClick={handleSchedule} disabled={disabled || loading || !date || !time}>
         {loading ? "설정 중..." : "예약"}

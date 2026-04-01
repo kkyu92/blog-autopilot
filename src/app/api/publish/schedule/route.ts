@@ -15,9 +15,9 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (!["blogger", "naver"].includes(platform)) {
+  if (!["blogger", "naver", "medium", "substack"].includes(platform)) {
     return NextResponse.json(
-      { error: "platform must be blogger or naver" },
+      { error: "platform must be blogger, naver, medium, or substack" },
       { status: 400 }
     );
   }

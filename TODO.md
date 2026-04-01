@@ -11,10 +11,10 @@
 - [x] 6. 예약 발행 — 날짜/시간 선택 + 플랫폼 지정 + cron API
 - [x] 7. 벌크 생성 — 키워드 멀티 선택 (최대 10개) + 일괄 AI 생성
 - [x] 8. 이미지 자동 삽입 — Unsplash/Pixabay 이미지 검색 + 에디터 삽입
-- [ ] 9. 테스트 커버리지 확대 — API 라우트, 생성 로직 테스트 추가 (현재 13개)
+- [x] 9. 테스트 커버리지 확대 — 73→146개 (API 검증, 트렌드 파싱, 프롬프트 빌더, 스키마)
 
 ## 우선순위 낮음 (장기)
-- [ ] 10. VPS 배포 — Fly.io/Railway 배포 + SQLite 영속 스토리지
-- [ ] 11. DB 백업 — SQLite 주기적 백업 스크립트
-- [ ] 12. 성과 추적 — Search Console 연동, 발행 후 검색 순위 모니터링
-- [ ] 13. 추가 플랫폼 — Medium, Substack 발행 지원
+- [x] 10. VPS 배포 — Dockerfile + fly.toml + standalone 빌드 + DATABASE_PATH 지원
+- [x] 11. DB 백업 — scripts/backup-db.mjs + /api/backup 엔드포인트 (최대 7개 로테이션)
+- [x] 12. 성과 추적 — Search Console API 연동 + 대시보드 성과 위젯 (클릭/노출/CTR/순위)
+- [x] 13. 추가 플랫폼 — Medium (Integration Token) + Substack (Cookie 기반) 발행 지원

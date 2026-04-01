@@ -22,6 +22,11 @@ function SettingsContent() {
 
   const [claudeKey, setClaudeKey] = useState("");
   const [defaultTone, setDefaultTone] = useState("informative");
+  const [mediumToken, setMediumToken] = useState("");
+  const [substackSubdomain, setSubstackSubdomain] = useState("");
+  const [substackEmail, setSubstackEmail] = useState("");
+  const [substackPassword, setSubstackPassword] = useState("");
+  const [searchConsoleSite, setSearchConsoleSite] = useState("");
   const [notification, setNotification] = useState<string | null>(null);
 
   // URL 파라미터로 알림 표시
@@ -50,6 +55,7 @@ function SettingsContent() {
   useEffect(() => {
     if (data?.settings) {
       if (data.settings.default_tone) setDefaultTone(data.settings.default_tone);
+      if (data.settings.search_console_site) setSearchConsoleSite(data.settings.search_console_site);
     }
   }, [data]);
 
@@ -217,6 +223,139 @@ function SettingsContent() {
             >
               저장
             </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Medium */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            Medium
+            <Badge variant={data?.settings?.medium_token ? "default" : "secondary"}>
+              {data?.settings?.medium_token ? "연결됨" : "미연결"}
+            </Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div>
+            <label className="text-sm text-muted-foreground">Integration Token</label>
+            <div className="flex gap-2 mt-1">
+              <Input
+                type="password"
+                value={mediumToken}
+                onChange={(e) => setMediumToken(e.target.value)}
+                placeholder="medium.com/me/settings 에서 발급"
+              />
+              <Button
+                size="sm"
+                onClick={() => {
+                  if (mediumToken) {
+                    saveMutation.mutate({ medium_token: mediumToken });
+                    setMediumToken("");
+                  }
+                }}
+                disabled={!mediumToken}
+              >
+                저장
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Medium Settings &gt; Security and apps &gt; Integration tokens
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Substack */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            Substack
+            <Badge variant={data?.settings?.substack_subdomain ? "default" : "secondary"}>
+              {data?.settings?.substack_subdomain ? "설정됨" : "미설정"}
+            </Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div>
+            <label className="text-sm text-muted-foreground">Subdomain</label>
+            <Input
+              value={substackSubdomain}
+              onChange={(e) => setSubstackSubdomain(e.target.value)}
+              placeholder="myblog (myblog.substack.com)"
+              className="mt-1"
+            />
+          </div>
+          <div>
+            <label className="text-sm text-muted-foreground">Email</label>
+            <Input
+              value={substackEmail}
+              onChange={(e) => setSubstackEmail(e.target.value)}
+              placeholder="Substack 로그인 이메일"
+              className="mt-1"
+            />
+          </div>
+          <div>
+            <label className="text-sm text-muted-foreground">Password</label>
+            <Input
+              type="password"
+              value={substackPassword}
+              onChange={(e) => setSubstackPassword(e.target.value)}
+              placeholder="Substack 비밀번호"
+              className="mt-1"
+            />
+          </div>
+          <Button
+            size="sm"
+            onClick={() => {
+              const updates: Record<string, string> = {};
+              if (substackSubdomain) updates.substack_subdomain = substackSubdomain;
+              if (substackEmail) updates.substack_email = substackEmail;
+              if (substackPassword) updates.substack_password = substackPassword;
+              if (Object.keys(updates).length) {
+                saveMutation.mutate(updates);
+                setSubstackPassword("");
+              }
+            }}
+            disabled={!substackSubdomain}
+          >
+            저장
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Search Console */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Search Console 성과 추적</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div>
+            <label className="text-sm text-muted-foreground">사이트 URL</label>
+            <div className="flex gap-2 mt-1">
+              <Input
+                value={searchConsoleSite}
+                onChange={(e) => setSearchConsoleSite(e.target.value)}
+                placeholder="https://myblog.blogspot.com/ 또는 sc-domain:myblog.com"
+              />
+              <Button
+                size="sm"
+                onClick={() => {
+                  if (searchConsoleSite) {
+                    saveMutation.mutate({ search_console_site: searchConsoleSite });
+                  }
+                }}
+                disabled={!searchConsoleSite}
+              >
+                저장
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {bloggerConnected
+                ? "Blogger 연결 시 Search Console도 함께 사용됩니다. 사이트 URL을 입력하면 대시보드에 성과가 표시됩니다."
+                : "먼저 Blogger(Google)를 연결하세요. Search Console 권한이 함께 부여됩니다."}
+            </p>
           </div>
         </CardContent>
       </Card>

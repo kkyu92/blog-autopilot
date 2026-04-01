@@ -1,0 +1,31 @@
+app = "content-autopilot"
+primary_region = "nrt"  # Tokyo (한국에서 가장 가까운 Fly 리전)
+
+[build]
+
+[env]
+  NODE_ENV = "production"
+  PORT = "3000"
+  # SQLite DB 경로를 Fly volume으로 지정
+  DATABASE_PATH = "/data/content.db"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [http_service.concurrency]
+    type = "requests"
+    hard_limit = 250
+    soft_limit = 200
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
+
+# SQLite 영속 스토리지
+[mounts]
+  source = "content_data"
+  destination = "/data"

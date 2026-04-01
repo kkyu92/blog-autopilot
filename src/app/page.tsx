@@ -28,6 +28,149 @@ interface DomesticIssue {
   summary: string;
 }
 
+interface PerformanceData {
+  totalClicks: number;
+  totalImpressions: number;
+  avgCtr: number;
+  avgPosition: number;
+  topQueries: Array<{
+    query: string;
+    clicks: number;
+    impressions: number;
+    position: number;
+  }>;
+}
+
+function PerformanceWidget() {
+  const { data: settings } = useQuery<{
+    connections: { blogger: string };
+    settings: Record<string, string>;
+  }>({
+    queryKey: ["settings"],
+    queryFn: async () => {
+      const res = await fetch("/api/settings");
+      if (!res.ok) throw new Error();
+      return res.json();
+    },
+  });
+
+  const siteUrl = settings?.settings?.search_console_site;
+  const isConnected = settings?.connections?.blogger === "connected";
+
+  const { data: performance, isLoading } = useQuery<PerformanceData>({
+    queryKey: ["analytics", siteUrl],
+    queryFn: async () => {
+      const res = await fetch(
+        `/api/analytics?siteUrl=${encodeURIComponent(siteUrl!)}&action=summary&days=28`
+      );
+      if (!res.ok) throw new Error();
+      return res.json();
+    },
+    enabled: !!siteUrl && isConnected,
+    refetchInterval: 30 * 60 * 1000, // 30분
+  });
+
+  if (!isConnected || !siteUrl) {
+    return (
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">검색 성과</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">
+            {!isConnected
+              ? "Google 계정을 연결하고 설정에서 Search Console 사이트를 지정하세요."
+              : "설정에서 search_console_site를 지정하세요."}
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">검색 성과 (28일)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            <Skeleton className="h-16 w-full" />
+            <Skeleton className="h-8 w-full" />
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!performance) return null;
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">검색 성과 (최근 28일)</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* 요약 지표 */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="text-center p-2 bg-muted rounded-md">
+            <p className="text-xs text-muted-foreground">클릭</p>
+            <p className="text-xl font-bold">
+              {performance.totalClicks.toLocaleString()}
+            </p>
+          </div>
+          <div className="text-center p-2 bg-muted rounded-md">
+            <p className="text-xs text-muted-foreground">노출</p>
+            <p className="text-xl font-bold">
+              {performance.totalImpressions.toLocaleString()}
+            </p>
+          </div>
+          <div className="text-center p-2 bg-muted rounded-md">
+            <p className="text-xs text-muted-foreground">평균 CTR</p>
+            <p className="text-xl font-bold">
+              {(performance.avgCtr * 100).toFixed(1)}%
+            </p>
+          </div>
+          <div className="text-center p-2 bg-muted rounded-md">
+            <p className="text-xs text-muted-foreground">평균 순위</p>
+            <p className="text-xl font-bold">
+              {performance.avgPosition.toFixed(1)}
+            </p>
+          </div>
+        </div>
+
+        {/* 상위 검색어 */}
+        {performance.topQueries?.length > 0 && (
+          <div>
+            <p className="text-xs font-medium text-muted-foreground mb-2">
+              상위 검색어
+            </p>
+            <div className="space-y-1">
+              {performance.topQueries.slice(0, 5).map((q, i) => (
+                <div
+                  key={i}
+                  className="flex items-center justify-between text-sm p-1.5 rounded hover:bg-muted"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground w-4">
+                      {i + 1}
+                    </span>
+                    <span className="truncate">{q.query}</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                    <span>{q.clicks}클릭</span>
+                    <span>#{q.position.toFixed(0)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function Dashboard() {
   const router = useRouter();
 
@@ -239,6 +382,9 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Search Console 성과 */}
+      <PerformanceWidget />
 
       {/* Recent drafts */}
       <Card>

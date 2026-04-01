@@ -12,7 +12,7 @@ export function getBloggerAuthUrl(state: string): string {
     client_id: GOOGLE_CLIENT_ID,
     redirect_uri: GOOGLE_REDIRECT_URI,
     response_type: "code",
-    scope: "https://www.googleapis.com/auth/blogger",
+    scope: "https://www.googleapis.com/auth/blogger https://www.googleapis.com/auth/webmasters.readonly",
     access_type: "offline",
     prompt: "consent",
     state,
