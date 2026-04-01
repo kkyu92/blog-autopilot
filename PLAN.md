@@ -588,6 +588,14 @@ Phase 4 (관리 화면)       ░░░░░░░░░░░░░░░░�
 | 14 | Design | AI 생성 중 streaming UX | Mechanical | P1 (completeness) | 5-30초 대기 중 UX 전무 | 로딩 스피너만 |
 | 15 | Design | empty/loading/error 상태 전체 정의 | Mechanical | P1 (completeness) | 모든 페이지에 상태 패턴 필요 | happy path only |
 | 16 | Design | Claude 프롬프트 템플릿 실제 작성 | Taste | P1 (completeness) | 제품 핵심 IP인데 "설명"만 있고 실제 프롬프트 없음 | 추후 작성 |
+| 17 | Eng | 플랜 전체 리라이트 (단순화 스택 반영) | Mechanical | P1 (completeness) | 현재 플랜이 FastAPI/Supabase/Redis/Tiptap 여전히 참조 | 부분 수정 |
+| 18 | Eng | SQLite 스키마 재작성 | Mechanical | P5 (explicit) | UUID/JSONB/TEXT[]/TIMESTAMPTZ 전부 SQLite 호환 불가 | PG 스키마 |
+| 19 | Eng | HTML 살균 (sanitize-html) | Mechanical | P1 (completeness) | Claude 생성 HTML에 XSS 위험 | 무살균 저장 |
+| 20 | Eng | Google Trends 비공식 API 불안정 | Taste | P3 (pragmatic) | 공식 API 없음, 수동 키워드 입력을 기본으로 | 자동 트렌드만 |
+| 21 | Eng | 예약 발행 MVP 제거 | Mechanical | P3 (pragmatic) | Next.js에 cron worker 없음, 즉시 발행만 MVP | 예약 발행 포함 |
+| 22 | Eng | 테스트 전략 추가 | Mechanical | P1 (completeness) | 테스트 0개, 최소 unit + integration 필요 | 테스트 없음 |
+| 23 | Eng | 배포 시 인증 필수 | Mechanical | P1 (completeness) | 공개 배포 시 모든 API 노출 | 인증 없음 |
+| 24 | Eng | 부분 재생성 MVP 제거 | Mechanical | P3 (pragmatic) | 전체 재생성만 MVP, 부분은 추후 | 부분 재생성 포함 |
 
 ---
 
