@@ -15,16 +15,21 @@ import sys
 import json
 import time
 import subprocess
+import threading
 import requests
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+from dotenv import load_dotenv
 
 # ── Config ──────────────────────────────────────────────────
-BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "8754613586:AAHB3wPHdAdyas6Y2PIn3g7mHW9vK-hbwCg")
-CHAT_ID = int(os.environ.get("TELEGRAM_CHAT_ID", "8661161978"))
 PROJECT_DIR = Path.home() / "projects" / "content-autopilot"
+load_dotenv(PROJECT_DIR / ".env")
+
+BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
+CHAT_ID = int(os.environ["TELEGRAM_CHAT_ID"])
 POLL_INTERVAL = 5  # seconds
+HEARTBEAT_INTERVAL = 3600  # 1 hour
 API_BASE = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
 
@@ -166,11 +171,24 @@ def handle_command(text: str) -> str:
     if text.lower() == "/ping":
         return "pong! Bot is alive."
 
+    if text.lower() == "/health":
+        uptime = datetime.now() - BOT_START_TIME
+        hours = int(uptime.total_seconds() // 3600)
+        mins = int((uptime.total_seconds() % 3600) // 60)
+        return (
+            f"*Bot Health*\n"
+            f"Status: ✅ Running\n"
+            f"Uptime: {hours}h {mins}m\n"
+            f"Tasks processed: {TASK_COUNT}\n"
+            f"Heartbeat: every {HEARTBEAT_INTERVAL // 60}min"
+        )
+
     if text.lower() == "/help":
         return (
             "*Commands:*\n"
             "/status - Show STATUS.md\n"
             "/ping - Check bot health\n"
+            "/health - Detailed health info\n"
             "/push - Commit & push changes\n"
             "/help - This message\n\n"
             "Any other message = Claude Code instruction"
@@ -224,14 +242,58 @@ def process_message(text: str) -> None:
     send_message(response)
 
 
+# ── Heartbeat ──────────────────────────────────────────────
+def heartbeat_loop():
+    """Send periodic heartbeat to confirm bot is alive."""
+    while True:
+        time.sleep(HEARTBEAT_INTERVAL)
+        try:
+            uptime = datetime.now() - BOT_START_TIME
+            hours = int(uptime.total_seconds() // 3600)
+            mins = int((uptime.total_seconds() % 3600) // 60)
+            send_message(
+                f"💓 *Heartbeat*\n"
+                f"Uptime: {hours}h {mins}m\n"
+                f"Tasks processed: {TASK_COUNT}",
+            )
+        except Exception as e:
+            print(f"[heartbeat error] {e}")
+
+
+BOT_START_TIME = datetime.now()
+TASK_COUNT = 0
+
+
+# ── Error notification ─────────────────────────────────────
+def notify_error(context: str, error: Exception) -> None:
+    """Send error alert to Telegram."""
+    send_message(
+        f"⚠️ *Error*\n"
+        f"Context: `{context}`\n"
+        f"Error: `{str(error)[:500]}`",
+    )
+
+
 # ── Main loop ───────────────────────────────────────────────
 def main():
+    global TASK_COUNT, BOT_START_TIME
+    BOT_START_TIME = datetime.now()
+
     print(f"[bot] Starting telegram bot for chat_id={CHAT_ID}")
     print(f"[bot] Project: {PROJECT_DIR}")
     print(f"[bot] Poll interval: {POLL_INTERVAL}s")
+    print(f"[bot] Heartbeat interval: {HEARTBEAT_INTERVAL}s")
+
+    # Start heartbeat thread
+    hb = threading.Thread(target=heartbeat_loop, daemon=True)
+    hb.start()
 
     # Send startup message
-    send_message("Bot started! Send /help for commands.")
+    send_message(
+        "🤖 *Bot started!*\n"
+        f"Heartbeat: every {HEARTBEAT_INTERVAL // 60}min\n"
+        "Send /help for commands.",
+    )
 
     offset = 0
     while True:
@@ -252,10 +314,11 @@ def main():
             print(f"[bot] Received: {text[:80]}")
             try:
                 process_message(text)
+                TASK_COUNT += 1
             except Exception as e:
                 error_msg = f"[error] {e}"
                 print(error_msg)
-                send_message(error_msg)
+                notify_error(text[:80], e)
 
         time.sleep(1)
 

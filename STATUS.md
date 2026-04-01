@@ -18,6 +18,14 @@
 - [x] Plan Rewrite v2
 - [x] Taste Decisions 확정 (v2.1)
 
+## 텔레그램 봇 (완료)
+- [x] 봇 토큰 .env 분리 (보안)
+- [x] /ping, /status, /health, /push, /help 명령
+- [x] Claude Code CLI 연동 (메시지 → 실행 → 결과 회신)
+- [x] GitHub Issue 자동 생성/완료
+- [x] Heartbeat (1시간 간격)
+- [x] 에러 알림 (텔레그램)
+- [x] 메시지 송수신 테스트 통과
+
 ## 다음 할 일
-1. 구현 시작 (Phase 1: 프로젝트 셋업)
-2. 텔레그램 봇 + GitHub 자동화 세팅 (Issue #2)
+1. 구현 시작 (Phase 1: 프로젝트 셋업 - Next.js 15 + SQLite)
