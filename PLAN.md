@@ -1,624 +1,428 @@
 <!-- /autoplan restore point: /Users/kyusikkim/.gstack/projects/kkyu92-content-autopilot/main-autoplan-restore-20260401-065949.md -->
-# 콘텐츠 자동화 시스템 (Content Autopilot) - 구현 플랜
+# 콘텐츠 자동화 시스템 (Content Autopilot) - 구현 플랜 v2
 
 ## Context
 
-키워드 트렌드 기반 블로그 콘텐츠 자동 생성 및 멀티 플랫폼 배포 개인 도구를 구축한다.
-현재 단계는 **단일 사용자 전용 도구**이며, 검증 후 SaaS 전환을 고려한다.
+키워드 기반 블로그 콘텐츠 자동 생성 + Blogger 발행 **개인 도구**.
+AI 콘텐츠가 실제로 검색 트래픽을 만드는지 검증하는 것이 1차 목표.
 
-**핵심 가치**: 키워드 발굴 → AI 초안 생성 → 사용자 검토 → 원클릭 배포의 반자동 파이프라인으로 콘텐츠 제작 시간을 대폭 단축.
+**핵심 가치**: 키워드 입력 → Claude AI 초안 생성 → Markdown 편집 → 원클릭 Blogger 발행
 
 ---
 
-## Phase 1: 프로젝트 셋업 및 기반 구축
+## 기술 스택 (확정)
 
-### 1-1. 모노레포 구조 생성
+| 항목 | 도구 | 이유 |
+|------|------|------|
+| 프레임워크 | Next.js 15 (App Router + API Routes) | 프론트+백엔드 통합, Vercel 배포 |
+| DB | SQLite (better-sqlite3) | 단일 사용자, 설정 없이 즉시 사용 |
+| ORM | Drizzle ORM (SQLite driver) | 타입 안전, 마이그레이션 지원 |
+| 에디터 | textarea + Markdown | 단순, 시간 절약 (Tiptap 제거) |
+| AI | Claude API (@anthropic-ai/sdk) | 본문 생성 + SEO 메타데이터 |
+| 발행 | Blogger API v3 | OAuth 2.0, 한국 블로그 플랫폼 |
+| UI | shadcn/ui + Tailwind CSS v4 | 빠른 UI 구성 |
+| 상태관리 | TanStack Query v5 | 서버 상태 캐싱 |
+| 패키지매니저 | pnpm | 빠르고 디스크 효율적 |
+
+**제거된 것들** (MVP 이후 재검토):
+- ~~FastAPI~~ → Next.js API Routes로 통합
+- ~~Supabase~~ → SQLite로 단순화
+- ~~Redis~~ → 불필요 (단일 사용자)
+- ~~Tiptap~~ → textarea + Markdown
+- ~~Instagram/Threads~~ → Blogger만 MVP
+- ~~OpenAI API~~ → Claude 단일 API
+- ~~DALL-E/FLUX/Unsplash~~ → 이미지는 수동 (MVP)
+- ~~예약 발행~~ → 즉시 발행만 (MVP)
+
+---
+
+## 프로젝트 구조
 
 ```
 content-autopilot/
-├── frontend/                 # Next.js 15 (App Router)
-│   ├── src/
-│   │   ├── app/              # App Router 페이지
-│   │   │   ├── (dashboard)/  # 대시보드 레이아웃 그룹
-│   │   │   ├── topics/       # 주제 발굴
-│   │   │   ├── editor/       # 콘텐츠 생성/편집
-│   │   │   ├── blog/         # 블로그 관리
-│   │   │   ├── settings/     # 설정
-│   │   │   └── layout.tsx    # 루트 레이아웃 (사이드바 포함)
-│   │   ├── components/
-│   │   │   ├── ui/           # shadcn/ui 컴포넌트
-│   │   │   ├── editor/       # 리치 텍스트 에디터 관련
-│   │   │   ├── images/       # 이미지 선택/배치 관련
-│   │   │   └── layout/       # 사이드바, 헤더 등
-│   │   ├── lib/              # 유틸리티, API 클라이언트
-│   │   ├── hooks/            # 커스텀 훅
-│   │   └── types/            # TypeScript 타입 정의
-│   ├── public/
-│   ├── tailwind.config.ts
-│   ├── next.config.ts
-│   └── package.json
-├── backend/                  # FastAPI
-│   ├── app/
+├── src/
+│   ├── app/                    # Next.js App Router
+│   │   ├── page.tsx            # 대시보드 (파이프라인 상태)
+│   │   ├── topics/
+│   │   │   └── page.tsx        # 키워드 조회 + 기회 랭킹
+│   │   ├── editor/
+│   │   │   └── [id]/
+│   │   │       └── page.tsx    # Markdown 에디터 + 미리보기
+│   │   ├── posts/
+│   │   │   └── page.tsx        # 콘텐츠 목록 (상태별 필터)
+│   │   ├── settings/
+│   │   │   └── page.tsx        # API 키 설정 + Blogger 연결
+│   │   ├── onboarding/
+│   │   │   └── page.tsx        # 첫 실행 위자드
 │   │   ├── api/
-│   │   │   └── v1/
-│   │   │       ├── trends.py      # 트렌드 분석 엔드포인트
-│   │   │       ├── crawl.py       # 크롤링 엔드포인트
-│   │   │       ├── content.py     # 콘텐츠 CRUD
-│   │   │       ├── images.py      # 이미지 서비스
-│   │   │       ├── publish.py     # 배포 엔드포인트
-│   │   │       └── settings.py    # 설정 엔드포인트
-│   │   ├── services/
-│   │   │   ├── trend_service.py   # Google Trends + YouTube 분석
-│   │   │   ├── crawl_service.py   # 블로그 크롤링
-│   │   │   ├── ai_service.py      # Claude/OpenAI 콘텐츠 생성
-│   │   │   ├── image_service.py   # 이미지 수집/생성
-│   │   │   └── publish_service.py # Blogger/Instagram 배포
-│   │   ├── models/                # Pydantic 모델
-│   │   ├── db/                    # DB 연결, 쿼리
-│   │   ├── core/
-│   │   │   ├── config.py          # 환경변수, 설정
-│   │   │   └── dependencies.py    # 의존성 주입
-│   │   └── main.py
-│   ├── tests/
-│   ├── Dockerfile
-│   ├── pyproject.toml             # uv 사용
-│   └── requirements.txt
-├── supabase/
-│   └── migrations/                # SQL 마이그레이션 파일
-├── docker-compose.yml             # 로컬 개발용
+│   │   │   ├── keywords/
+│   │   │   │   └── search/route.ts     # GET: 키워드 트렌드 조회
+│   │   │   ├── content/
+│   │   │   │   ├── route.ts            # GET: 목록, POST: 생성
+│   │   │   │   ├── [id]/route.ts       # GET/PUT/DELETE: 개별 콘텐츠
+│   │   │   │   └── generate/route.ts   # POST: Claude AI 생성 (streaming)
+│   │   │   ├── publish/
+│   │   │   │   └── blogger/route.ts    # POST: Blogger 발행
+│   │   │   ├── auth/
+│   │   │   │   └── blogger/
+│   │   │   │       ├── route.ts        # GET: OAuth 시작
+│   │   │   │       └── callback/route.ts # GET: OAuth 콜백
+│   │   │   └── settings/route.ts       # GET/PUT: 설정 CRUD
+│   │   └── layout.tsx          # 루트 레이아웃 (사이드바)
+│   ├── components/
+│   │   ├── ui/                 # shadcn/ui
+│   │   ├── layout/
+│   │   │   ├── sidebar.tsx
+│   │   │   └── header.tsx
+│   │   └── editor/
+│   │       ├── markdown-editor.tsx    # textarea + 툴바
+│   │       └── preview.tsx            # Markdown → HTML 미리보기
+│   ├── lib/
+│   │   ├── db.ts               # SQLite 연결 + Drizzle 인스턴스
+│   │   ├── schema.ts           # Drizzle 스키마 정의
+│   │   ├── claude.ts           # Claude API 클라이언트
+│   │   ├── blogger.ts          # Blogger API 클라이언트
+│   │   ├── auth.ts             # 간단한 Bearer token 인증
+│   │   └── sanitize.ts         # HTML 살균 (sanitize-html)
+│   ├── hooks/
+│   │   └── use-streaming.ts    # AI 생성 streaming 훅
+│   └── types/
+│       └── index.ts
+├── drizzle/
+│   └── migrations/             # Drizzle Kit 마이그레이션
+├── data/
+│   └── content.db              # SQLite DB 파일 (.gitignore)
 ├── .env.example
-├── .gitignore
+├── .env.local                  # (.gitignore)
+├── next.config.ts
+├── tailwind.config.ts
+├── drizzle.config.ts
+├── package.json
+├── PLAN.md
+├── STATUS.md
+├── CLAUDE.md
 └── README.md
 ```
 
-### 1-2. 기술 스택 셋업 상세
+---
 
-| 항목 | 도구 | 설정 사항 |
-|------|------|----------|
-| 프론트 패키지 매니저 | pnpm | workspace 설정 |
-| 백엔드 패키지 매니저 | uv | Python 3.12+ |
-| 프론트 UI | shadcn/ui + Tailwind v4 | 다크모드 지원 |
-| 리치 텍스트 에디터 | Tiptap | 이미지 삽입, CTA 블록 커스텀 노드 |
-| 상태 관리 | Zustand | 에디터 상태, 이미지 선택 상태 |
-| API 통신 | TanStack Query v5 | 캐싱, 낙관적 업데이트 |
-| 폼 관리 | React Hook Form + Zod | 설정 화면, SEO 메타 편집 |
-| 백엔드 비동기 HTTP | httpx | 외부 API 호출 |
-| 크롤링 | BeautifulSoup4 + httpx | 블로그 텍스트/이미지 추출 |
-| 작업 큐 | 없음 (MVP) | 추후 Celery/ARQ 도입 검토 |
-
-### 1-3. DB 스키마 (보완)
+## DB 스키마 (SQLite)
 
 ```sql
--- 원본 문서 기반 + 누락된 컬럼/인덱스 보완
-
-CREATE TABLE api_connections (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    provider TEXT NOT NULL,           -- 'blogger', 'instagram', 'youtube', 'unsplash', 'openai', 'claude'
-    credentials JSONB NOT NULL,       -- 암호화된 토큰/키 저장
-    metadata JSONB,                   -- 블로그 ID, 계정 정보 등
-    is_active BOOLEAN DEFAULT true,
-    created_at TIMESTAMPTZ DEFAULT now(),
-    updated_at TIMESTAMPTZ DEFAULT now()
-);
-
 CREATE TABLE keywords (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    keyword TEXT NOT NULL,
-    trend_data JSONB,                 -- Google Trends 응답 캐시
-    youtube_data JSONB,               -- YouTube 분석 결과 캐시
-    related_keywords TEXT[],          -- 연관 키워드 배열
-    competition_score REAL,           -- 경쟁도 (0-1)
-    search_volume INTEGER,            -- 월간 검색량 추정치
-    cached_at TIMESTAMPTZ,            -- 캐시 만료 판단용
-    created_at TIMESTAMPTZ DEFAULT now()
-);
-CREATE INDEX idx_keywords_keyword ON keywords (keyword);
-CREATE INDEX idx_keywords_cached_at ON keywords (cached_at);
-
-CREATE TABLE tone_presets (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name TEXT NOT NULL,               -- '정보 전달형', '대화체', '전문가 톤'
-    prompt_template TEXT NOT NULL,    -- AI에 전달할 톤 지시 프롬프트
-    is_default BOOLEAN DEFAULT false,
-    created_at TIMESTAMPTZ DEFAULT now()
-);
-
-CREATE TABLE blog_categories (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name TEXT NOT NULL,
-    slug TEXT NOT NULL UNIQUE,
-    parent_id UUID REFERENCES blog_categories(id),  -- 계층 구조 지원
-    series_name TEXT,                 -- 시리즈 이름 (nullable)
-    sort_order INTEGER DEFAULT 0,
-    created_at TIMESTAMPTZ DEFAULT now()
+    id TEXT PRIMARY KEY,              -- nanoid 생성
+    keyword TEXT NOT NULL UNIQUE,
+    trend_data TEXT,                   -- JSON 문자열 (트렌드 응답 캐시)
+    related_keywords TEXT,             -- JSON 배열 문자열
+    competition_score REAL,
+    search_volume INTEGER,
+    cached_at TEXT,                    -- ISO 8601 문자열
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE contents (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id TEXT PRIMARY KEY,              -- nanoid 생성
     title TEXT NOT NULL,
-    body TEXT NOT NULL,               -- HTML 형태
-    status TEXT NOT NULL DEFAULT 'draft',  -- draft, review, scheduled, published
-    keyword_id UUID REFERENCES keywords(id),
-    category_id UUID REFERENCES blog_categories(id),
-    tone_preset_id UUID REFERENCES tone_presets(id),
+    body TEXT NOT NULL,               -- Markdown 형태
+    body_html TEXT,                   -- Markdown → HTML 변환 결과 (발행용)
+    status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft', 'published', 'failed')),
+    keyword_id TEXT REFERENCES keywords(id),
+    tone TEXT DEFAULT 'informative',  -- 'informative', 'conversational', 'expert'
     seo_title TEXT,
     seo_description TEXT,
-    seo_tags TEXT[],
-    cta_config JSONB,                 -- CTA 버튼 설정 (텍스트, URL, 위치)
-    source_urls TEXT[],               -- 참고한 원본 블로그 URL들
-    scheduled_at TIMESTAMPTZ,         -- 예약 발행 시간
-    created_at TIMESTAMPTZ DEFAULT now(),
-    updated_at TIMESTAMPTZ DEFAULT now()
+    seo_tags TEXT,                    -- JSON 배열 문자열
+    source_urls TEXT,                 -- JSON 배열 문자열 (참고 URL)
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
-CREATE INDEX idx_contents_status ON contents (status);
-CREATE INDEX idx_contents_scheduled ON contents (scheduled_at) WHERE scheduled_at IS NOT NULL;
-
-CREATE TABLE content_images (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    content_id UUID REFERENCES contents(id) ON DELETE CASCADE,
-    url TEXT NOT NULL,
-    source_type TEXT NOT NULL,        -- 'crawled', 'stock', 'ai_generated'
-    source_provider TEXT,             -- 'unsplash', 'pexels', 'dall-e', 'flux'
-    source_url TEXT,                  -- 원본 출처 URL
-    alt_text TEXT,
-    usage_type TEXT NOT NULL,         -- 'thumbnail', 'body', 'instagram'
-    position INTEGER,                 -- 본문 내 위치 (순서)
-    metadata JSONB,                   -- 크기, 포맷, 라이선스 정보
-    created_at TIMESTAMPTZ DEFAULT now()
-);
-CREATE INDEX idx_content_images_content ON content_images (content_id);
 
 CREATE TABLE publications (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    content_id UUID REFERENCES contents(id) ON DELETE CASCADE,
-    platform TEXT NOT NULL,           -- 'blogger', 'instagram', 'threads'
-    external_id TEXT,                 -- 플랫폼 측 게시물 ID
-    external_url TEXT,                -- 발행된 게시물 URL
-    status TEXT NOT NULL DEFAULT 'pending', -- pending, published, failed, deleted
-    published_at TIMESTAMPTZ,
-    error_message TEXT,               -- 실패 시 에러 내용
-    created_at TIMESTAMPTZ DEFAULT now()
+    id TEXT PRIMARY KEY,
+    content_id TEXT NOT NULL REFERENCES contents(id) ON DELETE CASCADE,
+    platform TEXT NOT NULL DEFAULT 'blogger',
+    external_id TEXT,                 -- Blogger 게시물 ID
+    external_url TEXT,                -- 발행된 URL
+    status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'published', 'failed')),
+    published_at TEXT,
+    error_message TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
-CREATE INDEX idx_publications_content ON publications (content_id);
-CREATE INDEX idx_publications_platform ON publications (platform, status);
+CREATE INDEX idx_publications_content ON publications(content_id);
+
+CREATE TABLE settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+-- 설정 예: claude_api_key, blogger_tokens (JSON), default_tone
+```
+
+### 상태 머신
+
+```
+콘텐츠 상태:
+  draft ──(발행 클릭)──→ [발행 시도] ──(성공)──→ published
+                                      └──(실패)──→ failed
+  failed ──(재시도)──→ [발행 시도] ──→ ...
+  published ──(삭제)──→ (DB에서 제거)
+
+발행 상태:
+  pending ──→ published | failed
 ```
 
 ---
 
-## Phase 2: 핵심 파이프라인 구현 (주제 발굴 → AI 생성)
+## 핵심 파이프라인
 
-### 2-1. 트렌드 분석 서비스
+### 1. 키워드 조회 (`/topics`)
 
-**백엔드 (`trend_service.py`)**
-- Google Trends 분석: `google-trends-api-toolkit` 사용
-  - 키워드 인기도 추이 (최근 7일/30일/90일)
-  - 연관 키워드 추출
-  - 지역별 관심도 (한국 기준)
-- YouTube Data API v3 분석:
-  - 키워드 관련 최근 영상 검색
-  - 구독자 대비 조회수 비율로 "떠오르는 주제" 판별
-  - 영상 제목/태그에서 추가 키워드 추출
-- **캐싱 전략**: 동일 키워드 재검색 시 `keywords.cached_at` 기준 24시간 이내면 캐시 반환. Redis(Upstash)에 인기 키워드 TTL 캐싱.
+**API**: `GET /api/keywords/search?q=키워드`
 
-**프론트 (`/topics`)**
-- 키워드 입력 → 트렌드 점수 + 관련 키워드 카드 그리드
-- 각 카드: 키워드, 검색량 그래프(미니 차트), 경쟁도 배지, YouTube 인기 영상 썸네일
-- "이 주제로 콘텐츠 생성" 버튼 → 에디터로 이동
+- Google Trends 비공식 API 시도 → 실패 시 graceful degradation (수동 입력 허용)
+- 응답: 키워드, 관련 키워드, 트렌드 점수
+- 캐싱: 동일 키워드 24시간 내 재검색 시 DB 캐시 반환
 
-### 2-2. 크롤링 서비스
+**UI**:
+- 검색 입력 → 키워드 카드 리스트 (기회 순 정렬)
+- 각 카드: 키워드, 트렌드 점수 배지, "이 주제로 생성" 버튼
+- **Empty state**: "키워드를 입력해서 블로그 주제를 찾아보세요"
+- **Loading state**: 스켈레톤 카드 3개
+- **Error state**: "트렌드 조회 실패. 키워드를 직접 입력해서 진행할 수 있습니다"
 
-**백엔드 (`crawl_service.py`)**
-- 선택한 키워드로 Google 검색 상위 5-10개 블로그 크롤링
-- 추출 대상:
-  - 본문 텍스트 (HTML 구조 유지)
-  - 이미지 URL + alt 텍스트
-  - 메타 태그 (title, description)
-- **주의 사항**:
-  - `robots.txt` 준수
-  - 크롤링 간격 1-2초 딜레이
-  - User-Agent 명시
-  - 크롤링된 이미지는 참고용으로만 사용 (저작권 안내 UI 표시)
+### 2. AI 콘텐츠 생성 (`/editor/[id]`)
 
-### 2-3. AI 콘텐츠 생성 서비스
+**API**: `POST /api/content/generate` (Streaming SSE)
 
-**백엔드 (`ai_service.py`)**
-- **Claude API (주력)**: 본문 생성
-  - 입력: 키워드 + 크롤링된 참고 자료 + 톤 프리셋 프롬프트 + SEO 지침
-  - 출력: HTML 형태의 블로그 본문 (H2/H3 구조화, 이미지 삽입 위치 마커 포함)
-  - 프롬프트 구조:
-    ```
-    시스템: 톤 프리셋 + SEO 가이드라인
-    사용자: 키워드 + 참고 자료 요약 + 원하는 분량/구조
-    ```
-- **OpenAI API (보조)**: SEO 메타데이터 생성
-  - SEO 제목 (60자 이내)
-  - 메타 설명 (155자 이내)
-  - 태그/키워드 추출 (5-10개)
-  - 구조화된 JSON 응답 (`response_format: json`)
-- **부분 재생성**: 특정 문단만 선택하여 AI 재작성 요청 가능
-- **Redis 캐싱**: 동일 키워드+톤 조합의 응답을 30분 TTL로 캐싱 (비용 절감)
+- 입력: keyword, tone, target_length
+- Claude API streaming → SSE로 클라이언트에 실시간 전송
+- Markdown 형태로 생성 (H2/H3 구조화)
+- 생성 완료 후 자동 저장 (draft 상태)
 
-### 2-4. 이미지 서비스
-
-**백엔드 (`image_service.py`)**
-- **탭 1 - 크롤링 이미지**: `crawl_service`에서 수집한 이미지 목록 반환 (출처 URL 포함)
-- **탭 2 - 무료 스톡**: Unsplash/Pexels API 키워드 검색
-  - 적정 해상도(1200x630 이상) 필터링
-  - 라이선스 정보 포함
-- **탭 3 - AI 생성**: DALL-E 3 / FLUX API
-  - 키워드 기반 자동 프롬프트 생성
-  - 썸네일용(16:9), 본문용(4:3), 인스타용(1:1) 비율 옵션
-- **이미지 저장**: Supabase Storage에 선택된 이미지 업로드 → CDN URL 반환
-
----
-
-## Phase 3: 콘텐츠 편집기 및 배포
-
-### 3-1. 콘텐츠 편집기 (`/editor/[id]`)
-
-**핵심 컴포넌트:**
-- **Tiptap 리치 텍스트 에디터**
-  - 커스텀 노드: 이미지 블록 (캡션 + 출처), CTA 버튼 블록
-  - 툴바: 제목(H2/H3), 볼드, 리스트, 링크, 이미지 삽입, CTA 삽입
-  - 부분 선택 → "AI 재생성" 플로팅 버튼
-- **이미지 패널** (사이드 패널)
-  - 3개 탭 (크롤링/스톡/AI) 전환
-  - 드래그 앤 드롭으로 본문 내 이미지 배치
-  - 썸네일 이미지 지정 (대표 이미지)
-- **SEO 패널** (하단 또는 사이드)
-  - SEO 제목, 메타 설명 편집
-  - 태그 입력 (자동 추천 + 수동 추가/삭제)
-  - SEO 점수 시각화 (제목 길이, 키워드 밀도 등 체크리스트)
-- **CTA 설정**
-  - 프리셋: 구독 유도, 더보기, 제휴 링크 (쿠팡 파트너스 등)
-  - 위치: 본문 중간, 본문 하단 선택
-  - 텍스트/URL 커스텀
-- **미리보기 모드**
-  - 블로그 미리보기 (실제 Blogger 스타일)
-  - 인스타그램 미리보기 (이미지 + 캡션 변환)
-- **발행 설정**
-  - 카테고리/시리즈 선택
-  - 즉시 발행 vs 예약 발행 (날짜/시간 선택)
-  - 플랫폼 선택 (Blogger, Instagram 체크박스)
-  - 출처 표기 방식 (하단 링크 포함/생략)
-
-### 3-2. 배포 서비스
-
-**백엔드 (`publish_service.py`)**
-- **Blogger API v3**:
-  - OAuth 2.0 인증 플로우
-  - 포스트 생성 (HTML 본문, 라벨, 예약 시간)
-  - 이미지는 Supabase Storage CDN URL 참조
-- **Instagram Graph API**:
-  - 블로그 본문 → 인스타 캡션 자동 변환 (AI 요약)
-  - 이미지 비율 자동 조정 (1:1 크롭)
-  - 해시태그 자동 생성
-- **예약 발행**: `scheduled_at` 기반 — 백엔드에서 주기적 체크 (cron 또는 APScheduler)
-- **에러 핸들링**: 실패 시 `publications.error_message`에 기록, 재시도 버튼 제공
-
----
-
-## Phase 4: 관리 화면
-
-### 4-1. 블로그 관리 (`/blog`)
-- 콘텐츠 목록 (상태별 필터: 초안/검토중/예약/발행완료)
-- 카테고리/시리즈 CRUD
-- 발행 스케줄 캘린더 뷰
-- 발행된 글의 외부 링크 바로가기
-
-### 4-2. 대시보드 (`/`)
-- 최근 발행 콘텐츠 카드 (최근 5건)
-- 발행 현황 요약 (이번 주/이번 달 발행 수)
-- 트렌드 키워드 요약 (최근 검색한 키워드 중 상승 추세)
-- 빠른 액션: "새 주제 발굴", "초안 이어쓰기"
-
-### 4-3. 설정 (`/settings`)
-- **API 연결 관리**
-  - 각 서비스별 API 키/토큰 입력 및 연결 상태 표시
-  - Blogger OAuth 연결/해제
-  - Instagram 비즈니스 계정 연결
-- **블로그 설정**
-  - 기본 Blogger 블로그 선택
-  - 기본 카테고리/라벨 매핑
-- **톤 프리셋 관리**
-  - 기본 제공: 정보 전달형, 대화체, 전문가 톤
-  - 커스텀 톤 추가/편집 (프롬프트 직접 수정)
-- **CTA 프리셋 관리**
-  - 자주 쓰는 CTA 템플릿 저장
-- **기본 SEO 설정**
-  - 기본 태그, 출처 표기 방식 기본값
-
----
-
-## Phase 5 (추후): 확장
-
-- YouTube 탭 구현 (영상 스크립트 기반 블로그 변환)
-- Threads 배포 연동
-- n8n 워크플로우 통합 (파이프라인 복잡도 증가 시)
-- 멀티유저/SaaS 전환 (Supabase Auth + Stripe)
-- 성과 분석 (Google Analytics API 연동, AdSense 수익 추적)
-
----
-
-## 원본 문서 대비 보완 사항
-
-| 영역 | 원본에서 누락/미비 | 보완 내용 |
-|------|------------------|----------|
-| **DB 스키마** | 컬럼 정의, 인덱스, 관계 없음 | 전체 DDL + 인덱스 + FK 관계 정의 |
-| **프론트 상태관리** | 미정 | Zustand + TanStack Query 선정 |
-| **리치 텍스트 에디터** | "에디터" 언급만 | Tiptap 선정 + 커스텀 노드(CTA, 이미지 블록) 설계 |
-| **AI 프롬프트 구조** | "Claude로 생성" 수준 | 시스템/사용자 프롬프트 분리, 부분 재생성, 캐싱 전략 |
-| **이미지 저장소** | 미정 | Supabase Storage → CDN URL 파이프라인 |
-| **인증 플로우** | "Blogger API" 언급만 | OAuth 2.0 플로우 + 토큰 갱신 로직 명시 |
-| **예약 발행** | "예약 발행" 언급만 | APScheduler 기반 주기적 체크 + 재시도 로직 |
-| **에디터 UX** | 검토 항목 리스트만 | 컴포넌트별 구체적 UI 구조 + 인터랙션 설계 |
-| **SEO 최적화** | "SEO 메타" 수준 | SEO 점수 체크리스트 시각화, 제목 길이/키워드 밀도 검증 |
-| **캐싱 전략** | "Redis 캐싱" 언급만 | 키워드 캐시 24h TTL, AI 응답 30분 TTL 구체화 |
-| **에러 핸들링** | 없음 | 배포 실패 기록 + 재시도 UX |
-| **프로젝트 구조** | 없음 | 전체 디렉토리 트리 + 파일별 역할 정의 |
-| **백엔드 패키지 매니저** | 미정 | uv 선정 (빠르고 모던한 Python 패키지 관리) |
-| **폼/검증** | 없음 | React Hook Form + Zod 선정 |
-
----
-
-## 구현 순서 (권장)
+**Claude 프롬프트 템플릿**:
 
 ```
-Phase 1 (셋업)           ██░░░░░░░░░░░░░░░░░░
-  ├─ 모노레포 생성
-  ├─ Next.js + FastAPI 보일러플레이트
-  ├─ Supabase 프로젝트 + DB 마이그레이션
-  ├─ Docker Compose (로컬 개발)
-  └─ 환경변수 + .env 설정
+System:
+당신은 한국어 블로그 콘텐츠 전문 작가입니다.
+톤: {tone} (informative=정보 전달형, conversational=대화체, expert=전문가)
+다음 규칙을 따르세요:
+- H2, H3 소제목으로 구조화
+- 2000-3000자 분량
+- SEO 친화적: 키워드를 제목, 첫 문단, 소제목에 자연스럽게 포함
+- 독자에게 실질적인 가치를 제공하는 내용
+- 마지막에 요약 또는 행동 촉구 포함
 
-Phase 2 (핵심 파이프라인)  ░░░░██████████░░░░░░
-  ├─ 트렌드 분석 (백엔드 API + 프론트 UI)
-  ├─ 크롤링 서비스
-  ├─ AI 콘텐츠 생성 서비스
-  └─ 이미지 서비스
+User:
+키워드: {keyword}
+원하는 분량: {target_length}자
+{참고 자료가 있으면: "참고 자료:\n{source_summaries}"}
 
-Phase 3 (편집 + 배포)     ░░░░░░░░░░░░████████
-  ├─ Tiptap 에디터 + 이미지 패널
-  ├─ SEO 패널 + CTA 설정
-  ├─ 미리보기 모드
-  ├─ Blogger 배포
-  └─ Instagram 배포
+위 키워드에 대한 블로그 글을 Markdown 형식으로 작성해주세요.
+```
 
-Phase 4 (관리 화면)       ░░░░░░░░░░░░░░░░████
-  ├─ 블로그 관리 + 캘린더
-  ├─ 대시보드
-  └─ 설정 화면
+**SEO 메타데이터 생성** (같은 Claude 호출 또는 별도 호출):
+```
+다음 블로그 글의 SEO 메타데이터를 JSON으로 생성하세요:
+- seo_title: 60자 이내
+- seo_description: 155자 이내
+- seo_tags: 5-10개 키워드 배열
+
+글 제목: {title}
+글 내용 첫 500자: {body_preview}
+```
+
+**UI (에디터)**:
+- 레이아웃: 좌측 70% textarea (Markdown), 우측 30% 미리보기 (HTML 렌더링)
+- 상단: 제목 입력, 톤 선택 드롭다운
+- 하단: SEO 섹션 (접을 수 있음) + 발행 버튼
+- **Streaming state**: textarea에 텍스트가 실시간으로 나타남 + "생성 중..." 배지 + 취소 버튼
+- **Empty state**: "키워드를 선택하거나 직접 글을 작성하세요"
+- **Error state**: "AI 생성 실패. 다시 시도하거나 직접 작성하세요" + 재시도 버튼
+
+### 3. Blogger 발행
+
+**API**: `POST /api/publish/blogger`
+
+- 입력: content_id
+- Markdown → HTML 변환 (marked 라이브러리)
+- HTML 살균 (sanitize-html, 허용 태그 화이트리스트)
+- Blogger API v3로 발행 (OAuth 2.0 access token)
+- 토큰 만료 체크 → 자동 갱신 (refresh_token 사용)
+
+**OAuth 플로우**:
+```
+사용자 → /api/auth/blogger → Google OAuth 동의 화면
+→ 동의 → /api/auth/blogger/callback → tokens DB 저장
+→ 설정 화면으로 리다이렉트 ("연결 완료")
+```
+
+**토큰 관리**:
+- `settings` 테이블에 `blogger_tokens` 키로 JSON 저장
+- 매 발행 전 `expires_at - now < 5분` 체크 → 선제적 갱신
+- 갱신 실패 → 재인증 안내 UI
+
+**발행 후**:
+- 성공 화면: "발행 완료!" + 블로그 글 링크 + "다음 주제 찾기" 버튼
+- 실패 화면: 에러 메시지 + 재시도 버튼
+
+---
+
+## 페이지별 UI 사양
+
+### 대시보드 (`/`)
+- **목적**: 파이프라인 현황 한눈에 보기 (허영 메트릭 아님)
+- 초안 N개 | 발행 완료 N개 | 실패 N개 (이번 주)
+- 최근 초안 리스트 (이어서 편집)
+- "새 주제 찾기" CTA 버튼
+- **Empty state**: 첫 실행 시 온보딩 위자드로 리다이렉트
+
+### 키워드 (`/topics`)
+- 위에 상세 설명
+
+### 에디터 (`/editor/[id]`)
+- 위에 상세 설명
+
+### 콘텐츠 목록 (`/posts`)
+- 테이블 뷰: 제목, 상태 배지, 생성일, 발행일
+- 상태 필터 탭: 전체 | 초안 | 발행 완료 | 실패
+- 각 행: 편집 링크, 발행/재시도 버튼
+- **Empty state**: "아직 작성한 글이 없습니다. 새 주제를 찾아보세요"
+
+### 설정 (`/settings`)
+- Claude API 키 입력 (마스킹 표시)
+- Blogger 연결 상태 + 연결/해제 버튼
+- 기본 톤 선택
+- **간결하게**: 다른 설정은 필요할 때 추가
+
+### 온보딩 (`/onboarding`)
+- Step 1: Claude API 키 입력 → 유효성 검증 (간단한 API 호출)
+- Step 2: Blogger 연결 (OAuth) → 연결 확인
+- Step 3: "첫 번째 키워드를 검색해보세요" → `/topics`로 이동
+
+---
+
+## 인증 & 보안
+
+- **Bearer token 인증**: 환경변수 `AUTH_TOKEN`으로 설정, 모든 API 라우트에서 검증
+- **HTML 살균**: Claude 생성물에서 script, iframe, on* 이벤트 등 제거
+- **프롬프트 인젝션 방어**: 크롤링 텍스트는 HTML 태그 제거 후 길이 제한 + 구분자로 감싸서 Claude에 전달
+- **API 키 저장**: .env.local (로컬 개발), Vercel 환경변수 (배포)
+- **CORS**: 같은 오리진만 허용 (Next.js 기본)
+
+---
+
+## 테스트 전략
+
+| 유형 | 대상 | 도구 |
+|------|------|------|
+| Unit | 프롬프트 생성, HTML 살균, Markdown 변환 | Vitest |
+| Integration | Blogger API 발행 (mock), DB CRUD | Vitest |
+| E2E | 키워드 → 생성 → 발행 전체 플로우 (mock externals) | Playwright |
+
+**최소 테스트 목록**:
+- Claude 프롬프트 템플릿이 올바른 구조 생성하는지
+- HTML sanitize가 script 태그 제거하는지
+- Markdown → HTML 변환이 정상인지
+- Blogger 토큰 갱신 로직
+- 콘텐츠 CRUD API
+- 빈 입력/잘못된 입력 에러 핸들링
+
+---
+
+## 에러 핸들링
+
+| 에러 | 원인 | 자동 복구 | 사용자 메시지 |
+|------|------|----------|-------------|
+| Claude API 429 | Rate limit | 지수 백오프 3회 재시도 | "AI 서버가 바쁩니다. 잠시 후 다시 시도됩니다" |
+| Claude API 500 | 서버 에러 | 1회 재시도 | "AI 생성 실패. 다시 시도해주세요" |
+| Claude 빈 응답 | 프롬프트 문제 | 없음 | "생성된 내용이 없습니다. 다른 키워드로 시도해보세요" |
+| Blogger 401 | 토큰 만료 | refresh_token으로 갱신 | (자동 갱신, 실패 시) "블로그 재연결이 필요합니다" |
+| Blogger 403 | 권한 없음 | 없음 | "블로그에 글을 올릴 권한이 없습니다. 설정을 확인하세요" |
+| SQLite 잠금 | 동시 접근 | 100ms 후 재시도 | (투명하게 처리) |
+| 트렌드 조회 실패 | API 불안정 | graceful degradation | "트렌드 조회 실패. 키워드를 직접 입력해서 진행할 수 있습니다" |
+
+---
+
+## 구현 순서
+
+```
+Phase 1: 프로젝트 셋업 (CC: ~30분)
+  ├─ Next.js 15 프로젝트 생성
+  ├─ SQLite + Drizzle ORM 설정
+  ├─ DB 마이그레이션 실행
+  ├─ shadcn/ui 설치
+  ├─ 기본 레이아웃 (사이드바 + 헤더)
+  └─ Bearer token 인증 미들웨어
+
+Phase 2: 핵심 파이프라인 (CC: ~1시간)
+  ├─ Claude API 연동 (streaming)
+  ├─ 콘텐츠 생성 API + 에디터 페이지
+  ├─ Markdown → HTML 변환 + 살균
+  ├─ 콘텐츠 CRUD API
+  └─ 콘텐츠 목록 페이지
+
+Phase 3: Blogger 연동 (CC: ~1시간)
+  ├─ Blogger OAuth 플로우
+  ├─ 토큰 저장 + 자동 갱신
+  ├─ 발행 API
+  └─ 발행 결과 UI
+
+Phase 4: 키워드 + 대시보드 (CC: ~30분)
+  ├─ 키워드 조회 (Google Trends 시도 + fallback)
+  ├─ 키워드 페이지 UI
+  ├─ 대시보드 페이지
+  └─ 온보딩 위자드
+
+Phase 5: 마무리 (CC: ~30분)
+  ├─ 설정 페이지
+  ├─ 테스트 작성
+  ├─ .env.example + README
+  └─ Vercel 배포 설정
 ```
 
 ---
 
 ## 검증 방법
 
-1. **Phase 1 완료 검증**: `docker-compose up`으로 프론트/백엔드 동시 기동, Supabase 연결 확인
-2. **Phase 2 완료 검증**: 키워드 입력 → 트렌드 데이터 조회 → AI 초안 생성까지 E2E 동작
-3. **Phase 3 완료 검증**: 에디터에서 초안 편집 → 이미지 배치 → Blogger에 실제 포스팅 발행
-4. **Phase 4 완료 검증**: 대시보드에서 발행 현황 확인, 설정에서 API 키 변경 후 정상 동작
+1. **Phase 1 완료**: `pnpm dev`로 기동, 사이드바 있는 빈 페이지 표시
+2. **Phase 2 완료**: 키워드 입력 → Claude가 streaming으로 글 생성 → DB 저장
+3. **Phase 3 완료**: 생성된 글 → "발행" 클릭 → 실제 Blogger에 포스트 게시
+4. **Phase 4 완료**: 키워드 조회 → 주제 선택 → 글 생성 → 발행 E2E 동작
+5. **전체 완료**: 대시보드에서 현황 확인, 설정에서 API 변경 정상 동작
 
 ---
 
-## gstack 스킬 & 에이전트 역할 매핑
+## 미확정 사항
 
-프로젝트 각 단계에서 gstack 스킬을 **담당자 역할**로 활용한다.
-
-### 역할별 스킬 배치
-
-| 역할 | gstack 스킬 | 담당 업무 |
-|------|-------------|----------|
-| **CEO / 프로덕트 오너** | `/gstack-plan-ceo-review` | 제품 비전 검증, 스코프 조정, "10-star 제품" 관점으로 플랜 챌린지 |
-| **CTO / 엔지니어링 매니저** | `/gstack-plan-eng-review` | 아키텍처 리뷰, 데이터 플로우, 엣지 케이스, 테스트 커버리지, 성능 설계 |
-| **디자인 디렉터** | `/gstack-design-consultation` | 디자인 시스템 수립 (컬러, 타이포, 레이아웃), DESIGN.md 생성 |
-| **디자인 QA** | `/gstack-design-review` | 시각적 일관성 검수, 스페이싱/계층 구조 문제 발견 및 수정 |
-| **보안 책임자 (CSO)** | `/gstack-cso` | OWASP Top 10, STRIDE 위협 모델링, API 키 관리 보안 감사 |
-| **QA 엔지니어** | `/gstack-qa` | 웹앱 체계적 테스트, 버그 발견 및 자동 수정, 헬스 스코어 리포트 |
-| **코드 리뷰어** | `/gstack-review` | PR 리뷰 (SQL 안전성, LLM 신뢰 경계, 조건부 부작용 검출) |
-| **릴리즈 매니저** | `/gstack-ship` | 버전 범핑, CHANGELOG 업데이트, PR 생성 및 푸시 |
-| **배포 엔지니어** | `/gstack-land-and-deploy` | PR 머지 → CI 대기 → 프로덕션 배포 → 헬스 체크 |
-| **SRE / 모니터링** | `/gstack-canary` | 배포 후 카나리 모니터링, 콘솔 에러/성능 이상 감지 |
-| **성능 엔지니어** | `/gstack-benchmark` | 페이지 로드 타임, Core Web Vitals, 번들 사이즈 추적 |
-| **디버거** | `/gstack-investigate` | 버그 근본 원인 조사 (4단계: 조사 → 분석 → 가설 → 구현) |
-| **테크 라이터** | `/gstack-document-release` | 배포 후 문서 업데이트 (README, ARCHITECTURE, CHANGELOG) |
-| **스크럼 마스터** | `/gstack-retro` | 주간 회고, 커밋 히스토리 분석, 생산성 트렌드 |
-| **자동 리뷰 파이프라인** | `/gstack-autoplan` | CEO → 디자인 → 엔지니어링 리뷰를 한 번에 자동 실행 |
-
-### Phase별 스킬 활용 워크플로우
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│ Phase 0: 플랜 검증                                           │
-│                                                             │
-│  /gstack-plan-ceo-review  →  제품 비전/스코프 검증              │
-│  /gstack-plan-eng-review  →  아키텍처/기술 설계 검증             │
-│  /gstack-autoplan         →  위 리뷰 자동 순차 실행             │
-│                                                             │
-├─────────────────────────────────────────────────────────────┤
-│ Phase 1: 프로젝트 셋업                                        │
-│                                                             │
-│  /gstack-design-consultation → 디자인 시스템 (DESIGN.md) 수립   │
-│  /gstack-cso                → API 키 관리/환경변수 보안 감사     │
-│                                                             │
-├─────────────────────────────────────────────────────────────┤
-│ Phase 2-3: 핵심 기능 구현                                      │
-│                                                             │
-│  (개발 중)                                                    │
-│  /gstack-investigate   →  버그 발생 시 근본 원인 조사            │
-│                                                             │
-│  (기능 완성 후)                                                │
-│  /gstack-qa            →  각 기능별 QA + 자동 수정              │
-│  /gstack-design-review →  UI/UX 시각적 검수 + 자동 수정         │
-│  /gstack-benchmark     →  에디터/대시보드 성능 베이스라인 측정     │
-│  /gstack-review        →  PR 코드 리뷰                        │
-│                                                             │
-├─────────────────────────────────────────────────────────────┤
-│ Phase 4: 배포                                                │
-│                                                             │
-│  /gstack-ship             →  PR 생성 + 버전/CHANGELOG          │
-│  /gstack-land-and-deploy  →  머지 → 배포 → 헬스체크             │
-│  /gstack-canary           →  프로덕션 카나리 모니터링             │
-│  /gstack-document-release →  문서 동기화                       │
-│                                                             │
-├─────────────────────────────────────────────────────────────┤
-│ 주기적                                                       │
-│                                                             │
-│  /gstack-retro     →  주간 회고 (생산성, 코드 품질 트렌드)        │
-│  /gstack-cso       →  월간 보안 감사 (종합 스캔)                 │
-│  /gstack-benchmark →  PR마다 성능 회귀 체크                     │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### 추천 실행 순서 (Phase 0 - 지금 바로)
-
-플랜이 확정되었으므로, 구현 시작 전 아래 순서로 리뷰를 돌리는 것을 추천:
-
-1. **`/gstack-plan-ceo-review`** — 제품 비전이 충분히 야심찬지, 스코프가 적절한지 검증
-2. **`/gstack-plan-eng-review`** — 아키텍처/DB 설계/API 구조가 견고한지 검증
-3. **`/gstack-design-consultation`** — Phase 1 시작 시 디자인 시스템부터 수립
-
-또는 **`/gstack-autoplan`** 으로 1-2를 한 번에 자동 실행 가능.
+- [ ] 배포 환경 (Vercel Free vs 로컬 only)
+- [ ] API 비용 월 예산 (Claude API)
+- [ ] 네이버 블로그 지원 여부 (Phase 2+)
+- [ ] 커스텀 도메인
 
 ---
 
-## 확정 사항
-
-- [x] 프로젝트 생성 위치: `~/projects/content-autopilot`
-- [x] GitHub: Private 레포 생성
-- [x] 구현 시작: 다음 세션에서 Phase 1부터 진행
-
-## 미확정 사항 (추후 논의)
-
-- [ ] 배포 환경 확정 (Vercel Free vs Pro, Railway vs Render)
-- [ ] API 비용 월 예산 (Claude API, DALL-E, Upstash Redis)
-- [ ] 도메인 여부 (커스텀 도메인 or Vercel 기본)
-
----
-
-## GSTACK REVIEW REPORT
+## GSTACK REVIEW REPORT (autoplan 2차, 2026-04-01)
 
 | Review | Trigger | Runs | Status | 핵심 발견 |
 |--------|---------|------|--------|----------|
-| CEO Review | `/plan-ceo-review` | 1 | DONE | MVP 스코프 과대, 차별화 부재, 실사용 검증 선행 필요 |
-| Eng Review | `/plan-eng-review` | 1 | DONE | 인증 P0 누락, 비동기 처리 필수, DB 스키마 제약 조건 미비 |
-| Design Review | `/plan-design-review` | 1 | DONE | 에디터 인지 과부하, 온보딩 설계 부재, UX 상태 패턴 전무 |
+| CEO Review | `/plan-ceo-review` | 2 | DONE | 단순화 채택 (Approach B). 검증 전 과투자 방지 |
+| Design Review | `/plan-design-review` | 2 | DONE | 플랜-스택 불일치 해소, 상태 패턴 추가, 온보딩 설계 |
+| Eng Review | `/plan-eng-review` | 2 | DONE | SQLite 스키마 재작성, 인증/살균 추가, 테스트 전략 |
 
----
+### Decision Audit Trail (24건)
 
-### CEO 리뷰 요약
+| # | Phase | Decision | Principle |
+|---|-------|----------|-----------|
+| 1 | CEO | FastAPI → Next.js API Routes | P5 (explicit) |
+| 2 | CEO | Supabase → SQLite | P5 (explicit) |
+| 3 | CEO | Tiptap → textarea + markdown | P3 (pragmatic) |
+| 4 | CEO | Instagram 제거 | P3 (pragmatic) |
+| 5 | CEO | Redis 제거 | P5 (explicit) |
+| 6 | CEO | Claude 단일 API | P4 (DRY) |
+| 7 | CEO | Bearer token 인증 추가 | P1 (completeness) |
+| 8 | CEO | 네이버 블로그 우선 검토 (Taste) | P3 (pragmatic) |
+| 9-16 | Design | 플랜 리라이트, SQLite 스키마, textarea→HTML, API Routes, 온보딩, streaming, 상태 패턴, 프롬프트 | P1/P5 |
+| 17-24 | Eng | 리라이트, 스키마, HTML 살균, Trends API, 예약발행 제거, 테스트, 인증, 부분재생성 제거 | P1/P3/P5 |
 
-**핵심 메시지: 도구를 만들기 전에 글을 먼저 써라.**
-
-1. **MVP가 너무 크다.** 현재 플랜은 V2에 가깝다. 진짜 MVP는 "CLI 스크립트 하나: 키워드 → Claude API → 블로그 글 → Blogger 발행"이면 하루 만에 동작한다.
-
-2. **차별화 포인트가 없다.** Jasper, Koala.sh, Surfer SEO 등 이미 존재하는 경쟁사 대비 뚜렷한 차별화가 없다. 한국 시장 특화(네이버 블로그, 쿠팡 파트너스, 한국어 SEO)가 유력한 방향.
-
-3. **검증 안 된 가정들:**
-   - AI 콘텐츠가 Google SEO에서 효과적인가? (Helpful Content Update 이후 필터링 강화)
-   - Google 검색 크롤링은 ToS 위반 (SerpAPI 같은 대안 필요)
-   - Claude + OpenAI 두 API가 필요한가? (Claude 하나로 통일 가능)
-   - Instagram은 MVP에서 제거 권장 (Facebook 앱 심사만 1주)
-
-4. **기술 스택 단순화 권장:**
-   - Next.js API Routes로 백엔드 통합 (FastAPI 제거)
-   - SQLite로 시작 (Supabase 불필요)
-   - textarea + 마크다운 (Tiptap 에디터 = 시간 블랙홀)
-
-5. **SaaS 전환은 잊어라 (지금은).** 6개월 실사용 데이터 이후 판단.
-
----
-
-### 엔지니어링 리뷰 요약
-
-**핵심 메시지: 기능은 잘 정리됐지만 비기능 요구사항(보안, 성능, 테스트)이 빠져서 "배포 불가능" 상태.**
-
-**P0 (구현 전 반드시 해결):**
-- **인증이 전혀 없다.** 배포하면 URL 아는 누구나 API 키, 콘텐츠 전체에 접근. Supabase Auth 또는 최소 Bearer token 필수.
-
-**P1 (설계 반영 필요):**
-- **비동기 처리 패턴 없음.** 크롤링(10-20초) + AI 생성(10-30초) + 이미지(15-60초) = 동기 HTTP로 불가. FastAPI BackgroundTasks + SSE 필수.
-- **API 키 암호화 전략 없음.** `api_connections.credentials`에 application-level encryption 필요.
-- **Claude streaming 미사용.** 본문 생성 시 streaming → SSE로 실시간 타이핑 효과 필수.
-
-**P2 (DB/API 보완):**
-- `keywords.keyword`에 UNIQUE 제약 없음 → 캐시 로직 무의미
-- `contents.status` 등 TEXT 컬럼에 CHECK 제약 없음
-- `updated_at` 자동 갱신 트리거 없음 (moddatetime 확장 사용)
-- 목록 API에 N+1 위험 (콘텐츠 + 이미지 + 발행상태 JOIN 필요)
-- 페이지네이션 전략 없음
-- 프론트-백 API 타입 동기화 방법 없음 (OpenAPI codegen 필요)
-- CORS 설정 전략 없음
-- 크롤링 SSRF 위험 (인증 없이 임의 URL 크롤링 가능)
-- 테스트 전략 전무 (자동 테스트 0개)
-- CI/CD 파이프라인 없음
-
-**병렬 구현 가능:**
-- Lane A (프론트 중심): 트렌드+크롤링 → 에디터
-- Lane B (백엔드 중심): AI+이미지 서비스 + 배포 서비스
-- 합류: Phase 4 관리 화면
-
----
-
-### /autoplan 2차 리뷰 (2026-04-01)
-
-**Phase 1 CEO 결론: 플랜을 Approach B (경량 웹앱)으로 단순화.**
-- Next.js 풀스택 (API Routes) + SQLite + textarea 에디터
-- Instagram/Threads 제거, Redis/Supabase 제거, FastAPI 제거, Tiptap 제거
-- 핵심: 키워드 조회 → Claude 글 생성 → Blogger 발행
-
-<!-- AUTONOMOUS DECISION LOG -->
-## Decision Audit Trail
-
-| # | Phase | Decision | Classification | Principle | Rationale | Rejected |
-|---|-------|----------|---------------|-----------|-----------|----------|
-| 1 | CEO | FastAPI → Next.js API Routes | Mechanical | P5 (explicit) | 단일 사용자 도구에 두 서버 불필요 | FastAPI 유지 |
-| 2 | CEO | Supabase → SQLite | Mechanical | P5 (explicit) | 단일 사용자에 관리형 DB 과설계 | Supabase |
-| 3 | CEO | Tiptap → textarea + markdown | Mechanical | P3 (pragmatic) | 에디터 커스터마이징은 시간 블랙홀 | Tiptap |
-| 4 | CEO | Instagram 제거 | Mechanical | P3 (pragmatic) | Facebook 심사 1주, MVP 가치 낮음 | Instagram 포함 |
-| 5 | CEO | Redis 제거 | Mechanical | P5 (explicit) | SQLite + 인메모리 캐시로 충분 | Redis |
-| 6 | CEO | Claude 단일 API | Mechanical | P4 (DRY) | Claude + OpenAI 두 API 불필요 | 듀얼 API |
-| 7 | CEO | Bearer token 인증 추가 | Mechanical | P1 (completeness) | 인증 없이 배포 불가 | 인증 없음 |
-| 8 | CEO | 네이버 블로그 우선 검토 | Taste | P3 (pragmatic) | 한국 시장에서 Blogger만으로 불충분할 수 있음 | Blogger only |
-| 9 | Design | 플랜 전체 리라이트 필요 | Mechanical | P1 (completeness) | 현재 플랜이 단순화된 스택을 반영하지 않음 | 부분 수정 |
-| 10 | Design | SQLite 스키마 재작성 | Mechanical | P5 (explicit) | PostgreSQL 전용 문법(UUID, JSONB, TEXT[]) SQLite 호환 불가 | PG 스키마 유지 |
-| 11 | Design | textarea → HTML 파이프라인 확정 | Mechanical | P5 (explicit) | Markdown 입력 → HTML 변환으로 확정 | Raw HTML |
-| 12 | Design | Next.js API Routes 구조 정의 | Mechanical | P1 (completeness) | FastAPI 제거 후 API 설계 공백 | FastAPI 참조 유지 |
-| 13 | Design | 첫 실행 온보딩 위자드 추가 | Mechanical | P1 (completeness) | Claude API 키 → Blogger 연결 → 첫 키워드 3단계 | 설정 화면 몰아넣기 |
-| 14 | Design | AI 생성 중 streaming UX | Mechanical | P1 (completeness) | 5-30초 대기 중 UX 전무 | 로딩 스피너만 |
-| 15 | Design | empty/loading/error 상태 전체 정의 | Mechanical | P1 (completeness) | 모든 페이지에 상태 패턴 필요 | happy path only |
-| 16 | Design | Claude 프롬프트 템플릿 실제 작성 | Taste | P1 (completeness) | 제품 핵심 IP인데 "설명"만 있고 실제 프롬프트 없음 | 추후 작성 |
-| 17 | Eng | 플랜 전체 리라이트 (단순화 스택 반영) | Mechanical | P1 (completeness) | 현재 플랜이 FastAPI/Supabase/Redis/Tiptap 여전히 참조 | 부분 수정 |
-| 18 | Eng | SQLite 스키마 재작성 | Mechanical | P5 (explicit) | UUID/JSONB/TEXT[]/TIMESTAMPTZ 전부 SQLite 호환 불가 | PG 스키마 |
-| 19 | Eng | HTML 살균 (sanitize-html) | Mechanical | P1 (completeness) | Claude 생성 HTML에 XSS 위험 | 무살균 저장 |
-| 20 | Eng | Google Trends 비공식 API 불안정 | Taste | P3 (pragmatic) | 공식 API 없음, 수동 키워드 입력을 기본으로 | 자동 트렌드만 |
-| 21 | Eng | 예약 발행 MVP 제거 | Mechanical | P3 (pragmatic) | Next.js에 cron worker 없음, 즉시 발행만 MVP | 예약 발행 포함 |
-| 22 | Eng | 테스트 전략 추가 | Mechanical | P1 (completeness) | 테스트 0개, 최소 unit + integration 필요 | 테스트 없음 |
-| 23 | Eng | 배포 시 인증 필수 | Mechanical | P1 (completeness) | 공개 배포 시 모든 API 노출 | 인증 없음 |
-| 24 | Eng | 부분 재생성 MVP 제거 | Mechanical | P3 (pragmatic) | 전체 재생성만 MVP, 부분은 추후 | 부분 재생성 포함 |
-
----
-
-### 디자인 리뷰 요약
-
-**전체 평가: 4/10. 백엔드는 탄탄, 프론트는 "이런 화면이 있다" 수준에서 멈춤.**
-
-| 차원 | 점수 | 핵심 이슈 |
-|------|------|----------|
-| 정보 구조 | 5/10 | 크롤링 결과 화면 누락, /blog 과부하 |
-| 사용자 플로우 | 3/10 | 키워드→에디터 중간 단계 전무, AI 생성 대기 UX 없음 |
-| 에디터 UX | 4/10 | 인지 과부하, 레이아웃 미결정 |
-| 이미지 관리 | 5/10 | 탭 구조 OK, 저작권/비용 피드백 없음 |
-| 대시보드 | 5/10 | 단일 사용자에 부적합한 메트릭 |
-| 모바일/반응형 | 0/10 | 언급 없음 |
-| 온보딩 | 1/10 | 6개 API를 설정 화면에 몰아넣음 |
-| 접근성 | 1/10 | 언급 없음 |
-| UX 상태 패턴 | 1/10 | empty/loading/error 상태 전무 |
-
-**우선 수정:**
-1. **콘텐츠 생성 위자드** 설계 (키워드 → 크롤링 → 톤 선택 → AI 생성 → 에디터)
-2. **에디터 레이아웃 확정** — 탭 기반 사이드 패널 추천 (한 번에 하나만 표시)
-3. **모든 화면에 empty/loading/error 상태** 추가
-4. **점진적 온보딩** — 처음에 Claude API 키 하나만 → 기능 사용 시 추가 연결 요청
-5. **모바일 전략** — 에디터는 데스크톱 전용, 대시보드/목록은 반응형
-6. **접근성** — 드래그앤드롭 키보드 대안, SEO 점수 색상+텍스트 조합
+**Taste Decisions (사용자 확인 대기)**:
+1. #8: 네이버 블로그 추후 지원 여부
+2. #16: Claude 프롬프트 템플릿 반복 최적화 시점
+3. #20: Google Trends 대신 수동 키워드 기본으로 할지
