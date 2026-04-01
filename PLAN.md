@@ -580,6 +580,14 @@ Phase 4 (관리 화면)       ░░░░░░░░░░░░░░░░�
 | 6 | CEO | Claude 단일 API | Mechanical | P4 (DRY) | Claude + OpenAI 두 API 불필요 | 듀얼 API |
 | 7 | CEO | Bearer token 인증 추가 | Mechanical | P1 (completeness) | 인증 없이 배포 불가 | 인증 없음 |
 | 8 | CEO | 네이버 블로그 우선 검토 | Taste | P3 (pragmatic) | 한국 시장에서 Blogger만으로 불충분할 수 있음 | Blogger only |
+| 9 | Design | 플랜 전체 리라이트 필요 | Mechanical | P1 (completeness) | 현재 플랜이 단순화된 스택을 반영하지 않음 | 부분 수정 |
+| 10 | Design | SQLite 스키마 재작성 | Mechanical | P5 (explicit) | PostgreSQL 전용 문법(UUID, JSONB, TEXT[]) SQLite 호환 불가 | PG 스키마 유지 |
+| 11 | Design | textarea → HTML 파이프라인 확정 | Mechanical | P5 (explicit) | Markdown 입력 → HTML 변환으로 확정 | Raw HTML |
+| 12 | Design | Next.js API Routes 구조 정의 | Mechanical | P1 (completeness) | FastAPI 제거 후 API 설계 공백 | FastAPI 참조 유지 |
+| 13 | Design | 첫 실행 온보딩 위자드 추가 | Mechanical | P1 (completeness) | Claude API 키 → Blogger 연결 → 첫 키워드 3단계 | 설정 화면 몰아넣기 |
+| 14 | Design | AI 생성 중 streaming UX | Mechanical | P1 (completeness) | 5-30초 대기 중 UX 전무 | 로딩 스피너만 |
+| 15 | Design | empty/loading/error 상태 전체 정의 | Mechanical | P1 (completeness) | 모든 페이지에 상태 패턴 필요 | happy path only |
+| 16 | Design | Claude 프롬프트 템플릿 실제 작성 | Taste | P1 (completeness) | 제품 핵심 IP인데 "설명"만 있고 실제 프롬프트 없음 | 추후 작성 |
 
 ---
 
