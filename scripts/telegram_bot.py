@@ -31,6 +31,7 @@ CHAT_ID = int(os.environ["TELEGRAM_CHAT_ID"])
 POLL_INTERVAL = 5  # seconds
 HEARTBEAT_INTERVAL = 3600  # 1 hour
 API_BASE = f"https://api.telegram.org/bot{BOT_TOKEN}"
+LOOP_RUNNING = False  # Guard against concurrent loops
 
 
 # ── Telegram helpers ────────────────────────────────────────
@@ -190,6 +191,8 @@ def handle_command(text: str) -> str:
             "/ping - Check bot health\n"
             "/health - Detailed health info\n"
             "/push - Commit & push changes\n"
+            "/loop N instruction - Run Claude in loop (max N iterations)\n"
+            "/stop - Stop running loop\n"
             "/help - This message\n\n"
             "Any other message = Claude Code instruction"
         )
@@ -197,8 +200,138 @@ def handle_command(text: str) -> str:
     if text.lower() == "/push":
         return git_push()
 
+    if text.lower() == "/stop":
+        global LOOP_RUNNING
+        if LOOP_RUNNING:
+            LOOP_RUNNING = False
+            return "Loop stop requested. Will stop after current iteration."
+        return "No loop is running."
+
+    if text.lower().startswith("/loop"):
+        return "LOOP_CMD"  # Signal to run loop
+
     # Everything else goes to Claude Code
     return None  # Signal to run Claude
+
+
+def parse_loop_command(text: str) -> tuple[int, str]:
+    """Parse '/loop N instruction' format. Returns (max_iterations, instruction)."""
+    parts = text.strip().split(None, 2)  # ['/loop', 'N', 'instruction...']
+    if len(parts) < 3:
+        return 0, ""
+    try:
+        max_iter = int(parts[1])
+        max_iter = min(max(max_iter, 1), 10)  # Clamp 1-10
+        return max_iter, parts[2]
+    except ValueError:
+        # No number given: '/loop instruction...' → default 3 iterations
+        return 3, text.split(None, 1)[1]
+
+
+def evaluate_result(instruction: str, result: str) -> tuple[bool, str]:
+    """Ask Claude to evaluate if the result is satisfactory."""
+    eval_prompt = (
+        f"You are evaluating whether a task has been completed satisfactorily.\n\n"
+        f"Original instruction: {instruction}\n\n"
+        f"Result:\n{result[:3000]}\n\n"
+        f"Evaluate this result. Respond in this exact JSON format:\n"
+        f'{{"done": true/false, "reason": "brief explanation in Korean", '
+        f'"next_action": "if not done, what to improve next (in Korean)"}}'
+    )
+    eval_output = run_claude(eval_prompt)
+
+    try:
+        # Extract JSON from response
+        import re
+        json_match = re.search(r'\{[^}]+\}', eval_output)
+        if json_match:
+            data = json.loads(json_match.group())
+            return data.get("done", False), data.get("reason", ""), data.get("next_action", "")
+    except (json.JSONDecodeError, AttributeError):
+        pass
+
+    return False, "evaluation failed", instruction
+
+
+def run_loop(max_iterations: int, instruction: str) -> None:
+    """Run Claude in a loop with evaluation between iterations."""
+    global LOOP_RUNNING
+    LOOP_RUNNING = True
+
+    send_message(
+        f"*Loop started*\n"
+        f"Instruction: `{instruction[:100]}`\n"
+        f"Max iterations: {max_iterations}"
+    )
+
+    issue_url = create_github_issue(
+        title=f"[bot/loop] {instruction[:50]}",
+        body=(
+            f"**Source:** Telegram (loop)\n"
+            f"**Max iterations:** {max_iterations}\n"
+            f"**Instruction:**\n{instruction}"
+        ),
+    )
+    if issue_url:
+        send_message(f"Issue: {issue_url}")
+
+    current_instruction = instruction
+    all_results = []
+
+    for i in range(1, max_iterations + 1):
+        if not LOOP_RUNNING:
+            send_message(f"*Loop stopped by user at iteration {i}*")
+            break
+
+        send_message(f"*[{i}/{max_iterations}]* Running...")
+
+        result = run_claude(current_instruction)
+        all_results.append(f"## Iteration {i}\n{result[:1000]}")
+
+        # Push after each iteration
+        push_status = git_push()
+
+        # Last iteration → skip evaluation, just finish
+        if i == max_iterations:
+            send_message(
+                f"*[{i}/{max_iterations}]* Max iterations reached.\n\n"
+                f"{result[:2000]}\n\n"
+                f"*Git:* {push_status}"
+            )
+            break
+
+        # Evaluate
+        done, reason, next_action = evaluate_result(instruction, result)
+
+        if done:
+            send_message(
+                f"*[{i}/{max_iterations}] Done!*\n"
+                f"Reason: {reason}\n\n"
+                f"{result[:2000]}\n\n"
+                f"*Git:* {push_status}"
+            )
+            break
+        else:
+            send_message(
+                f"*[{i}/{max_iterations}]* Not yet satisfied.\n"
+                f"Reason: {reason}\n"
+                f"Next: {next_action}"
+            )
+            # Feed the improvement direction to next iteration
+            current_instruction = (
+                f"Previous instruction: {instruction}\n\n"
+                f"Previous result feedback: {reason}\n"
+                f"Improvement needed: {next_action}\n\n"
+                f"Please improve based on the above feedback."
+            )
+
+    # Close issue
+    if issue_url:
+        summary = "\n\n".join(all_results)[:3000]
+        close_github_issue(issue_url, f"## Loop completed ({i} iterations)\n\n{summary}")
+
+    LOOP_RUNNING = False
+    send_message("*Loop finished.*")
 
 
 def process_message(text: str) -> None:
@@ -207,6 +340,16 @@ def process_message(text: str) -> None:
 
     # Check for built-in command first
     builtin_result = handle_command(text)
+    if builtin_result == "LOOP_CMD":
+        max_iter, instruction = parse_loop_command(text)
+        if not instruction:
+            send_message("Usage: `/loop [N] instruction`\nN = max iterations (default 3, max 10)")
+            return
+        if LOOP_RUNNING:
+            send_message("A loop is already running. Send `/stop` first.")
+            return
+        run_loop(max_iter, instruction)
+        return
     if builtin_result is not None:
         send_message(builtin_result)
         return

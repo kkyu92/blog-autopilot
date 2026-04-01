@@ -4,15 +4,27 @@ import path from "path";
 import fs from "fs";
 import * as schema from "./schema";
 
-const dataDir = path.join(process.cwd(), "data");
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
+let _db: ReturnType<typeof drizzle<typeof schema>> | null = null;
+
+export function getDb() {
+  if (!_db) {
+    const dataDir = path.join(process.cwd(), "data");
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+
+    const sqlite = new Database(path.join(dataDir, "content.db"));
+    sqlite.pragma("journal_mode = WAL");
+    sqlite.pragma("foreign_keys = ON");
+
+    _db = drizzle(sqlite, { schema });
+  }
+  return _db;
 }
 
-const sqlite = new Database(path.join(dataDir, "content.db"));
-
-// Performance & safety pragmas
-sqlite.pragma("journal_mode = WAL");
-sqlite.pragma("foreign_keys = ON");
-
-export const db = drizzle(sqlite, { schema });
+// Backward-compatible export
+export const db = new Proxy({} as ReturnType<typeof drizzle<typeof schema>>, {
+  get(_, prop) {
+    return (getDb() as unknown as Record<string | symbol, unknown>)[prop];
+  },
+});

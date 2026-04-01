@@ -25,10 +25,10 @@ export function Header() {
     <header className="flex items-center justify-between border-b px-4 h-14 md:px-6">
       {/* Mobile menu */}
       <Sheet>
-        <SheetTrigger asChild>
-          <Button variant="ghost" size="icon" className="md:hidden">
-            <span className="text-lg">☰</span>
-          </Button>
+        <SheetTrigger
+          render={<Button variant="ghost" size="icon" className="md:hidden" />}
+        >
+          <span className="text-lg">☰</span>
         </SheetTrigger>
         <SheetContent side="left" className="w-60 p-0">
           <SheetTitle className="p-4 border-b text-lg font-bold">

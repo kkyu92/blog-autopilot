@@ -1,9 +1,9 @@
 # AUTOPLAN STATUS
 
 ## 현재 상태
-- PHASE: 구현 Phase 1 완료
+- PHASE: 구현 Phase 2 완료
 - BRANCH: main
-- PLAN_FILE: PLAN.md (v2.2 - 배포전략/의존성 보강)
+- PLAN_FILE: PLAN.md (v2.3 - 2차 autoplan 리뷰 완료)
 
 ## Taste Decisions 확정
 - [x] #8: 네이버 블로그 → MVP 이후 지원 추가
@@ -36,5 +36,19 @@
 - [x] 라우트 스텁 (대시보드, 키워드, 콘텐츠, 설정)
 - [x] .env.example 작성
 
+## 구현 Phase 2: 핵심 파이프라인 (완료)
+- [x] Phase 2 의존성 설치 (@anthropic-ai/sdk, marked, sanitize-html, @tanstack/react-query, @mozilla/readability, jsdom)
+- [x] 콘텐츠 CRUD API (GET/POST /api/content, GET/PUT/DELETE /api/content/[id])
+- [x] Markdown → HTML 변환 + 살균 (lib/sanitize.ts)
+- [x] Claude API 클라이언트 (lib/claude.ts, streaming generator)
+- [x] 콘텐츠 생성 API (POST /api/content/generate, SSE streaming)
+- [x] 에디터 페이지 (/editor/[id], Markdown + 미리보기 + auto-save + streaming)
+- [x] 콘텐츠 목록 페이지 (/posts, 상태 필터 탭, 삭제)
+- [x] 참고 자료 자동 수집 API (POST /api/content/research)
+- [x] TanStack Query 프로바이더 설정
+- [x] 대시보드 실시간 데이터 표시
+- [x] db.ts lazy-init 패턴 적용
+- [x] header.tsx base-ui 호환 수정
+
 ## 다음 할 일
-1. Phase 2: 핵심 파이프라인 (Claude API 연동, 에디터, 콘텐츠 CRUD)
+1. Phase 3: 블로그 발행 연동 (Blogger OAuth, 네이버 OAuth, 토큰 관리, 발행 API)
