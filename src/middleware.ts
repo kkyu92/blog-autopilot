@@ -11,8 +11,8 @@ export function middleware(request: NextRequest) {
   // Skip auth if no token configured (local dev)
   if (!AUTH_TOKEN) return NextResponse.next();
 
-  // Skip OAuth callback (needs to be accessible)
-  if (request.nextUrl.pathname.startsWith("/api/auth/blogger/callback")) {
+  // Skip OAuth callbacks and auth start (needs to be accessible)
+  if (request.nextUrl.pathname.startsWith("/api/auth/")) {
     return NextResponse.next();
   }
 

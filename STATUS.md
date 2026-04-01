@@ -1,12 +1,12 @@
 # AUTOPLAN STATUS
 
 ## 현재 상태
-- PHASE: 구현 Phase 2 완료
+- PHASE: 구현 Phase 3 완료
 - BRANCH: main
 - PLAN_FILE: PLAN.md (v2.3 - 2차 autoplan 리뷰 완료)
 
 ## Taste Decisions 확정
-- [x] #8: 네이버 블로그 → MVP 이후 지원 추가
+- [x] #8: 네이버 블로그 → MVP에 포함 확정
 - [x] #16: Claude 프롬프트 → MVP 개발과 동시에 반복 개선
 - [x] #20: Google Trends → 실시간 연동. 대시보드+키워드 페이지에 자동 표시
 
@@ -17,15 +17,6 @@
 - [x] Final Approval Gate
 - [x] Plan Rewrite v2
 - [x] Taste Decisions 확정 (v2.1)
-
-## 텔레그램 봇 (완료)
-- [x] 봇 토큰 .env 분리 (보안)
-- [x] /ping, /status, /health, /push, /help 명령
-- [x] Claude Code CLI 연동 (메시지 → 실행 → 결과 회신)
-- [x] GitHub Issue 자동 생성/완료
-- [x] Heartbeat (1시간 간격)
-- [x] 에러 알림 (텔레그램)
-- [x] 메시지 송수신 테스트 통과
 
 ## 구현 Phase 1: 프로젝트 셋업 (완료)
 - [x] Next.js 15 (App Router + TypeScript + Tailwind v4)
@@ -47,8 +38,17 @@
 - [x] 참고 자료 자동 수집 API (POST /api/content/research)
 - [x] TanStack Query 프로바이더 설정
 - [x] 대시보드 실시간 데이터 표시
-- [x] db.ts lazy-init 패턴 적용
-- [x] header.tsx base-ui 호환 수정
+
+## 구현 Phase 3: 블로그 발행 연동 (완료)
+- [x] Blogger OAuth 플로우 (state nonce CSRF 방지)
+- [x] 네이버 OAuth 플로우 (state nonce CSRF 방지)
+- [x] 토큰 저장 + 자동 갱신 (mutex)
+- [x] 발행 API (POST /api/publish/blogger, POST /api/publish/naver)
+- [x] 설정 API (GET/PUT /api/settings)
+- [x] 설정 페이지 (API 키, 블로그 연결/해제, 기본 톤)
+- [x] 에디터 발행 버튼 (Blogger/네이버 선택)
+- [x] 발행 결과 UI (성공/실패 메시지)
+- [x] 미들웨어 OAuth 콜백 예외 처리
 
 ## 다음 할 일
-1. Phase 3: 블로그 발행 연동 (Blogger OAuth, 네이버 OAuth, 토큰 관리, 발행 API)
+1. Phase 4: 키워드 + 대시보드 (Google Trends 연동, 키워드 페이지, 온보딩 위자드)

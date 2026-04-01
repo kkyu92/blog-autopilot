@@ -1,8 +1,8 @@
 "use client";
 
 import { useParams, useSearchParams } from "next/navigation";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { MarkdownEditor } from "@/components/editor/markdown-editor";
 import { Preview } from "@/components/editor/preview";
 import { useStreaming } from "@/hooks/use-streaming";
@@ -33,6 +33,14 @@ const TONE_OPTIONS = [
 ];
 
 export default function EditorPage() {
+  return (
+    <Suspense>
+      <EditorContent />
+    </Suspense>
+  );
+}
+
+function EditorContent() {
   const { id } = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const keyword = searchParams.get("keyword") || "";
@@ -44,6 +52,12 @@ export default function EditorPage() {
   );
   const [activeTab, setActiveTab] = useState<"editor" | "preview">("editor");
   const [showSeo, setShowSeo] = useState(false);
+  const [publishResult, setPublishResult] = useState<{
+    ok?: boolean;
+    url?: string;
+    error?: string;
+  } | null>(null);
+  const queryClient = useQueryClient();
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const streaming = useStreaming();
@@ -138,6 +152,36 @@ export default function EditorPage() {
       });
     }
   }, [keyword, content]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 발행
+  const handlePublish = useCallback(
+    async (platform: "blogger" | "naver") => {
+      setPublishResult(null);
+      try {
+        // 먼저 현재 내용 저장
+        await save(streaming.text);
+
+        const res = await fetch(`/api/publish/${platform}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ contentId: id }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          setPublishResult({ error: data.error });
+        } else {
+          setPublishResult({ ok: true, url: data.externalUrl });
+          refetch();
+          queryClient.invalidateQueries({ queryKey: ["contents"] });
+        }
+      } catch (err) {
+        setPublishResult({
+          error: err instanceof Error ? err.message : "Publish failed",
+        });
+      }
+    },
+    [id, streaming.text, save, refetch, queryClient]
+  );
 
   const saveStatusLabel = {
     saved: "저장됨",
@@ -281,6 +325,57 @@ export default function EditorPage() {
           </div>
         )}
       </div>
+
+      {/* 발행 섹션 */}
+      <div className="flex items-center gap-2 pt-2 border-t">
+        <span className="text-sm font-medium">발행:</span>
+        <Button
+          size="sm"
+          onClick={() => handlePublish("blogger")}
+          disabled={streaming.isStreaming || !streaming.text}
+        >
+          Blogger
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => handlePublish("naver")}
+          disabled={streaming.isStreaming || !streaming.text}
+        >
+          네이버
+        </Button>
+        {content?.status === "published" && (
+          <Badge variant="default">발행됨</Badge>
+        )}
+      </div>
+
+      {publishResult && (
+        <div
+          className={`text-sm p-3 rounded-md ${
+            publishResult.ok
+              ? "bg-primary/10 text-primary"
+              : "bg-destructive/10 text-destructive"
+          }`}
+        >
+          {publishResult.ok ? (
+            <>
+              발행 완료!{" "}
+              {publishResult.url && (
+                <a
+                  href={publishResult.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline"
+                >
+                  블로그에서 보기
+                </a>
+              )}
+            </>
+          ) : (
+            <>발행 실패: {publishResult.error}</>
+          )}
+        </div>
+      )}
     </div>
   );
 }
