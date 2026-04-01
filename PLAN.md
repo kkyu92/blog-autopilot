@@ -1,4 +1,4 @@
-<!-- /autoplan restore point: /Users/kyusikkim/.gstack/projects/kkyu92-content-autopilot/main-autoplan-restore-20260401-214241.md -->
+<!-- /autoplan restore point: /Users/kyusikkim/.gstack/projects/kkyu92-content-autopilot/main-autoplan-restore-20260401-221346.md -->
 # 콘텐츠 자동화 시스템 (Content Autopilot) - 구현 플랜 v2
 
 ## Context
