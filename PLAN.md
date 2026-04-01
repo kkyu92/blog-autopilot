@@ -1,4 +1,4 @@
-<!-- /autoplan restore point: /Users/kyusikkim/.gstack/projects/kkyu92-content-autopilot/main-autoplan-restore-20260401-065949.md -->
+<!-- /autoplan restore point: /Users/kyusikkim/.gstack/projects/kkyu92-content-autopilot/main-autoplan-restore-20260401-211719.md -->
 # 콘텐츠 자동화 시스템 (Content Autopilot) - 구현 플랜 v2
 
 ## Context
@@ -32,6 +32,7 @@ AI 콘텐츠가 실제로 검색 트래픽을 만드는지 검증하는 것이 1
 - `nanoid` — 테이블 PK 생성
 - `google-trends-api` — Google Trends 비공식 API (npm)
 - `@tanstack/react-query` — 서버 상태 캐싱
+- `@mozilla/readability` + `jsdom` — 웹페이지 본문 추출 (참고 자료 수집)
 
 **배포 전략**:
 - **MVP**: 로컬 실행 (`pnpm dev`). SQLite는 서버리스(Vercel) 비호환이므로 로컬 우선
@@ -82,9 +83,13 @@ content-autopilot/
 │   │   │   │   ├── [id]/route.ts       # GET/PUT/DELETE: 개별 콘텐츠
 │   │   │   │   └── generate/route.ts   # POST: Claude AI 생성 (streaming)
 │   │   │   ├── publish/
-│   │   │   │   └── blogger/route.ts    # POST: Blogger 발행
+│   │   │   │   ├── blogger/route.ts    # POST: Blogger 발행
+│   │   │   │   └── naver/route.ts      # POST: 네이버 블로그 발행
 │   │   │   ├── auth/
-│   │   │   │   └── blogger/
+│   │   │   │   ├── blogger/
+│   │   │   │   │   ├── route.ts        # GET: OAuth 시작
+│   │   │   │   │   └── callback/route.ts # GET: OAuth 콜백
+│   │   │   │   └── naver/
 │   │   │   │       ├── route.ts        # GET: OAuth 시작
 │   │   │   │       └── callback/route.ts # GET: OAuth 콜백
 │   │   │   └── settings/route.ts       # GET/PUT: 설정 CRUD
@@ -222,11 +227,37 @@ PRAGMA foreign_keys = ON;        -- FK 제약 활성화
 - **Error state**: "실시간 트렌드를 가져오지 못했습니다. 아래에서 직접 검색하세요"
 - **Stale data state**: "5분 전 데이터" 배지 표시
 
+### 1.5 참고 자료 자동 수집 (키워드 → 상위 사이트 분석)
+
+**플로우**:
+```
+키워드 입력 → Google Custom Search API → 상위 5개 URL 추출
+→ 각 URL 본문 추출 (@mozilla/readability + jsdom)
+→ 본문 요약 (각 1000자 제한) → source_urls + source_summaries DB 저장
+→ Claude에 참고 자료로 전달 → 새로운 글 창작
+```
+
+**API**: `POST /api/content/research`
+- 입력: keyword
+- Google Custom Search API로 상위 5개 결과 검색
+- 각 URL fetch → `@mozilla/readability`로 본문 추출
+- 본문을 1000자로 요약 (또는 앞부분 추출)
+- 결과를 `source_urls` (JSON 배열)로 저장
+
+**핵심 의존성 추가**:
+- `@mozilla/readability` + `jsdom` — 웹페이지 본문 추출
+- Google Custom Search API — 상위 검색 결과 (무료 100회/일)
+
+**에러 처리**:
+- URL fetch 실패: 해당 URL 스킵, 나머지로 진행
+- Custom Search API 할당량 초과: "검색 할당량 초과. 내일 다시 시도하거나 URL을 직접 입력하세요"
+- 크롤링 차단 (403/robots.txt): 해당 URL 스킵
+
 ### 2. AI 콘텐츠 생성 (`/editor/[id]`)
 
 **API**: `POST /api/content/generate` (Streaming SSE)
 
-- 입력: keyword, tone, target_length
+- 입력: keyword, tone, target_length, source_summaries (자동 수집 또는 수동 입력)
 - Claude API streaming → SSE로 클라이언트에 실시간 전송
 - Markdown 형태로 생성 (H2/H3 구조화)
 - 생성 완료 후 자동 저장 (draft 상태)
@@ -263,39 +294,65 @@ User:
 글 내용 첫 500자: {body_preview}
 ```
 
+**Streaming SSE 구현 주의사항**:
+- TransformStream tee 패턴: 하나는 클라이언트 전송, 하나는 서버 누적 (DB 저장용)
+- AbortController: 클라이언트 연결 해제 시 Claude API 호출 즉시 중단 (토큰 절약)
+- DB write는 stream close callback 안에서 await (핸들러 exit 전 완료 보장)
+
 **UI (에디터)**:
 - 레이아웃: 좌측 70% textarea (Markdown), 우측 30% 미리보기 (HTML 렌더링)
-- 상단: 제목 입력, 톤 선택 드롭다운
-- 하단: SEO 섹션 (접을 수 있음) + 발행 버튼
+- **모바일 (<768px)**: 세로 스택, 에디터/미리보기 탭 전환
+- 상단: 제목 입력, 톤 선택 드롭다운 (기본값: informative)
+- 하단: SEO 섹션 (기본 접힘) + 발행 버튼
+- **Auto-save**: 1초 debounce, "저장됨" / "저장 중..." 표시기
 - **Streaming state**: textarea에 텍스트가 실시간으로 나타남 + "생성 중..." 배지 + 취소 버튼
 - **Empty state**: "키워드를 선택하거나 직접 글을 작성하세요"
 - **Error state**: "AI 생성 실패. 다시 시도하거나 직접 작성하세요" + 재시도 버튼
+- **키워드→에디터 전환**: "이 주제로 생성" 클릭 → draft 레코드 즉시 생성 → `/editor/[id]` 리다이렉트 → 자동 생성 시작
+- **발행 후 편집**: published 상태도 편집 가능. 재발행 시 새 publications 행 생성 (이력 보존)
 
-### 3. Blogger 발행
+### 3. 블로그 발행 (Blogger + 네이버)
 
-**API**: `POST /api/publish/blogger`
+**API**:
+- `POST /api/publish/blogger` — Blogger 발행
+- `POST /api/publish/naver` — 네이버 블로그 발행
 
-- 입력: content_id
+**공통 플로우**:
+- 입력: content_id, platform
 - Markdown → HTML 변환 (marked 라이브러리)
 - HTML 살균 (sanitize-html, 허용 태그 화이트리스트)
-- Blogger API v3로 발행 (OAuth 2.0 access token)
-- 토큰 만료 체크 → 자동 갱신 (refresh_token 사용)
+- 플랫폼별 API로 발행
+- 토큰 만료 체크 → 자동 갱신
 
-**OAuth 플로우**:
+**Blogger OAuth 플로우**:
 ```
 사용자 → /api/auth/blogger → Google OAuth 동의 화면
-→ 동의 → /api/auth/blogger/callback → tokens DB 저장
+→ 동의 → /api/auth/blogger/callback → state nonce 검증 → tokens DB 저장
 → 설정 화면으로 리다이렉트 ("연결 완료")
 ```
 
+**네이버 OAuth 플로우**:
+```
+사용자 → /api/auth/naver → 네이버 로그인 동의 화면
+→ 동의 → /api/auth/naver/callback → state nonce 검증 → tokens DB 저장
+→ 설정 화면으로 리다이렉트 ("연결 완료")
+```
+- 네이버 블로그 API: `https://openapi.naver.com/blog/writePost.json`
+- 필요 권한: `blog` scope
+
+**OAuth 보안**:
+- `state` nonce 생성 → 쿠키에 저장 → callback에서 검증 (CSRF 방지)
+- 토큰 갱신 mutex: 동시 갱신 요청 방지 (race condition 방어)
+
 **토큰 관리**:
-- `settings` 테이블에 `blogger_tokens` 키로 JSON 저장
+- `settings` 테이블에 `blogger_tokens`, `naver_tokens` 키로 JSON 저장
 - 매 발행 전 `expires_at - now < 5분` 체크 → 선제적 갱신
 - 갱신 실패 → 재인증 안내 UI
 
 **발행 후**:
 - 성공 화면: "발행 완료!" + 블로그 글 링크 + "다음 주제 찾기" 버튼
 - 실패 화면: 에러 메시지 + 재시도 버튼
+- 플랫폼 선택 UI: 발행 버튼에 드롭다운 (Blogger / 네이버 / 둘 다)
 
 ---
 
@@ -356,8 +413,12 @@ User:
 - HTML sanitize가 script 태그 제거하는지
 - Markdown → HTML 변환이 정상인지
 - Blogger 토큰 갱신 로직
-- 콘텐츠 CRUD API
+- 네이버 토큰 갱신 로직
+- 콘텐츠 CRUD API (updatedAt 자동 갱신 포함)
 - 빈 입력/잘못된 입력 에러 핸들링
+- OAuth state nonce CSRF 검증
+- SSE 스트리밍 중단 시 AbortController 동작
+- source_urls 길이 제한 (10KB)
 
 ---
 
@@ -372,6 +433,9 @@ User:
 | Blogger 403 | 권한 없음 | 없음 | "블로그에 글을 올릴 권한이 없습니다. 설정을 확인하세요" |
 | SQLite 잠금 | 동시 접근 | 100ms 후 재시도 | (투명하게 처리) |
 | 트렌드 조회 실패 | API 불안정 | graceful degradation | "트렌드 조회 실패. 키워드를 직접 입력해서 진행할 수 있습니다" |
+| 네이버 API 401 | 토큰 만료 | refresh_token 갱신 | (자동 갱신, 실패 시) "네이버 블로그 재연결이 필요합니다" |
+| 네이버 API 403 | 권한/스팸 감지 | 없음 | "네이버에 글을 올릴 수 없습니다. 권한을 확인하세요" |
+| SSE 클라이언트 중단 | 브라우저 닫힘 | AbortController 즉시 중단 | (투명하게 처리, 토큰 절약) |
 
 ---
 
@@ -386,18 +450,20 @@ Phase 1: 프로젝트 셋업 (CC: ~30분)
   ├─ 기본 레이아웃 (사이드바 + 헤더)
   └─ Bearer token 인증 미들웨어
 
-Phase 2: 핵심 파이프라인 (CC: ~1시간)
-  ├─ Claude API 연동 (streaming)
-  ├─ 콘텐츠 생성 API + 에디터 페이지
+Phase 2: 핵심 파이프라인 (CC: ~1.5시간)
+  ├─ 참고 자료 자동 수집 (Google Custom Search + readability)
+  ├─ Claude API 연동 (streaming + AbortController)
+  ├─ 콘텐츠 생성 API + 에디터 페이지 (auto-save)
   ├─ Markdown → HTML 변환 + 살균
   ├─ 콘텐츠 CRUD API
   └─ 콘텐츠 목록 페이지
 
-Phase 3: Blogger 연동 (CC: ~1시간)
-  ├─ Blogger OAuth 플로우
-  ├─ 토큰 저장 + 자동 갱신
-  ├─ 발행 API
-  └─ 발행 결과 UI
+Phase 3: 블로그 발행 연동 (CC: ~1.5시간)
+  ├─ Blogger OAuth 플로우 (state nonce CSRF 포함)
+  ├─ 네이버 OAuth 플로우
+  ├─ 토큰 저장 + 자동 갱신 (mutex)
+  ├─ 발행 API (Blogger + 네이버)
+  └─ 발행 결과 UI + 플랫폼 선택
 
 Phase 4: 키워드 + 대시보드 (CC: ~30분)
   ├─ 키워드 조회 (Google Trends 시도 + fallback)
@@ -426,7 +492,7 @@ Phase 5: 마무리 (CC: ~30분)
 
 ## 확정된 Taste Decisions
 
-- [x] #8: 네이버 블로그 → MVP 이후 지원 추가 확정
+- [x] #8: 네이버 블로그 → MVP에 포함 확정 (2차 autoplan에서 변경)
 - [x] #16: Claude 프롬프트 → MVP 개발과 동시에 반복 개선
 - [x] #20: Google Trends → 실시간 연동 확정. 대시보드+키워드 페이지에 자동 표시
 
@@ -438,7 +504,48 @@ Phase 5: 마무리 (CC: ~30분)
 
 ---
 
-## Review History
+## 구현 시 주의사항 (2차 리뷰 반영)
 
-3차례 리뷰 완료 (CEO → Design → Eng). 총 24건 결정, 3건 Taste Decision 확정.
-상세 로그는 git history 참조 (`git log --oneline`).
+- **db.ts**: lazy-init 패턴 사용 (빌드 타임 fs 에러 방지)
+- **updatedAt**: 모든 UPDATE 쿼리에서 명시적으로 설정
+- **source_urls**: Claude에 전달 시 10KB 제한
+- **OAuth tokens**: 평문 저장 (MVP). VPS 배포 시 암호화 필요
+
+---
+
+<!-- AUTONOMOUS DECISION LOG -->
+## Decision Audit Trail (2차 autoplan, 2026-04-01)
+
+| # | Phase | Decision | Classification | Principle | Rationale |
+|---|-------|----------|---------------|-----------|-----------|
+| 1 | CEO | /office-hours 스킵 | Mechanical | P6 (action) | 이미 3차 리뷰 완료된 플랜 |
+| 2 | CEO | 네이버 블로그 MVP 포함 | User Decision | — | 사용자 선택 (C: 둘 다) |
+| 3 | CEO | Search Console 연동 | Taste | P1 (completeness) | 핵심 가설 측정에 필요하지만 scope 증가 |
+| 4 | CEO | Approach A (순차 구현) 선택 | Mechanical | P1+P3 | Phase 1 완료 상태에서 가장 직관적 |
+| 5 | Design | 발행 후 편집 가능 | Mechanical | P1 (completeness) | published 상태도 편집, 재발행 시 새 row |
+| 6 | Design | Auto-save 추가 | Mechanical | P1 (completeness) | 1초 debounce + 저장 표시기 |
+| 7 | Design | 키워드→에디터 전환 | Mechanical | P5 (explicit) | draft 생성 → redirect → 자동 생성 |
+| 8 | Design | 모바일 에디터 | Mechanical | P3 (pragmatic) | <768px 세로 스택 + 탭 전환 |
+| 9 | Eng | OAuth state CSRF | Mechanical | P1 (completeness) | nonce + 쿠키 검증 |
+| 10 | Eng | SSE AbortController | Mechanical | P1 (completeness) | 클라이언트 중단 시 토큰 절약 |
+| 11 | Eng | TransformStream tee | Mechanical | P5 (explicit) | 스트리밍 + DB 저장 동시 처리 |
+| 12 | Eng | 토큰 갱신 mutex | Mechanical | P5 (explicit) | 동시 갱신 race condition 방어 |
+| 13 | Eng | db.ts lazy-init | Mechanical | P5 (explicit) | 빌드 타임 에러 방지 |
+| 14 | Eng | updatedAt 명시적 설정 | Mechanical | P1 (completeness) | SQLite trigger 대신 app layer |
+| 15 | Eng | source_urls 10KB 제한 | Mechanical | P3 (pragmatic) | Claude API 비용 방지 |
+
+---
+
+## GSTACK REVIEW REPORT (autoplan 2차, 2026-04-01)
+
+| Review | Trigger | Runs | Status | 핵심 발견 |
+|--------|---------|------|--------|----------|
+| CEO Review | `/plan-ceo-review` | 1 | DONE | 네이버 블로그 MVP 포함 확정, 가설 측정 방법 질문 |
+| Design Review | `/plan-design-review` | 1 | DONE | 에디터 save state, 발행 후 편집, 모바일 대응 |
+| Eng Review | `/plan-eng-review` | 1 | DONE | OAuth CSRF, SSE 안정성, DB lazy-init |
+| Voices | subagent-only | 3 | DONE | Codex 미설치. Claude subagent 3회 (CEO/Design/Eng) |
+
+### Cross-Phase Themes
+**Theme: OAuth 보안** — CEO (premise #3)와 Eng (CSRF state) 모두 OAuth 관련 우려 제기. 고신뢰 신호.
+
+**VERDICT:** 15건 auto-decided, 1건 taste decision, 1건 user decision. 네이버 블로그 추가로 Phase 3 scope 증가.
