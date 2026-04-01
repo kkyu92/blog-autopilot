@@ -11,11 +11,18 @@ export function middleware(request: NextRequest) {
   // Skip auth if no token configured (local dev)
   if (!AUTH_TOKEN) return NextResponse.next();
 
-  // Skip OAuth callbacks and auth start (needs to be accessible)
+  // Skip OAuth callbacks and auth start
   if (request.nextUrl.pathname.startsWith("/api/auth/")) {
     return NextResponse.next();
   }
 
+  // Same-origin requests from the browser (have Referer or Sec-Fetch-Site)
+  const secFetchSite = request.headers.get("sec-fetch-site");
+  if (secFetchSite === "same-origin") {
+    return NextResponse.next();
+  }
+
+  // External API calls require Bearer token
   const header = request.headers.get("authorization");
   if (!header || header !== `Bearer ${AUTH_TOKEN}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

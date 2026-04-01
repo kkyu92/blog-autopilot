@@ -8,47 +8,81 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { toast } from "sonner";
 
-interface TrendingKeyword {
+interface GoogleTrend {
   keyword: string;
   trafficVolume: string;
-  relatedQueries: string[];
+  newsTitle: string;
+  newsSource: string;
+}
+
+interface DomesticIssue {
+  keyword: string;
+  rank: number;
+  summary: string;
+  question: string;
+  newsTitle: string;
+  newsUrl: string;
 }
 
 export default function TopicsPage() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
 
-  // 실시간 트렌드 자동 로드
+  // Google 실시간 트렌드
   const {
-    data: trendData,
-    isLoading: trendLoading,
-    error: trendError,
+    data: googleData,
+    isLoading: googleLoading,
+    error: googleError,
   } = useQuery<{
-    keywords: TrendingKeyword[];
+    keywords: GoogleTrend[];
     cached: boolean;
     cachedAt: string;
     stale?: boolean;
   }>({
-    queryKey: ["trending"],
+    queryKey: ["google-trending"],
     queryFn: async () => {
       const res = await fetch("/api/keywords/trending");
       if (!res.ok) throw new Error("트렌드 조회 실패");
       return res.json();
     },
-    refetchInterval: 5 * 60 * 1000, // 5분 자동 갱신
+    refetchInterval: 5 * 60 * 1000,
   });
 
-  // 키워드 검색
+  // 국내 이슈 키워드
+  const {
+    data: domesticData,
+    isLoading: domesticLoading,
+    error: domesticError,
+  } = useQuery<{
+    keywords: DomesticIssue[];
+    cached: boolean;
+    cachedAt: string;
+    stale?: boolean;
+  }>({
+    queryKey: ["domestic-issues"],
+    queryFn: async () => {
+      const res = await fetch("/api/keywords/naver-trending");
+      if (!res.ok) throw new Error("국내 이슈 조회 실패");
+      return res.json();
+    },
+    refetchInterval: 5 * 60 * 1000,
+  });
+
+  // 키워드 검색 → Google + Naver 연관 키워드
   const searchMutation = useMutation({
     mutationFn: async (q: string) => {
-      const res = await fetch(`/api/keywords/search?q=${encodeURIComponent(q)}`);
+      const res = await fetch(
+        `/api/keywords/search?q=${encodeURIComponent(q)}`
+      );
       if (!res.ok) throw new Error("검색 실패");
       return res.json();
     },
   });
 
-  // "이 주제로 생성" — draft 생성 → 에디터로 이동
+  // draft 생성 → 에디터 이동
   const createMutation = useMutation({
     mutationFn: async (keyword: string) => {
       const res = await fetch("/api/content", {
@@ -62,6 +96,9 @@ export default function TopicsPage() {
     onSuccess: (data, keyword) => {
       router.push(`/editor/${data.id}?keyword=${encodeURIComponent(keyword)}`);
     },
+    onError: () => {
+      toast.error("콘텐츠 생성에 실패했습니다. 다시 시도해주세요.");
+    },
   });
 
   const handleSearch = (e: React.FormEvent) => {
@@ -71,83 +108,59 @@ export default function TopicsPage() {
     }
   };
 
+  const handleKeywordClick = (keyword: string) => {
+    setSearchQuery(keyword);
+    searchMutation.mutate(keyword);
+  };
+
+  const CacheInfo = ({
+    data,
+  }: {
+    data?: { stale?: boolean; cached: boolean; cachedAt: string };
+  }) => {
+    if (!data) return null;
+    return (
+      <span className="flex items-center gap-1">
+        {data.stale && <Badge variant="outline">이전 데이터</Badge>}
+        {data.cached && data.cachedAt && (
+          <span className="text-xs text-muted-foreground">
+            {Math.round(
+              (Date.now() - new Date(data.cachedAt).getTime()) / 60000
+            )}
+            분 전
+          </span>
+        )}
+      </span>
+    );
+  };
+
+  const LoadingSkeleton = () => (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      {[1, 2, 3, 4, 5, 6].map((i) => (
+        <Card key={i}>
+          <CardContent className="p-4">
+            <Skeleton className="h-5 w-32 mb-2" />
+            <Skeleton className="h-4 w-20 mb-2" />
+            <Skeleton className="h-3 w-full" />
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+
+  const ErrorCard = ({ message }: { message: string }) => (
+    <Card>
+      <CardContent className="p-4 text-sm text-muted-foreground">
+        {message}
+      </CardContent>
+    </Card>
+  );
+
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold">키워드 탐색</h2>
 
-      {/* 실시간 트렌드 */}
-      <div>
-        <div className="flex items-center gap-2 mb-3">
-          <h3 className="text-lg font-semibold">지금 뜨는 키워드</h3>
-          {trendData?.stale && (
-            <Badge variant="outline">이전 데이터</Badge>
-          )}
-          {trendData?.cached && trendData.cachedAt && (
-            <span className="text-xs text-muted-foreground">
-              {Math.round(
-                (Date.now() - new Date(trendData.cachedAt).getTime()) / 60000
-              )}
-              분 전
-            </span>
-          )}
-        </div>
-
-        {trendLoading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {[1, 2, 3].map((i) => (
-              <Card key={i}>
-                <CardContent className="p-4">
-                  <Skeleton className="h-5 w-32 mb-2" />
-                  <Skeleton className="h-4 w-20 mb-2" />
-                  <Skeleton className="h-3 w-full" />
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        ) : trendError ? (
-          <Card>
-            <CardContent className="p-4 text-sm text-muted-foreground">
-              실시간 트렌드를 가져오지 못했습니다. 아래에서 직접 검색하세요.
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {trendData?.keywords?.map((item, i) => (
-              <Card key={i} className="hover:border-primary/50 transition-colors">
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between mb-2">
-                    <h4 className="font-medium">{item.keyword}</h4>
-                    {item.trafficVolume && (
-                      <Badge variant="secondary" className="text-xs">
-                        {item.trafficVolume}
-                      </Badge>
-                    )}
-                  </div>
-                  {item.relatedQueries.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mb-3">
-                      {item.relatedQueries.map((q, j) => (
-                        <Badge key={j} variant="outline" className="text-xs">
-                          {q}
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-                  <Button
-                    size="sm"
-                    className="w-full"
-                    onClick={() => createMutation.mutate(item.keyword)}
-                    disabled={createMutation.isPending}
-                  >
-                    이 주제로 생성
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* 수동 검색 */}
+      {/* 키워드 검색 */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">키워드 검색</CardTitle>
@@ -166,45 +179,73 @@ export default function TopicsPage() {
           </form>
 
           {searchMutation.data && (
-            <div className="mt-4 space-y-3">
-              <div className="flex items-center gap-2">
-                <h4 className="font-medium">
-                  &quot;{searchMutation.data.keyword}&quot; 검색 결과
+            <div className="mt-4 space-y-4">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h4 className="font-medium text-lg">
+                  &quot;{searchMutation.data.keyword}&quot;
                 </h4>
                 <Button
                   size="sm"
                   onClick={() =>
                     createMutation.mutate(searchMutation.data.keyword)
                   }
+                  disabled={createMutation.isPending}
                 >
                   이 주제로 생성
                 </Button>
               </div>
 
-              {searchMutation.data.relatedKeywords?.length > 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Google 연관 */}
                 <div>
-                  <p className="text-sm text-muted-foreground mb-1">
-                    관련 키워드
+                  <p className="text-sm font-medium text-muted-foreground mb-2">
+                    Google 연관 키워드
                   </p>
-                  <div className="flex flex-wrap gap-1">
-                    {searchMutation.data.relatedKeywords.map(
-                      (kw: string, i: number) => (
-                        <Badge
-                          key={i}
-                          variant="outline"
-                          className="cursor-pointer hover:bg-muted"
-                          onClick={() => {
-                            setSearchQuery(kw);
-                            searchMutation.mutate(kw);
-                          }}
-                        >
-                          {kw}
-                        </Badge>
-                      )
-                    )}
-                  </div>
+                  {searchMutation.data.google?.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {searchMutation.data.google.map(
+                        (kw: string, i: number) => (
+                          <Badge
+                            key={i}
+                            variant="secondary"
+                            className="cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors px-3 py-1"
+                            onClick={() => handleKeywordClick(kw)}
+                          >
+                            {kw}
+                          </Badge>
+                        )
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">결과 없음</p>
+                  )}
                 </div>
-              )}
+
+                {/* Naver 연관 */}
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground mb-2">
+                    Naver 연관 키워드
+                  </p>
+                  {searchMutation.data.naver?.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {searchMutation.data.naver.map(
+                        (kw: string, i: number) => (
+                          <Badge
+                            key={i}
+                            variant="outline"
+                            className="cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors px-3 py-1 border-green-500/50"
+                            onClick={() => handleKeywordClick(kw)}
+                          >
+                            {kw}
+                          </Badge>
+                        )
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">결과 없음</p>
+                  )}
+                </div>
+              </div>
             </div>
           )}
 
@@ -215,6 +256,161 @@ export default function TopicsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* 실시간 트렌드 탭 */}
+      <Tabs defaultValue="google">
+        <div className="flex items-center gap-3 mb-1">
+          <TabsList>
+            <TabsTrigger value="google">Google 트렌드</TabsTrigger>
+            <TabsTrigger value="domestic">국내 이슈</TabsTrigger>
+          </TabsList>
+        </div>
+
+        {/* Google 트렌드 */}
+        <TabsContent value="google" className="mt-3">
+          <div className="flex items-center gap-2 mb-3">
+            <h3 className="text-lg font-semibold">실시간 인기 검색어</h3>
+            <CacheInfo data={googleData} />
+          </div>
+
+          {googleLoading ? (
+            <LoadingSkeleton />
+          ) : googleError ? (
+            <ErrorCard message="Google 트렌드를 가져오지 못했습니다." />
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {googleData?.keywords?.map((item, i) => (
+                <Card
+                  key={i}
+                  className="hover:border-primary/50 transition-colors"
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between mb-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground font-mono w-5">
+                          {i + 1}
+                        </span>
+                        <h4
+                          className="font-medium cursor-pointer hover:text-primary transition-colors"
+                          onClick={() => handleKeywordClick(item.keyword)}
+                        >
+                          {item.keyword}
+                        </h4>
+                      </div>
+                      {item.trafficVolume && (
+                        <Badge
+                          variant="secondary"
+                          className="text-xs shrink-0"
+                        >
+                          {item.trafficVolume}
+                        </Badge>
+                      )}
+                    </div>
+
+                    {item.newsTitle && (
+                      <p className="text-xs text-muted-foreground mb-2 line-clamp-2">
+                        {item.newsSource && (
+                          <span className="font-medium">
+                            [{item.newsSource}]
+                          </span>
+                        )}{" "}
+                        {item.newsTitle}
+                      </p>
+                    )}
+
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() => handleKeywordClick(item.keyword)}
+                      >
+                        연관 검색
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => createMutation.mutate(item.keyword)}
+                        disabled={createMutation.isPending}
+                      >
+                        글 생성
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* 국내 이슈 */}
+        <TabsContent value="domestic" className="mt-3">
+          <div className="flex items-center gap-2 mb-3">
+            <h3 className="text-lg font-semibold">실시간 국내 이슈</h3>
+            <CacheInfo data={domesticData} />
+          </div>
+
+          {domesticLoading ? (
+            <LoadingSkeleton />
+          ) : domesticError ? (
+            <ErrorCard message="국내 이슈를 가져오지 못했습니다." />
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {domesticData?.keywords?.map((item, i) => (
+                <Card
+                  key={i}
+                  className="hover:border-green-500/30 transition-colors"
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xs text-muted-foreground font-mono w-5">
+                        {item.rank}
+                      </span>
+                      <h4
+                        className="font-medium cursor-pointer hover:text-green-600 transition-colors"
+                        onClick={() => handleKeywordClick(item.keyword)}
+                      >
+                        {item.keyword}
+                      </h4>
+                    </div>
+
+                    {item.summary && (
+                      <p className="text-xs text-muted-foreground mb-1 line-clamp-2">
+                        {item.summary}
+                      </p>
+                    )}
+
+                    {item.newsTitle && (
+                      <p className="text-xs text-blue-500/80 mb-2 line-clamp-1">
+                        {item.newsTitle}
+                      </p>
+                    )}
+
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() => handleKeywordClick(item.keyword)}
+                      >
+                        연관 검색
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => createMutation.mutate(item.keyword)}
+                        disabled={createMutation.isPending}
+                      >
+                        글 생성
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

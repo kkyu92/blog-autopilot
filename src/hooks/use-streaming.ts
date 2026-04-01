@@ -8,19 +8,25 @@ interface StreamingState {
   error: string | null;
 }
 
+interface StartParams {
+  contentId: string;
+  keyword: string;
+  tone?: string;
+  targetLength?: number;
+  sourceSummaries?: string;
+}
+
+interface UseStreamingOptions {
+  onComplete?: (text: string) => void;
+}
+
 interface UseStreamingReturn extends StreamingState {
-  start: (params: {
-    contentId: string;
-    keyword: string;
-    tone?: string;
-    targetLength?: number;
-    sourceSummaries?: string;
-  }) => void;
+  start: (params: StartParams) => void;
   stop: () => void;
   setText: (text: string) => void;
 }
 
-export function useStreaming(): UseStreamingReturn {
+export function useStreaming(options?: UseStreamingOptions): UseStreamingReturn {
   const [state, setState] = useState<StreamingState>({
     isStreaming: false,
     text: "",
@@ -35,13 +41,7 @@ export function useStreaming(): UseStreamingReturn {
   }, []);
 
   const start = useCallback(
-    (params: {
-      contentId: string;
-      keyword: string;
-      tone?: string;
-      targetLength?: number;
-      sourceSummaries?: string;
-    }) => {
+    (params: StartParams) => {
       // 이전 스트림 중단
       abortRef.current?.abort();
 
@@ -101,6 +101,7 @@ export function useStreaming(): UseStreamingReturn {
                 }
                 if (parsed.done) {
                   setState((s) => ({ ...s, isStreaming: false }));
+                  options?.onComplete?.(accumulated);
                   return;
                 }
               } catch {

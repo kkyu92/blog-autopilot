@@ -9,6 +9,7 @@ import { useStreaming } from "@/hooks/use-streaming";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
 
 type ContentRow = {
   id: string;
@@ -57,10 +58,23 @@ function EditorContent() {
     url?: string;
     error?: string;
   } | null>(null);
+  const [autoPublish, setAutoPublish] = useState<"blogger" | "naver" | null>(null);
   const queryClient = useQueryClient();
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const streaming = useStreaming();
+  const handleAutoPublish = useCallback(
+    (text: string) => {
+      if (autoPublish && text.length > 100) {
+        // 생성 완료 후 자동 발행
+        setTimeout(() => {
+          handlePublishRef.current?.(autoPublish);
+        }, 500);
+      }
+    },
+    [autoPublish]
+  );
+  const streaming = useStreaming({ onComplete: handleAutoPublish });
+  const handlePublishRef = useRef<((platform: "blogger" | "naver") => void) | null>(null);
 
   // 콘텐츠 조회
   const { data: content, refetch } = useQuery<ContentRow>({
@@ -99,6 +113,7 @@ function EditorContent() {
         setSaveStatus("saved");
       } catch {
         setSaveStatus("unsaved");
+        toast.error("저장에 실패했습니다");
       }
     },
     [id, title]
@@ -156,6 +171,7 @@ function EditorContent() {
   // 발행
   const handlePublish = useCallback(
     async (platform: "blogger" | "naver") => {
+      setAutoPublish(null); // 자동 발행 플래그 리셋
       setPublishResult(null);
       try {
         // 먼저 현재 내용 저장
@@ -169,19 +185,28 @@ function EditorContent() {
         const data = await res.json();
         if (!res.ok) {
           setPublishResult({ error: data.error });
+          toast.error(`발행 실패: ${data.error}`);
         } else {
           setPublishResult({ ok: true, url: data.externalUrl });
+          toast.success("발행 완료!", {
+            action: data.externalUrl
+              ? { label: "블로그에서 보기", onClick: () => window.open(data.externalUrl, "_blank") }
+              : undefined,
+          });
           refetch();
           queryClient.invalidateQueries({ queryKey: ["contents"] });
         }
       } catch (err) {
-        setPublishResult({
-          error: err instanceof Error ? err.message : "Publish failed",
-        });
+        const msg = err instanceof Error ? err.message : "Publish failed";
+        setPublishResult({ error: msg });
+        toast.error(`발행 실패: ${msg}`);
       }
     },
     [id, streaming.text, save, refetch, queryClient]
   );
+
+  // ref로 handlePublish를 onComplete 콜백에서 접근
+  handlePublishRef.current = handlePublish;
 
   const saveStatusLabel = {
     saved: "저장됨",
@@ -327,7 +352,7 @@ function EditorContent() {
       </div>
 
       {/* 발행 섹션 */}
-      <div className="flex items-center gap-2 pt-2 border-t">
+      <div className="flex items-center gap-2 pt-2 border-t flex-wrap">
         <span className="text-sm font-medium">발행:</span>
         <Button
           size="sm"
@@ -346,6 +371,31 @@ function EditorContent() {
         </Button>
         {content?.status === "published" && (
           <Badge variant="default">발행됨</Badge>
+        )}
+
+        <span className="text-muted-foreground mx-1">|</span>
+        <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
+          <input
+            type="checkbox"
+            checked={autoPublish === "blogger"}
+            onChange={(e) => setAutoPublish(e.target.checked ? "blogger" : null)}
+            className="rounded"
+          />
+          생성 후 Blogger 자동 발행
+        </label>
+        <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
+          <input
+            type="checkbox"
+            checked={autoPublish === "naver"}
+            onChange={(e) => setAutoPublish(e.target.checked ? "naver" : null)}
+            className="rounded"
+          />
+          생성 후 네이버 자동 발행
+        </label>
+        {autoPublish && streaming.isStreaming && (
+          <Badge variant="outline" className="text-xs">
+            생성 완료 시 {autoPublish === "blogger" ? "Blogger" : "네이버"}에 자동 발행됩니다
+          </Badge>
         )}
       </div>
 

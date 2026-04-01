@@ -2,16 +2,16 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { keywords } from "@/lib/schema";
 import { eq } from "drizzle-orm";
-import { getGoogleDailyTrends } from "@/lib/trends";
+import { getDomesticIssues } from "@/lib/trends";
 import { nanoid } from "nanoid";
 
-// GET /api/keywords/trending — Google Trends RSS 실시간 인기 키워드
+// GET /api/keywords/naver-trending — 국내 실시간 이슈 키워드 (Zum)
 export async function GET() {
   // 캐시 확인 (5분 TTL)
   const [cached] = await db
     .select()
     .from(keywords)
-    .where(eq(keywords.keyword, "__trending_cache__"));
+    .where(eq(keywords.keyword, "__domestic_issues_cache__"));
 
   if (cached?.trendData && cached.cachedAt) {
     const cacheAge = Date.now() - new Date(cached.cachedAt).getTime();
@@ -23,37 +23,35 @@ export async function GET() {
           cachedAt: cached.cachedAt,
         });
       } catch {
-        // 캐시 파싱 실패 시 새로 요청
+        // 캐시 파싱 실패
       }
     }
   }
 
   try {
-    const trends = await getGoogleDailyTrends();
+    const issues = await getDomesticIssues();
     const now = new Date().toISOString();
 
-    // 캐시 저장
     if (cached) {
       await db
         .update(keywords)
-        .set({ trendData: JSON.stringify(trends), cachedAt: now })
-        .where(eq(keywords.keyword, "__trending_cache__"));
+        .set({ trendData: JSON.stringify(issues), cachedAt: now })
+        .where(eq(keywords.keyword, "__domestic_issues_cache__"));
     } else {
       await db.insert(keywords).values({
         id: nanoid(),
-        keyword: "__trending_cache__",
-        trendData: JSON.stringify(trends),
+        keyword: "__domestic_issues_cache__",
+        trendData: JSON.stringify(issues),
         cachedAt: now,
       });
     }
 
     return NextResponse.json({
-      keywords: trends,
+      keywords: issues,
       cached: false,
       cachedAt: now,
     });
   } catch (err) {
-    // 실패 시 마지막 캐시 데이터 반환
     if (cached?.trendData) {
       try {
         return NextResponse.json({
@@ -63,13 +61,13 @@ export async function GET() {
           stale: true,
         });
       } catch {
-        // 캐시도 실패
+        // pass
       }
     }
 
     return NextResponse.json(
       {
-        error: "트렌드 조회 실패",
+        error: "국내 이슈 조회 실패",
         message: err instanceof Error ? err.message : "Unknown error",
         keywords: [],
       },
