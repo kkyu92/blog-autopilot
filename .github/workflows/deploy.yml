@@ -1,12 +1,12 @@
 name: CI/CD — Test & Deploy
 
-  on:
+on:
     push:
       branches: [main]
     pull_request:
       branches: [main]
 
-  jobs:
+jobs:
     test:
       name: Test
       runs-on: ubuntu-latest
