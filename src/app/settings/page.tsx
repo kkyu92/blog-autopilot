@@ -27,18 +27,15 @@ function SettingsContent() {
   const [substackEmail, setSubstackEmail] = useState("");
   const [substackPassword, setSubstackPassword] = useState("");
   const [searchConsoleSite, setSearchConsoleSite] = useState("");
-  const [notification, setNotification] = useState<string | null>(null);
-
-  // URL 파라미터로 알림 표시
-  useEffect(() => {
-    if (searchParams.get("blogger") === "connected") {
-      setNotification("Blogger 연결 완료!");
-    } else if (searchParams.get("naver") === "connected") {
-      setNotification("네이버 블로그 연결 완료!");
-    } else if (searchParams.get("error")) {
-      setNotification(`오류: ${searchParams.get("error")}`);
-    }
-  }, [searchParams]);
+  const [notification, setNotification] = useState<string | null>(() => {
+    const blogger = searchParams.get("blogger");
+    const naver = searchParams.get("naver");
+    const error = searchParams.get("error");
+    if (blogger === "connected") return "Blogger 연결 완료!";
+    if (naver === "connected") return "네이버 블로그 연결 완료!";
+    if (error) return `오류: ${error}`;
+    return null;
+  });
 
   const { data } = useQuery<{
     settings: Record<string, string>;
@@ -54,6 +51,7 @@ function SettingsContent() {
 
   useEffect(() => {
     if (data?.settings) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- 서버 데이터로 폼 초기화
       if (data.settings.default_tone) setDefaultTone(data.settings.default_tone);
       if (data.settings.search_console_site) setSearchConsoleSite(data.settings.search_console_site);
     }
@@ -302,7 +300,7 @@ function SettingsContent() {
               type="password"
               value={substackPassword}
               onChange={(e) => setSubstackPassword(e.target.value)}
-              placeholder="Substack 비밀번호"
+              placeholder="Substack 비밀번호 (또는 SUBSTACK_PASSWORD 환경변수)"
               className="mt-1"
             />
           </div>

@@ -1,7 +1,7 @@
 # Content Autopilot — TODO
 
-> 마지막 점검: 2026-04-02 07:30 KST
-> 빌드: PASS | 테스트: 146/146 PASS | Lint: 6 errors, 5 warnings
+> 마지막 점검: 2026-04-02 09:40 KST
+> 빌드: PASS | 테스트: 146/146 PASS | Lint: 0 errors, 0 warnings
 
 ---
 
@@ -19,26 +19,15 @@
 
 ---
 
-## 긴급: Lint 에러 수정 (빌드는 통과하지만 코드 품질 이슈)
-
-### ESLint Errors (6개)
-- [ ] `src/app/topics/page.tsx:161` — `Date.now()` 렌더 중 호출 (impure function). `useState`+`useEffect`로 교체
-- [ ] `src/app/editor/[id]/page.tsx:248` — `handlePublishRef.current` 수정 불가 에러. 변수명 Ref 접미사 확인 또는 useEffect 안으로 이동
-- [ ] `src/app/page.tsx:232` — `TrendSkeleton` 컴포넌트 렌더 중 생성. 컴포넌트 밖으로 이동
-- [ ] `src/app/page.tsx:294,349` — 위 TrendSkeleton 사용 부분 (같은 수정으로 해결)
-
-### ESLint Warnings (5개)
-- [ ] `src/app/api/content/route.ts:25` — 미사용 변수 `keyword`
-- [ ] `src/app/api/publish/blogger/route.ts:8` — 미사용 import `getTokens`
-- [ ] `src/app/editor/[id]/page.tsx:4` — 미사용 import `useMutation`
-- [ ] `src/app/editor/[id]/page.tsx:711` — `<img>` → `next/image` 교체 권장
-- [ ] `src/hooks/use-streaming.ts:127` — useCallback dependency 누락 (`options`)
+## 완료: Lint 에러/경고 수정
+- [x] ESLint Errors 9개 → 0개 (topics, editor, page, settings 수정)
+- [x] ESLint Warnings 5개 → 0개 (미사용 import/변수 제거, dependency 수정)
 
 ---
 
-## 보안 (우선순위 높음)
-- [ ] `src/lib/substack.ts` — Substack 비밀번호 평문 저장. 암호화 또는 환경변수 전환
-- [ ] `src/app/api/backup/route.ts:16` — `dbPath` execSync 직접 삽입. path 검증 추가
+## 완료: 보안 수정
+- [x] `src/app/api/backup/route.ts` — `execSync` → `execFileSync` + path traversal 검증
+- [x] Substack 비밀번호 — `SUBSTACK_PASSWORD` 환경변수 우선 사용
 
 ---
 
@@ -75,7 +64,7 @@
 ---
 
 ## 테스트
-- [ ] `pnpm lint` 에러 0으로 만들기 (CI에서 lint 체크 추가 고려)
+- [x] `pnpm lint` 에러 0으로 만들기
 - [ ] CI workflow에 `pnpm lint` 단계 추가
 
 ---

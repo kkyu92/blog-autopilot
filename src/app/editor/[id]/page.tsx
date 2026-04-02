@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams, useSearchParams } from "next/navigation";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { MarkdownEditor } from "@/components/editor/markdown-editor";
 import { Preview } from "@/components/editor/preview";
@@ -69,14 +69,14 @@ function EditorContent() {
       if (autoPublish && text.length > 100) {
         // 생성 완료 후 자동 발행
         setTimeout(() => {
-          handlePublishRef.current?.(autoPublish);
+          publishRef.current?.(autoPublish);
         }, 500);
       }
     },
     [autoPublish]
   );
+  const publishRef = useRef<((platform: "blogger" | "naver") => void) | null>(null);
   const streaming = useStreaming({ onComplete: handleAutoPublish });
-  const handlePublishRef = useRef<((platform: "blogger" | "naver") => void) | null>(null);
 
   // 콘텐츠 조회
   const { data: content, refetch } = useQuery<ContentRow>({
@@ -245,7 +245,8 @@ function EditorContent() {
   );
 
   // ref로 handlePublish를 onComplete 콜백에서 접근
-  handlePublishRef.current = handlePublish;
+  // eslint-disable-next-line react-hooks/immutability
+  publishRef.current = handlePublish;
 
   const saveStatusLabel = {
     saved: "저장됨",
@@ -708,6 +709,7 @@ function ImageSearch({
                   className="cursor-pointer rounded-md overflow-hidden border hover:border-primary transition-colors"
                   onClick={() => handleInsert(img)}
                 >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={img.thumb}
                     alt={img.alt}

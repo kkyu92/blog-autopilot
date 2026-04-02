@@ -5,7 +5,6 @@ import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { getValidBloggerTokens, publishToBlogger } from "@/lib/blogger";
 import { renderForPublish } from "@/lib/sanitize";
-import { getTokens } from "@/lib/tokens";
 
 // POST /api/publish/blogger — Blogger 발행
 export async function POST(request: NextRequest) {

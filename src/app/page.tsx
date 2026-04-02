@@ -28,6 +28,14 @@ interface DomesticIssue {
   summary: string;
 }
 
+const TrendSkeleton = () => (
+  <div className="space-y-2">
+    {[1, 2, 3].map((i) => (
+      <Skeleton key={i} className="h-8 w-full" />
+    ))}
+  </div>
+);
+
 interface PerformanceData {
   totalClicks: number;
   totalImpressions: number;
@@ -228,14 +236,6 @@ export default function Dashboard() {
   const drafts = allPosts.filter((p) => p.status === "draft");
   const published = allPosts.filter((p) => p.status === "published");
   const failed = allPosts.filter((p) => p.status === "failed");
-
-  const TrendSkeleton = () => (
-    <div className="space-y-2">
-      {[1, 2, 3].map((i) => (
-        <Skeleton key={i} className="h-8 w-full" />
-      ))}
-    </div>
-  );
 
   return (
     <div className="space-y-6">

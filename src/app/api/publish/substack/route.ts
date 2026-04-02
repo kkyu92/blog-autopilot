@@ -22,7 +22,7 @@ async function getSubstackConfig() {
   return {
     subdomain: config.substack_subdomain || "",
     email: config.substack_email || "",
-    password: config.substack_password || "",
+    password: process.env.SUBSTACK_PASSWORD || config.substack_password || "",
     cookie: config.substack_cookie || "",
   };
 }

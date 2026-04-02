@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
 // POST /api/content — 새 콘텐츠 생성
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const { title, keyword, keywordId, tone } = body;
+  const { title, keywordId, tone } = body;
 
   if (!title) {
     return NextResponse.json({ error: "title is required" }, { status: 400 });

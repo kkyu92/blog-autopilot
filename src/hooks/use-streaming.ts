@@ -33,6 +33,8 @@ export function useStreaming(options?: UseStreamingOptions): UseStreamingReturn 
     error: null,
   });
   const abortRef = useRef<AbortController | null>(null);
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
 
   const stop = useCallback(() => {
     abortRef.current?.abort();
@@ -101,7 +103,7 @@ export function useStreaming(options?: UseStreamingOptions): UseStreamingReturn 
                 }
                 if (parsed.done) {
                   setState((s) => ({ ...s, isStreaming: false }));
-                  options?.onComplete?.(accumulated);
+                  optionsRef.current?.onComplete?.(accumulated);
                   return;
                 }
               } catch {

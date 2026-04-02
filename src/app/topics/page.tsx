@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,11 +27,62 @@ interface DomesticIssue {
   newsUrl: string;
 }
 
+const CacheInfo = ({
+  data,
+  nowTs,
+}: {
+  data?: { stale?: boolean; cached: boolean; cachedAt: string };
+  nowTs: number;
+}) => {
+  if (!data) return null;
+  return (
+    <span className="flex items-center gap-1">
+      {data.stale && <Badge variant="outline">이전 데이터</Badge>}
+      {data.cached && data.cachedAt && (
+        <span className="text-xs text-muted-foreground">
+          {Math.round(
+            (nowTs - new Date(data.cachedAt).getTime()) / 60000
+          )}
+          분 전
+        </span>
+      )}
+    </span>
+  );
+};
+
+const LoadingSkeleton = () => (
+  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+    {[1, 2, 3, 4, 5, 6].map((i) => (
+      <Card key={i}>
+        <CardContent className="p-4">
+          <Skeleton className="h-5 w-32 mb-2" />
+          <Skeleton className="h-4 w-20 mb-2" />
+          <Skeleton className="h-3 w-full" />
+        </CardContent>
+      </Card>
+    ))}
+  </div>
+);
+
+const ErrorCard = ({ message }: { message: string }) => (
+  <Card>
+    <CardContent className="p-4 text-sm text-muted-foreground">
+      {message}
+    </CardContent>
+  </Card>
+);
+
 export default function TopicsPage() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedKeywords, setSelectedKeywords] = useState<Set<string>>(new Set());
   const [bulkTone, setBulkTone] = useState("informative");
+  const [nowTs, setNowTs] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNowTs(Date.now()), 60000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Google 실시간 트렌드
   const {
@@ -145,49 +196,6 @@ export default function TopicsPage() {
     setSearchQuery(keyword);
     searchMutation.mutate(keyword);
   };
-
-  const CacheInfo = ({
-    data,
-  }: {
-    data?: { stale?: boolean; cached: boolean; cachedAt: string };
-  }) => {
-    if (!data) return null;
-    return (
-      <span className="flex items-center gap-1">
-        {data.stale && <Badge variant="outline">이전 데이터</Badge>}
-        {data.cached && data.cachedAt && (
-          <span className="text-xs text-muted-foreground">
-            {Math.round(
-              (Date.now() - new Date(data.cachedAt).getTime()) / 60000
-            )}
-            분 전
-          </span>
-        )}
-      </span>
-    );
-  };
-
-  const LoadingSkeleton = () => (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-      {[1, 2, 3, 4, 5, 6].map((i) => (
-        <Card key={i}>
-          <CardContent className="p-4">
-            <Skeleton className="h-5 w-32 mb-2" />
-            <Skeleton className="h-4 w-20 mb-2" />
-            <Skeleton className="h-3 w-full" />
-          </CardContent>
-        </Card>
-      ))}
-    </div>
-  );
-
-  const ErrorCard = ({ message }: { message: string }) => (
-    <Card>
-      <CardContent className="p-4 text-sm text-muted-foreground">
-        {message}
-      </CardContent>
-    </Card>
-  );
 
   return (
     <div className="space-y-6">
@@ -349,7 +357,7 @@ export default function TopicsPage() {
         <TabsContent value="google" className="mt-3">
           <div className="flex items-center gap-2 mb-3">
             <h3 className="text-lg font-semibold">실시간 인기 검색어</h3>
-            <CacheInfo data={googleData} />
+            <CacheInfo data={googleData} nowTs={nowTs} />
           </div>
 
           {googleLoading ? (
@@ -432,7 +440,7 @@ export default function TopicsPage() {
         <TabsContent value="domestic" className="mt-3">
           <div className="flex items-center gap-2 mb-3">
             <h3 className="text-lg font-semibold">실시간 국내 이슈</h3>
-            <CacheInfo data={domesticData} />
+            <CacheInfo data={domesticData} nowTs={nowTs} />
           </div>
 
           {domesticLoading ? (

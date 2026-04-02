@@ -1,13 +1,20 @@
 import { NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
-import { execSync } from "child_process";
+import { execFileSync } from "child_process";
 
 // POST /api/backup — DB 백업 실행
 export async function POST() {
-  const dbPath =
+  const dbPath = path.resolve(
     process.env.DATABASE_PATH ||
-    path.join(process.cwd(), "data", "content.db");
+    path.join(process.cwd(), "data", "content.db")
+  );
+
+  // path traversal 방지: data 디렉토리 내부인지 확인
+  const dataDir = path.resolve(process.cwd(), "data");
+  if (!dbPath.startsWith(dataDir + path.sep) && dbPath !== path.join(dataDir, "content.db")) {
+    return NextResponse.json({ error: "Invalid DB path" }, { status: 400 });
+  }
 
   if (!fs.existsSync(dbPath)) {
     return NextResponse.json({ error: "DB not found" }, { status: 404 });
@@ -22,12 +29,12 @@ export async function POST() {
   const backupFile = path.join(backupDir, `content-${timestamp}.db`);
 
   try {
-    execSync(`sqlite3 "${dbPath}" ".backup '${backupFile}'"`, {
+    execFileSync("sqlite3", [dbPath, `.backup '${backupFile}'`], {
       stdio: "pipe",
     });
   } catch {
     try {
-      execSync(`sqlite3 "${dbPath}" "PRAGMA wal_checkpoint(TRUNCATE);"`, {
+      execFileSync("sqlite3", [dbPath, "PRAGMA wal_checkpoint(TRUNCATE);"], {
         stdio: "pipe",
       });
     } catch {
