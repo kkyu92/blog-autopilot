@@ -327,30 +327,45 @@ skills/
 
 ## 9. Tailscale + 싱크 전략
 
+### Phase 1: 집 PC 메인 (초기 셋업)
 ```
-집 PC (Paperclip 서버, 24/7)
+집 PC (Paperclip 서버)
   ├── Tailscale IP: 100.x.x.1
   ├── Paperclip: http://100.x.x.1:3100
-  └── PM2: paperclip 프로세스 상시 가동
+  └── PM2: paperclip 상시 가동 (caffeinate 필요)
 
-회사 PC (Claude Code 작업용)
-  ├── Tailscale IP: 100.x.x.2
-  ├── Paperclip 대시보드 접속: http://100.x.x.1:3100
-  └── Claude Code로 에이전트 설정 변경
-
-폰 (모니터링 + 지시)
-  ├── Tailscale IP: 100.x.x.3
-  └── 브라우저로 Paperclip 대시보드 모니터링
+폰 (모니터링)
+  ├── Tailscale 앱 설치
+  └── 브라우저로 http://100.x.x.1:3100 접속
 ```
+
+### Phase 2: 회사 PC 메인 (안정화 후 이전)
+```
+회사 PC (Paperclip 메인 서버, 24/7 상시 전원)
+  ├── Tailscale IP: 100.x.x.2
+  ├── Paperclip: http://100.x.x.2:3100
+  └── PM2: paperclip 상시 가동
+
+집 PC (작업/개발용)
+  ├── Tailscale IP: 100.x.x.1
+  └── 대시보드 접속 + Claude Code 작업
+
+폰 (모니터링)
+  └── 브라우저로 http://100.x.x.2:3100 접속
+```
+
+**이전 절차**: 회사 PC에 Paperclip 설치 → `~/.paperclip/` DB 복사 → PM2 시작 → 폰 접속 주소 변경
+**이전 장점**: 슬립/절전 걱정 없음, 유선 네트워크 안정, 전기세 무료
+**주의**: 회사 방화벽에서 외부 API (Google OAuth, Claude API, Naver API) 차단 여부 확인 필수
 
 ---
 
 ## 10. 실행 순서 (우선순위)
 
 ### 즉시 (이번 주)
-1. [ ] Paperclip 설치 (`npx paperclipai onboard --yes`)
+1. [ ] Paperclip 설치 (`npx paperclipai onboard --yes`) — 집 PC
 2. [ ] PM2 설정 + 상시 가동
-3. [ ] Tailscale 3곳 설치
+3. [ ] Tailscale 설치 — 집 PC + 폰 (2곳만, 회사는 나중에)
 
 ### 단기 (1~2주)
 4. [ ] Paperclip 회사 생성 + 에이전트 4개 등록
@@ -365,10 +380,11 @@ skills/
 11. [ ] 1주일 자동 운영 모니터링
 
 ### 장기 (1개월+)
-12. [ ] content-autopilot 레포 archive
-13. [ ] 추가 키워드 소스 연동
-14. [ ] 성과 기반 키워드 선별 고도화
-15. [ ] 회사 PC Paperclip 설치 (미러링 or 접속 전용)
+12. [ ] 회사 PC로 Paperclip 서버 이전 (24/7 상시 전원 활용)
+13. [ ] 회사 방화벽 API 허용 확인 후 전환
+14. [ ] content-autopilot 레포 archive
+15. [ ] 추가 키워드 소스 연동
+16. [ ] 성과 기반 키워드 선별 고도화
 
 ---
 
