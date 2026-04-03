@@ -59,7 +59,9 @@ function formatDate(iso: string): string {
 
 export default function PostsPage() {
   const [statusFilter, setStatusFilter] = useState("");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleteTarget, setDeleteTarget] = useState<ContentRow | null>(null);
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
   const queryClient = useQueryClient();
 
   const { data: posts = [], isLoading } = useQuery<ContentRow[]>({
@@ -84,6 +86,21 @@ export default function PostsPage() {
     },
   });
 
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      const results = await Promise.allSettled(
+        ids.map(id => fetch(`/api/content/${id}`, { method: "DELETE" }))
+      );
+      const failed = results.filter(r => r.status === "rejected").length;
+      if (failed > 0) throw new Error(`${failed}건 삭제 실패`);
+    },
+    onSuccess: () => {
+      setSelected(new Set());
+      setBulkDeleteConfirm(false);
+      queryClient.invalidateQueries({ queryKey: ["contents"] });
+    },
+  });
+
   const syncMutation = useMutation({
     mutationFn: async () => {
       const res = await fetch("/api/content/sync", { method: "POST" });
@@ -95,6 +112,28 @@ export default function PostsPage() {
       alert(`싱크 완료: 새로 가져온 글 ${data.total.newlySynced}개, 기존 ${data.total.alreadyExisting}개`);
     },
   });
+
+  const toggleSelect = (id: string) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    if (selected.size === posts.length) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(posts.map(p => p.id)));
+    }
+  };
+
+  const selectedPosts = posts.filter(p => selected.has(p.id));
+  const selectedPublishedCount = selectedPosts.filter(
+    p => p.publications?.some(pub => pub.status === "published")
+  ).length;
 
   return (
     <div className="space-y-4">
@@ -115,12 +154,36 @@ export default function PostsPage() {
         </div>
       </div>
 
+      {/* 선택 액션 바 */}
+      {selected.size > 0 && (
+        <div className="flex items-center gap-3 bg-muted/50 border rounded-lg px-4 py-2.5">
+          <span className="text-sm font-medium">{selected.size}개 선택</span>
+          <Button
+            size="sm"
+            variant="destructive"
+            onClick={() => setBulkDeleteConfirm(true)}
+          >
+            선택 삭제
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setSelected(new Set())}
+          >
+            선택 해제
+          </Button>
+        </div>
+      )}
+
       {/* 상태 필터 탭 */}
       <div className="flex gap-1 border-b">
         {STATUS_TABS.map((tab) => (
           <button
             key={tab.value}
-            onClick={() => setStatusFilter(tab.value)}
+            onClick={() => {
+              setStatusFilter(tab.value);
+              setSelected(new Set());
+            }}
             className={`px-3 py-1.5 text-sm ${
               statusFilter === tab.value
                 ? "border-b-2 border-primary font-medium"
@@ -147,6 +210,14 @@ export default function PostsPage() {
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-[40px]">
+                <input
+                  type="checkbox"
+                  checked={posts.length > 0 && selected.size === posts.length}
+                  onChange={toggleAll}
+                  className="rounded cursor-pointer"
+                />
+              </TableHead>
               <TableHead>제목</TableHead>
               <TableHead className="w-[100px]">상태</TableHead>
               <TableHead className="w-[140px]">플랫폼</TableHead>
@@ -156,7 +227,18 @@ export default function PostsPage() {
           </TableHeader>
           <TableBody>
             {posts.map((post) => (
-              <TableRow key={post.id}>
+              <TableRow
+                key={post.id}
+                className={selected.has(post.id) ? "bg-muted/30" : ""}
+              >
+                <TableCell>
+                  <input
+                    type="checkbox"
+                    checked={selected.has(post.id)}
+                    onChange={() => toggleSelect(post.id)}
+                    className="rounded cursor-pointer"
+                  />
+                </TableCell>
                 <TableCell>
                   <Link
                     href={`/editor/${post.id}`}
@@ -209,7 +291,7 @@ export default function PostsPage() {
         </Table>
       )}
 
-      {/* 삭제 확인 모달 */}
+      {/* 개별 삭제 확인 모달 */}
       {deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="bg-background rounded-lg p-6 max-w-md w-full mx-4 space-y-4 shadow-lg">
@@ -231,11 +313,7 @@ export default function PostsPage() {
               </div>
             )}
             <div className="flex gap-2 justify-end">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setDeleteTarget(null)}
-              >
+              <Button variant="outline" size="sm" onClick={() => setDeleteTarget(null)}>
                 취소
               </Button>
               <Button
@@ -249,6 +327,43 @@ export default function PostsPage() {
                 }}
               >
                 {deleteMutation.isPending ? "삭제 중..." : "삭제"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 일괄 삭제 확인 모달 */}
+      {bulkDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-background rounded-lg p-6 max-w-md w-full mx-4 space-y-4 shadow-lg">
+            <h3 className="font-bold text-lg">일괄 삭제</h3>
+            <p className="text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">{selected.size}개</span> 콘텐츠를 삭제하시겠습니까?
+            </p>
+            {selectedPublishedCount > 0 && (
+              <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md">
+                {selectedPublishedCount}개 글이 외부 플랫폼(Blogger/WordPress)에서도 함께 삭제됩니다.
+              </div>
+            )}
+            <div className="text-xs text-muted-foreground max-h-32 overflow-y-auto space-y-1">
+              {selectedPosts.map(p => (
+                <div key={p.id} className="truncate">
+                  {p.title || "(제목 없음)"}
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" size="sm" onClick={() => setBulkDeleteConfirm(false)}>
+                취소
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                disabled={bulkDeleteMutation.isPending}
+                onClick={() => bulkDeleteMutation.mutate([...selected])}
+              >
+                {bulkDeleteMutation.isPending ? `삭제 중... (${selected.size}건)` : `${selected.size}개 삭제`}
               </Button>
             </div>
           </div>
