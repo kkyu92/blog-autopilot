@@ -127,8 +127,8 @@ export default function PostsPage() {
               <TableHead>제목</TableHead>
               <TableHead className="w-[100px]">상태</TableHead>
               <TableHead className="w-[140px]">플랫폼</TableHead>
-              <TableHead className="w-[120px]">생성일</TableHead>
-              <TableHead className="w-[120px]">작업</TableHead>
+              <TableHead className="w-[100px]">생성일</TableHead>
+              <TableHead className="w-[60px]"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -171,24 +171,17 @@ export default function PostsPage() {
                   {formatDate(post.createdAt)}
                 </TableCell>
                 <TableCell>
-                  <div className="flex gap-1">
-                    <Link href={`/editor/${post.id}`}>
-                      <Button variant="ghost" size="sm">
-                        편집
-                      </Button>
-                    </Link>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-destructive"
-                      onClick={() => {
-                        if (confirm("정말 삭제하시겠습니까?"))
-                          deleteMutation.mutate(post.id);
-                      }}
-                    >
-                      삭제
-                    </Button>
-                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-destructive"
+                    onClick={() => {
+                      if (confirm("정말 삭제하시겠습니까?"))
+                        deleteMutation.mutate(post.id);
+                    }}
+                  >
+                    삭제
+                  </Button>
                 </TableCell>
               </TableRow>
             ))}
