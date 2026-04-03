@@ -76,6 +76,40 @@ export async function getWordPressSite(
   return { id: data.ID, name: data.name, url: data.URL };
 }
 
+// WordPress 전체 게시물 목록 조회
+export async function listWordPressPosts(
+  accessToken: string,
+  site?: string
+): Promise<{ id: number; title: string; url: string; content: string; date: string }[]> {
+  const targetSite = site || WP_SITE;
+  if (!targetSite) throw new Error("WORDPRESS_SITE not configured");
+
+  const posts: { id: number; title: string; url: string; content: string; date: string }[] = [];
+  let offset = 0;
+
+  do {
+    const res = await fetch(
+      `https://public-api.wordpress.com/rest/v1.1/sites/${targetSite}/posts?number=100&offset=${offset}&status=publish`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    if (!res.ok) break;
+    const data = await res.json();
+    for (const post of data.posts || []) {
+      posts.push({
+        id: post.ID,
+        title: post.title,
+        url: post.URL,
+        content: post.content || "",
+        date: post.date,
+      });
+    }
+    if ((data.posts || []).length < 100) break;
+    offset += 100;
+  } while (true);
+
+  return posts;
+}
+
 // WordPress 글 발행
 export async function publishToWordPress(params: {
   accessToken: string;

@@ -105,6 +105,36 @@ export async function listBlogs(
   );
 }
 
+// Blogger 전체 게시물 목록 조회
+export async function listBloggerPosts(
+  accessToken: string,
+  blogId: string
+): Promise<{ id: string; title: string; url: string; content: string; published: string }[]> {
+  const posts: { id: string; title: string; url: string; content: string; published: string }[] = [];
+  let pageToken = "";
+
+  do {
+    const url = `https://www.googleapis.com/blogger/v3/blogs/${blogId}/posts?maxResults=50&status=live${pageToken ? `&pageToken=${pageToken}` : ""}`;
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) break;
+    const data = await res.json();
+    for (const post of data.items || []) {
+      posts.push({
+        id: post.id,
+        title: post.title,
+        url: post.url,
+        content: post.content || "",
+        published: post.published,
+      });
+    }
+    pageToken = data.nextPageToken || "";
+  } while (pageToken);
+
+  return posts;
+}
+
 // Blogger 게시물 발행
 export async function publishToBlogger(params: {
   accessToken: string;

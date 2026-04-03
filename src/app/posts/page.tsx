@@ -84,13 +84,35 @@ export default function PostsPage() {
     },
   });
 
+  const syncMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/content/sync", { method: "POST" });
+      if (!res.ok) throw new Error("Sync failed");
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["contents"] });
+      alert(`싱크 완료: 새로 가져온 글 ${data.total.newlySynced}개, 기존 ${data.total.alreadyExisting}개`);
+    },
+  });
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold">내 콘텐츠</h1>
-        <Link href="/topics">
-          <Button size="sm">+ 새 글 작성</Button>
-        </Link>
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => syncMutation.mutate()}
+            disabled={syncMutation.isPending}
+          >
+            {syncMutation.isPending ? "싱크 중..." : "플랫폼 싱크"}
+          </Button>
+          <Link href="/topics">
+            <Button size="sm">+ 새 글 작성</Button>
+          </Link>
+        </div>
       </div>
 
       {/* 상태 필터 탭 */}
