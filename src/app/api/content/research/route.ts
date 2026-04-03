@@ -60,12 +60,11 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Google Custom Search로 상위 결과 검색 (10→15개로 확대, 필터링 후 상위 선별)
+  // 검색 소스: Google CSE (있으면) + Naver 검색 API (폴백)
   let urls: { url: string; title: string; snippet: string }[] = [];
 
   if (GOOGLE_CSE_KEY && GOOGLE_CSE_ID) {
     try {
-      // 1차 검색: 일반 검색
       const searchUrl = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_CSE_KEY}&cx=${GOOGLE_CSE_ID}&q=${encodeURIComponent(keyword)}&num=10&lr=lang_ko`;
       const res = await fetch(searchUrl);
       if (res.ok) {
@@ -79,7 +78,6 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // 2차 검색: "키워드 + 분석/정리/가이드" 추가 (양질 글 타겟팅)
       const deepSearchUrl = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_CSE_KEY}&cx=${GOOGLE_CSE_ID}&q=${encodeURIComponent(keyword + " 분석 정리 가이드")}&num=5&lr=lang_ko`;
       const res2 = await fetch(deepSearchUrl);
       if (res2.ok) {
@@ -94,8 +92,104 @@ export async function POST(request: NextRequest) {
         urls = [...urls, ...additionalUrls];
       }
     } catch {
-      // 검색 실패 시 빈 결과로 진행
+      // CSE 실패 시 폴백으로 진행
     }
+  }
+
+  // CSE 결과가 없으면 Google 직접 검색으로 폴백
+  if (urls.length === 0) {
+    try {
+      const googleUrl = `https://www.google.com/search?q=${encodeURIComponent(keyword)}&hl=ko&num=15`;
+      const res = await fetch(googleUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "Accept-Language": "ko-KR,ko;q=0.9",
+        },
+        signal: AbortSignal.timeout(10000),
+      });
+      if (res.ok) {
+        const html = await res.text();
+        // Google 검색 결과에서 URL 추출
+        const linkRegex = /href="\/url\?q=(https?:\/\/[^&"]+)/g;
+        let match;
+        const seen = new Set<string>();
+        while ((match = linkRegex.exec(html)) !== null) {
+          const url = decodeURIComponent(match[1]);
+          // 구글 자체 페이지, 유튜브, 이미지 등 제외
+          if (seen.has(url)) continue;
+          if (url.includes("google.com") || url.includes("youtube.com") || url.includes("accounts.google")) continue;
+          seen.add(url);
+          urls.push({ url, title: "", snippet: "" });
+        }
+      }
+    } catch {
+      // 폴백도 실패
+    }
+  }
+
+  // 추가: Naver 웹 검색 (블로그 + 일반 웹 결과)
+  try {
+    // 네이버 블로그 검색
+    const naverBlogUrl = `https://search.naver.com/search.naver?where=blog&query=${encodeURIComponent(keyword)}`;
+    const res = await fetch(naverBlogUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+        "Accept-Language": "ko-KR,ko;q=0.9",
+      },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (res.ok) {
+      const html = await res.text();
+      // 네이버 블로그 포스트 URL (개별 글)
+      const blogPostRegex = /https?:\/\/blog\.naver\.com\/[a-zA-Z0-9_]+\/\d+/g;
+      const blogMatches = html.match(blogPostRegex) || [];
+      const seen = new Set(urls.map(u => u.url));
+      for (const url of [...new Set(blogMatches)]) {
+        if (!seen.has(url)) {
+          seen.add(url);
+          urls.push({ url, title: "", snippet: "" });
+        }
+      }
+
+      // 외부 블로그 URL도 수집 (trip.com, mediahub 등)
+      const externalRegex = /href="(https?:\/\/(?:kr\.trip\.com|mediahub|brunch\.co\.kr|post\.naver\.com|m\.blog\.naver\.com)[^"]+)"/g;
+      let match;
+      while ((match = externalRegex.exec(html)) !== null) {
+        const url = match[1];
+        if (!seen.has(url)) {
+          seen.add(url);
+          urls.push({ url, title: "", snippet: "" });
+        }
+      }
+    }
+  } catch {
+    // 네이버 검색 실패 무시
+  }
+
+  // 추가: Naver 웹 검색 (VIEW 탭 - 블로그 + 카페 + 포스트)
+  try {
+    const naverViewUrl = `https://search.naver.com/search.naver?where=view&query=${encodeURIComponent(keyword)}&sm=tab_opt`;
+    const res = await fetch(naverViewUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+        "Accept-Language": "ko-KR,ko;q=0.9",
+      },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (res.ok) {
+      const html = await res.text();
+      const viewUrlRegex = /https?:\/\/blog\.naver\.com\/[a-zA-Z0-9_]+\/\d+/g;
+      const viewMatches = html.match(viewUrlRegex) || [];
+      const seen = new Set(urls.map(u => u.url));
+      for (const url of [...new Set(viewMatches)].slice(0, 10)) {
+        if (!seen.has(url)) {
+          seen.add(url);
+          urls.push({ url, title: "", snippet: "" });
+        }
+      }
+    }
+  } catch {
+    // 실패 무시
   }
 
   // 각 URL에서 본문 추출 + 품질 평가
@@ -109,16 +203,22 @@ export async function POST(request: NextRequest) {
     error?: string;
   }[] = [];
 
-  for (const item of urls) {
+  for (const item of urls.slice(0, 20)) {
     try {
+      // 네이버 블로그는 모바일 버전으로 변환 (Readability 호환)
+      let fetchUrl = item.url;
+      if (fetchUrl.includes("blog.naver.com") && !fetchUrl.includes("m.blog.naver.com")) {
+        fetchUrl = fetchUrl.replace("blog.naver.com", "m.blog.naver.com");
+      }
+
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 10000);
 
-      const res = await fetch(item.url, {
+      const res = await fetch(fetchUrl, {
         signal: controller.signal,
         headers: {
           "User-Agent":
-            "Mozilla/5.0 (compatible; ContentAutopilot/1.0; research bot)",
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1",
         },
       });
       clearTimeout(timeout);

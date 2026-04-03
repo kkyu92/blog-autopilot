@@ -15,7 +15,8 @@ export async function GET() {
 
   if (cached?.trendData && cached.cachedAt) {
     const cacheAge = Date.now() - new Date(cached.cachedAt).getTime();
-    if (cacheAge < 5 * 60 * 1000) {
+    // Google Trends RSS는 이미 일간 기준이므로 1시간 캐시
+    if (cacheAge < 60 * 60 * 1000) {
       try {
         return NextResponse.json({
           keywords: JSON.parse(cached.trendData),
