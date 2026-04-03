@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { getMediumUser, publishToMedium } from "@/lib/medium";
 import { renderForPublish } from "@/lib/sanitize";
+import { withRetry } from "@/lib/retry";
 import { settings } from "@/lib/schema";
 
 // POST /api/publish/medium — Medium 발행
@@ -60,14 +61,16 @@ export async function POST(request: NextRequest) {
     const html = content.bodyHtml || renderForPublish(content.body);
     const seoTags = content.seoTags ? JSON.parse(content.seoTags) : [];
 
-    const result = await publishToMedium({
-      integrationToken,
-      authorId: user.id,
-      title: content.seoTitle || content.title,
-      html,
-      tags: seoTags.slice(0, 5),
-      publishStatus: publishStatus as "public" | "draft" | "unlisted",
-    });
+    const result = await withRetry(() =>
+      publishToMedium({
+        integrationToken,
+        authorId: user.id,
+        title: content.seoTitle || content.title,
+        html,
+        tags: seoTags.slice(0, 5),
+        publishStatus: publishStatus as "public" | "draft" | "unlisted",
+      })
+    );
 
     const now = new Date().toISOString();
     await db

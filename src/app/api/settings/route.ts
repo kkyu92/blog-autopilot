@@ -29,12 +29,14 @@ export async function GET() {
   // 플랫폼별 연결 상태
   const bloggerTokens = await getTokens("blogger");
   const naverTokens = await getTokens("naver");
+  const wordpressTokens = await getTokens("wordpress");
 
   return NextResponse.json({
     settings: result,
     connections: {
       blogger: bloggerTokens ? "connected" : "disconnected",
       naver: naverTokens ? "connected" : "disconnected",
+      wordpress: wordpressTokens ? "connected" : "disconnected",
     },
   });
 }

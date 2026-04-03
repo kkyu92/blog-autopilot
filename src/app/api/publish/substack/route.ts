@@ -9,6 +9,7 @@ import {
   loginToSubstack,
 } from "@/lib/substack";
 import { renderForPublish } from "@/lib/sanitize";
+import { withRetry } from "@/lib/retry";
 
 // 설정에서 Substack 인증 정보 조회
 async function getSubstackConfig() {
@@ -103,24 +104,28 @@ export async function POST(request: NextRequest) {
   try {
     const html = content.bodyHtml || renderForPublish(content.body);
 
-    // 1. 초안 생성
-    const draft = await createSubstackDraft({
-      subdomain: config.subdomain,
-      cookie,
-      title: content.seoTitle || content.title,
-      subtitle: content.seoDescription || "",
-      html,
-    });
+    // 1. 초안 생성 (재시도 포함)
+    const draft = await withRetry(() =>
+      createSubstackDraft({
+        subdomain: config.subdomain,
+        cookie,
+        title: content.seoTitle || content.title,
+        subtitle: content.seoDescription || "",
+        html,
+      })
+    );
 
     let externalUrl = draft.draft_url;
 
-    // 2. 발행 (선택)
+    // 2. 발행 (선택, 재시도 포함)
     if (publish) {
-      const published = await publishSubstackDraft({
-        subdomain: config.subdomain,
-        cookie,
-        draftId: draft.id,
-      });
+      const published = await withRetry(() =>
+        publishSubstackDraft({
+          subdomain: config.subdomain,
+          cookie,
+          draftId: draft.id,
+        })
+      );
       externalUrl = published.url;
     }
 

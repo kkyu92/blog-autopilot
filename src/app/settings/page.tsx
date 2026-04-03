@@ -22,24 +22,22 @@ function SettingsContent() {
 
   const [claudeKey, setClaudeKey] = useState("");
   const [defaultTone, setDefaultTone] = useState("informative");
-  const [mediumToken, setMediumToken] = useState("");
-  const [substackSubdomain, setSubstackSubdomain] = useState("");
-  const [substackEmail, setSubstackEmail] = useState("");
-  const [substackPassword, setSubstackPassword] = useState("");
   const [searchConsoleSite, setSearchConsoleSite] = useState("");
   const [notification, setNotification] = useState<string | null>(() => {
     const blogger = searchParams.get("blogger");
     const naver = searchParams.get("naver");
+    const wordpress = searchParams.get("wordpress");
     const error = searchParams.get("error");
     if (blogger === "connected") return "Blogger 연결 완료!";
     if (naver === "connected") return "네이버 블로그 연결 완료!";
+    if (wordpress === "connected") return "WordPress 연결 완료!";
     if (error) return `오류: ${error}`;
     return null;
   });
 
   const { data } = useQuery<{
     settings: Record<string, string>;
-    connections: { blogger: string; naver: string };
+    connections: { blogger: string; naver: string; wordpress: string };
   }>({
     queryKey: ["settings"],
     queryFn: async () => {
@@ -89,6 +87,7 @@ function SettingsContent() {
 
   const bloggerConnected = data?.connections?.blogger === "connected";
   const naverConnected = data?.connections?.naver === "connected";
+  const wordpressConnected = data?.connections?.wordpress === "connected";
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -170,30 +169,48 @@ function SettingsContent() {
         </CardContent>
       </Card>
 
-      {/* 네이버 블로그 연결 */}
+      {/* WordPress 연결 */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            네이버 블로그
-            <Badge variant={naverConnected ? "default" : "secondary"}>
-              {naverConnected ? "연결됨" : "미연결"}
+            WordPress
+            <Badge variant={wordpressConnected ? "default" : "secondary"}>
+              {wordpressConnected ? "연결됨" : "미연결"}
             </Badge>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {naverConnected ? (
+          {wordpressConnected ? (
             <Button
               variant="outline"
               size="sm"
-              onClick={() => disconnectMutation.mutate("naver")}
+              onClick={() => disconnectMutation.mutate("wordpress")}
             >
               연결 해제
             </Button>
           ) : (
-            <a href="/api/auth/naver">
-              <Button size="sm">네이버 연결</Button>
+            <a href="/api/auth/wordpress">
+              <Button size="sm">WordPress 연결</Button>
             </a>
           )}
+          <p className="text-xs text-muted-foreground mt-2">
+            WordPress.com 블로그에 자동 발행합니다.
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* 네이버 블로그 (API 종료) */}
+      <Card className="opacity-60">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            네이버 블로그
+            <Badge variant="secondary">API 종료</Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-xs text-muted-foreground">
+            네이버 블로그 글쓰기 API는 2020년 5월에 종료되었습니다.
+          </p>
         </CardContent>
       </Card>
 
@@ -225,101 +242,18 @@ function SettingsContent() {
         </CardContent>
       </Card>
 
-      {/* Medium */}
-      <Card>
+      {/* Medium (신규 토큰 발급 중단) */}
+      <Card className="opacity-60">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             Medium
-            <Badge variant={data?.settings?.medium_token ? "default" : "secondary"}>
-              {data?.settings?.medium_token ? "연결됨" : "미연결"}
-            </Badge>
+            <Badge variant="secondary">신규 토큰 발급 중단</Badge>
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <div>
-            <label className="text-sm text-muted-foreground">Integration Token</label>
-            <div className="flex gap-2 mt-1">
-              <Input
-                type="password"
-                value={mediumToken}
-                onChange={(e) => setMediumToken(e.target.value)}
-                placeholder="medium.com/me/settings 에서 발급"
-              />
-              <Button
-                size="sm"
-                onClick={() => {
-                  if (mediumToken) {
-                    saveMutation.mutate({ medium_token: mediumToken });
-                    setMediumToken("");
-                  }
-                }}
-                disabled={!mediumToken}
-              >
-                저장
-              </Button>
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Medium Settings &gt; Security and apps &gt; Integration tokens
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Substack */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            Substack
-            <Badge variant={data?.settings?.substack_subdomain ? "default" : "secondary"}>
-              {data?.settings?.substack_subdomain ? "설정됨" : "미설정"}
-            </Badge>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div>
-            <label className="text-sm text-muted-foreground">Subdomain</label>
-            <Input
-              value={substackSubdomain}
-              onChange={(e) => setSubstackSubdomain(e.target.value)}
-              placeholder="myblog (myblog.substack.com)"
-              className="mt-1"
-            />
-          </div>
-          <div>
-            <label className="text-sm text-muted-foreground">Email</label>
-            <Input
-              value={substackEmail}
-              onChange={(e) => setSubstackEmail(e.target.value)}
-              placeholder="Substack 로그인 이메일"
-              className="mt-1"
-            />
-          </div>
-          <div>
-            <label className="text-sm text-muted-foreground">Password</label>
-            <Input
-              type="password"
-              value={substackPassword}
-              onChange={(e) => setSubstackPassword(e.target.value)}
-              placeholder="Substack 비밀번호 (또는 SUBSTACK_PASSWORD 환경변수)"
-              className="mt-1"
-            />
-          </div>
-          <Button
-            size="sm"
-            onClick={() => {
-              const updates: Record<string, string> = {};
-              if (substackSubdomain) updates.substack_subdomain = substackSubdomain;
-              if (substackEmail) updates.substack_email = substackEmail;
-              if (substackPassword) updates.substack_password = substackPassword;
-              if (Object.keys(updates).length) {
-                saveMutation.mutate(updates);
-                setSubstackPassword("");
-              }
-            }}
-            disabled={!substackSubdomain}
-          >
-            저장
-          </Button>
+        <CardContent>
+          <p className="text-xs text-muted-foreground">
+            Medium API는 신규 Integration Token 발급을 중단했습니다. 기존 토큰 보유자만 사용 가능합니다.
+          </p>
         </CardContent>
       </Card>
 

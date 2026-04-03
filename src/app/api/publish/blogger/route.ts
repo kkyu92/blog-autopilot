@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { getValidBloggerTokens, publishToBlogger } from "@/lib/blogger";
 import { renderForPublish } from "@/lib/sanitize";
+import { withRetry } from "@/lib/retry";
 
 // POST /api/publish/blogger — Blogger 발행
 export async function POST(request: NextRequest) {
@@ -49,13 +50,16 @@ export async function POST(request: NextRequest) {
     const html = content.bodyHtml || renderForPublish(content.body);
     const seoTags = content.seoTags ? JSON.parse(content.seoTags) : [];
 
-    const result = await publishToBlogger({
-      accessToken: tokens.access_token,
-      blogId: blogId || (await getDefaultBlogId(tokens.access_token)),
-      title: content.seoTitle || content.title,
-      html,
-      labels: seoTags,
-    });
+    const targetBlogId = blogId || (await getDefaultBlogId(tokens.access_token));
+    const result = await withRetry(() =>
+      publishToBlogger({
+        accessToken: tokens.access_token,
+        blogId: targetBlogId,
+        title: content.seoTitle || content.title,
+        html,
+        labels: seoTags,
+      })
+    );
 
     // 성공 업데이트
     const now = new Date().toISOString();

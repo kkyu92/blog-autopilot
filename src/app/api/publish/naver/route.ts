@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { getValidNaverTokens, publishToNaver } from "@/lib/naver";
 import { renderForPublish } from "@/lib/sanitize";
+import { withRetry } from "@/lib/retry";
 
 // POST /api/publish/naver — 네이버 블로그 발행
 export async function POST(request: NextRequest) {
@@ -45,11 +46,13 @@ export async function POST(request: NextRequest) {
   try {
     const html = content.bodyHtml || renderForPublish(content.body);
 
-    const result = await publishToNaver({
-      accessToken: tokens.access_token,
-      title: content.seoTitle || content.title,
-      html,
-    });
+    const result = await withRetry(() =>
+      publishToNaver({
+        accessToken: tokens.access_token,
+        title: content.seoTitle || content.title,
+        html,
+      })
+    );
 
     const now = new Date().toISOString();
     await db
