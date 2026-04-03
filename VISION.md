@@ -1,6 +1,6 @@
 # 프로젝트 최종 목표
 
-> 마지막 업데이트: 2026-04-02
+> 마지막 업데이트: 2026-04-03
 
 ---
 
@@ -15,13 +15,13 @@
 사람이 하는 일: **모니터링 + 승인**. 나머지는 전부 자동.
 
 ```
-[자동] 트렌드 키워드 수집 (Google/Naver/Zum)
+[자동] 트렌드 키워드 수집 (Google/Zum)
   ↓
 [자동] 키워드 분석 + 글감 선별
   ↓
-[자동] SEO 최적화 블로그 글 생성 (Claude AI)
+[자동] SEO 최적화 블로그 글 생성 (Claude, Max 구독)
   ↓
-[자동] 멀티 플랫폼 발행 (Blogger/Naver/Medium/Substack)
+[자동] 멀티 플랫폼 발행 (Blogger + WordPress)
   ↓
 [자동] 검색 성과 추적 (Search Console)
   ↓
@@ -54,27 +54,26 @@
 ## 시스템 구조
 
 ### Paperclip (오케스트레이션)
-- 회사 PC에서 24/7 가동 (PM2 + Tailscale)
-- 에이전트 4개가 티켓 기반으로 자율 협업
-- 폰에서 대시보드 모니터링
+- 집 PC에서 PM2 + Tailscale로 가동 (추후 회사 PC 24/7 이전)
+- 에이전트 5개가 티켓 기반으로 자율 협업
+- 집/회사/폰 3곳에서 대시보드 접속 가능
 
-### 에이전트 4명
+### 에이전트 5명
 
 | 에이전트 | 역할 | heartbeat |
 |----------|------|-----------|
-| **Researcher** | 트렌드 키워드 수집 + 연관 키워드 확장 | 6시간마다 |
-| **Analyst** | 키워드 분석 + 글감 선별 + 우선순위 | 태스크 할당 시 |
-| **Writer** | 콘텐츠 생성 + SEO 메타 + 품질 검증 | 태스크 할당 시 |
-| **Publisher** | 멀티 플랫폼 발행 + 성과 추적 | 태스크 할당 시 + 1시간 |
+| **CEO** | 명령 창구, 태스크 생성/조율 | 1시간 |
+| **Researcher** | 키워드 수집 + 중복제거 + 그룹핑 + 분석 | 12~24시간 |
+| **Writer** | 기존 글 리서치 + 새 글 직접 창작 (SDK 미사용, Max 구독) | assignment |
+| **QA** | 정책 위반 체크 + 품질 검증 (발행 전 게이트) | assignment |
+| **Publisher** | Blogger + WordPress 발행 + 성과 추적 | 1시간 |
 
 ### 발행 플랫폼
 
 | 플랫폼 | 역할 | 상태 |
 |--------|------|------|
-| Google Blogger | 메인 (AdSense 연동) | OAuth 구현 완료 |
-| Naver Blog | 한국 트래픽 | OAuth 구현 완료 |
-| Medium | 영문 확장 시 | API 구현 완료 |
-| Substack | 뉴스레터 형태 | API 구현 완료 |
+| Google Blogger | 메인 수익화 (AdSense) | OAuth 연결 완료 |
+| WordPress.com | 글 축적 → 추후 수익화 | OAuth 연결 완료 |
 
 ---
 
@@ -110,13 +109,13 @@
 | 구분 | 도구 |
 |------|------|
 | 오케스트레이션 | Paperclip (에이전트 관리, 태스크, 예산) |
-| AI 런타임 | Claude Code (claude_local 어댑터) |
-| AI 모델 | Claude Sonnet (콘텐츠 생성) |
+| AI 런타임 | Claude Code (claude_local 어댑터, Max 구독) |
 | 키워드 수집 | Google Trends RSS, Zum, Google/Naver Suggest |
 | DB | SQLite (콘텐츠) + PostgreSQL (Paperclip) |
 | 성과 추적 | Google Search Console API |
 | 접속 | Tailscale (집/회사/폰) |
-| 프로세스 관리 | PM2 (자동 재시작, 부팅 시 시작) |
+| 프로세스 관리 | PM2 (자동 재시작) |
+| 비용 | $0 (Max 구독 활용, API 키 불필요) |
 
 ---
 
@@ -124,23 +123,28 @@
 
 ### Phase 1: MVP ✅ 완료
 - Next.js 앱으로 수동 콘텐츠 생성 + 발행
-- 146개 테스트, lint 0 errors
+- 219개 테스트, 0 lint errors
 
-### Phase 2: 자동화 전환 🔄 진행 중
+### Phase 2: 자동화 전환 ✅ 대부분 완료
 - [x] Paperclip 설치 + PM2 상시 가동
-- [ ] Tailscale 설치 (집 PC + 폰)
-- [ ] 에이전트 4개 등록 + 테스트
-- [ ] 전체 파이프라인 E2E 연결
+- [x] Tailscale 3곳 (집/회사/폰) 연결
+- [x] Paperclip 에이전트 5개 등록
+- [x] Google Blogger OAuth 연결 + 발행 테스트 성공
+- [x] WordPress.com OAuth 연결 + 발행 테스트 성공
+- [x] 네이버/Medium/Substack 제거 (API 종료)
+- [x] Writer SDK 호출 제거 (직접 글 작성, Max 구독)
+- [x] 삭제 시 외부 플랫폼 연동
+- [ ] 전체 파이프라인 E2E 연결 (Paperclip 에이전트 자율 운영)
 
 ### Phase 3: 수익화
+- [ ] AdSense 필수 페이지 생성 (About/Privacy/Contact)
+- [ ] 글 15~20개 축적
 - [ ] AdSense 승인 신청
 - [ ] 1주일 자동 운영 모니터링
-- [ ] 성과 기반 키워드 전략 자동 개선
 
 ### Phase 4: 스케일
 - [ ] 회사 PC로 서버 이전 (24/7)
 - [ ] 다중 블로그 운영
-- [ ] 추가 키워드 소스 연동
 - [ ] 글 200개 달성
 
 ---
@@ -149,14 +153,13 @@
 
 | 항목 | 월 비용 |
 |------|---------|
-| Claude API (Sonnet) | ~$63 (~70K tokens/day) |
-| 도메인 (선택) | $0~10/year |
-| 서버 | $0 (회사 PC) |
+| Claude (Max 구독) | $0 (이미 구독 중) |
+| 서버 | $0 (집/회사 PC) |
 | Tailscale | $0 (개인 무료) |
 | Paperclip | $0 (오픈소스) |
-| **합계** | **~$63/month** |
+| **합계** | **$0/month** |
 
-수익 $100/month 달성 시 순이익 전환.
+Max 구독으로 전환하여 API 비용 0원. 순수익 = 전체 AdSense 수익.
 
 ---
 
@@ -165,9 +168,7 @@
 1. **에이전트가 사람 개입 없이 주 5개 이상 글 발행**
 2. **AdSense 승인 통과**
 3. **월 검색 트래픽 1,000+ 달성**
-4. **월 수익 > 운영 비용 (순이익 전환)**
-
-이 4가지가 달성되면 이 프로젝트는 성공.
+4. **월 수익 > $0 (비용이 0이므로 첫 수익부터 성공)**
 
 ---
 

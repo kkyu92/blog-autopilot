@@ -6,7 +6,6 @@
  * - 중복 체크 후 DB 저장
  */
 import { randomUUID } from "crypto";
-import { eq } from "drizzle-orm";
 import { getDb } from "../src/lib/db";
 import { keywords } from "../src/lib/schema";
 import {
@@ -94,7 +93,7 @@ async function main() {
       relatedGoogle = related.google;
       relatedNaver = related.naver;
       console.log(`G:${relatedGoogle.length} N:${relatedNaver.length}`);
-    } catch (e) {
+    } catch {
       console.log(`연관키워드 실패`);
     }
 

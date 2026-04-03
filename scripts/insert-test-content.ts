@@ -135,7 +135,7 @@ const stmt = db.prepare(`
 stmt.run(id, title, body, seoTitle, seoDescription, seoTags, now, now);
 
 // 검증
-const saved = db.prepare("SELECT id, title, status, seo_title FROM contents WHERE id = ?").get(id) as any;
+const saved = db.prepare("SELECT id, title, status, seo_title FROM contents WHERE id = ?").get(id) as Record<string, string>;
 console.log(`\n=== DB 저장 ===`);
 console.log(`ID: ${saved.id}`);
 console.log(`제목: ${saved.title}`);
