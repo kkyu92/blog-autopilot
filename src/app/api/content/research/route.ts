@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
 
   if (GOOGLE_CSE_KEY && GOOGLE_CSE_ID) {
     try {
-      const searchUrl = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_CSE_KEY}&cx=${GOOGLE_CSE_ID}&q=${encodeURIComponent(keyword)}&num=5&lr=lang_ko`;
+      const searchUrl = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_CSE_KEY}&cx=${GOOGLE_CSE_ID}&q=${encodeURIComponent(keyword)}&num=10&lr=lang_ko`;
       const res = await fetch(searchUrl);
       if (res.ok) {
         const data = await res.json();
@@ -71,11 +71,11 @@ export async function POST(request: NextRequest) {
       const article = reader.parse();
 
       if (article?.textContent) {
-        // 1000자로 제한
+        // 2000자로 확장 (더 깊은 분석을 위해)
         const summary = article.textContent
           .replace(/\s+/g, " ")
           .trim()
-          .slice(0, 1000);
+          .slice(0, 2000);
         results.push({ url: item.url, title: article.title || item.title, summary });
       } else {
         results.push({ ...item, summary: "", error: "No readable content" });

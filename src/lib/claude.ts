@@ -96,8 +96,8 @@ export async function* generateContent(
 
   const stream = client.messages.stream(
     {
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 4096,
+      model: "claude-opus-4-20250514",
+      max_tokens: 8192,
       system: buildSystemPrompt(tone),
       messages: [
         {
