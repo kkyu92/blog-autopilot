@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { contents } from "@/lib/schema";
+import { contents, publications } from "@/lib/schema";
 import { desc, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 
-// GET /api/content — 콘텐츠 목록
+// GET /api/content — 콘텐츠 목록 (발행 정보 포함)
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const status = searchParams.get("status");
@@ -16,7 +16,22 @@ export async function GET(request: NextRequest) {
   }
 
   const rows = await query;
-  return NextResponse.json(rows);
+
+  // 각 콘텐츠의 발행 정보 조회
+  const pubs = await db.select().from(publications);
+  const pubsByContent = new Map<string, { platform: string; externalUrl: string | null; status: string }[]>();
+  for (const pub of pubs) {
+    const list = pubsByContent.get(pub.contentId) || [];
+    list.push({ platform: pub.platform, externalUrl: pub.externalUrl, status: pub.status });
+    pubsByContent.set(pub.contentId, list);
+  }
+
+  const enriched = rows.map((row) => ({
+    ...row,
+    publications: pubsByContent.get(row.id) || [],
+  }));
+
+  return NextResponse.json(enriched);
 }
 
 // POST /api/content — 새 콘텐츠 생성

@@ -14,6 +14,12 @@ import {
 } from "@/components/ui/table";
 import { useState } from "react";
 
+type Publication = {
+  platform: string;
+  externalUrl: string | null;
+  status: string;
+};
+
 type ContentRow = {
   id: string;
   title: string;
@@ -21,6 +27,7 @@ type ContentRow = {
   status: string;
   createdAt: string;
   updatedAt: string;
+  publications: Publication[];
 };
 
 const STATUS_TABS = [
@@ -119,8 +126,8 @@ export default function PostsPage() {
             <TableRow>
               <TableHead>제목</TableHead>
               <TableHead className="w-[100px]">상태</TableHead>
+              <TableHead className="w-[140px]">플랫폼</TableHead>
               <TableHead className="w-[120px]">생성일</TableHead>
-              <TableHead className="w-[120px]">수정일</TableHead>
               <TableHead className="w-[120px]">작업</TableHead>
             </TableRow>
           </TableHeader>
@@ -140,11 +147,28 @@ export default function PostsPage() {
                     {STATUS_LABEL[post.status] || post.status}
                   </Badge>
                 </TableCell>
-                <TableCell className="text-sm text-muted-foreground">
-                  {formatDate(post.createdAt)}
+                <TableCell>
+                  <div className="flex gap-1 flex-wrap">
+                    {post.publications?.filter(p => p.status === "published").map((pub) => (
+                      <a
+                        key={pub.platform}
+                        href={pub.externalUrl || "#"}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-block"
+                      >
+                        <Badge variant="outline" className="cursor-pointer hover:bg-primary/10 text-xs">
+                          {pub.platform === "blogger" ? "Blogger" : "WordPress"} ↗
+                        </Badge>
+                      </a>
+                    ))}
+                    {(!post.publications || post.publications.filter(p => p.status === "published").length === 0) && (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                  </div>
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground">
-                  {formatDate(post.updatedAt)}
+                  {formatDate(post.createdAt)}
                 </TableCell>
                 <TableCell>
                   <div className="flex gap-1">
