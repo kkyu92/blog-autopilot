@@ -122,3 +122,27 @@ export async function publishToWordPress(params: {
   const post = await res.json();
   return { id: post.ID, url: post.URL };
 }
+
+// WordPress 게시물 삭제
+export async function deleteFromWordPress(params: {
+  accessToken: string;
+  site?: string;
+  postId: string;
+}): Promise<void> {
+  const { accessToken, site = WP_SITE, postId } = params;
+
+  if (!site) throw new Error("WORDPRESS_SITE not configured");
+
+  const res = await fetch(
+    `https://public-api.wordpress.com/rest/v1.2/sites/${site}/posts/${postId}/delete`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    }
+  );
+
+  if (!res.ok && res.status !== 404) {
+    const err = await res.text();
+    throw new Error(`WordPress delete failed (${res.status}): ${err}`);
+  }
+}

@@ -59,6 +59,7 @@ function formatDate(iso: string): string {
 
 export default function PostsPage() {
   const [statusFilter, setStatusFilter] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<ContentRow | null>(null);
   const queryClient = useQueryClient();
 
   const { data: posts = [], isLoading } = useQuery<ContentRow[]>({
@@ -175,10 +176,7 @@ export default function PostsPage() {
                     variant="ghost"
                     size="sm"
                     className="text-destructive"
-                    onClick={() => {
-                      if (confirm("정말 삭제하시겠습니까?"))
-                        deleteMutation.mutate(post.id);
-                    }}
+                    onClick={() => setDeleteTarget(post)}
                   >
                     삭제
                   </Button>
@@ -187,6 +185,52 @@ export default function PostsPage() {
             ))}
           </TableBody>
         </Table>
+      )}
+
+      {/* 삭제 확인 모달 */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-background rounded-lg p-6 max-w-md w-full mx-4 space-y-4 shadow-lg">
+            <h3 className="font-bold text-lg">콘텐츠 삭제</h3>
+            <p className="text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">{deleteTarget.title}</span>
+              을(를) 삭제하시겠습니까?
+            </p>
+            {deleteTarget.publications?.filter(p => p.status === "published").length > 0 && (
+              <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md">
+                다음 플랫폼에서도 함께 삭제됩니다:
+                <ul className="mt-1 list-disc list-inside">
+                  {deleteTarget.publications.filter(p => p.status === "published").map((pub) => (
+                    <li key={pub.platform}>
+                      {pub.platform === "blogger" ? "Google Blogger" : "WordPress"}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            <div className="flex gap-2 justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setDeleteTarget(null)}
+              >
+                취소
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                disabled={deleteMutation.isPending}
+                onClick={() => {
+                  deleteMutation.mutate(deleteTarget.id, {
+                    onSuccess: () => setDeleteTarget(null),
+                  });
+                }}
+              >
+                {deleteMutation.isPending ? "삭제 중..." : "삭제"}
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

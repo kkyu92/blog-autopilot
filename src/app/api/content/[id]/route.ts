@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { contents } from "@/lib/schema";
+import { contents, publications } from "@/lib/schema";
 import { eq } from "drizzle-orm";
+import { getValidBloggerTokens, deleteFromBlogger, listBlogs } from "@/lib/blogger";
+import { getValidWordPressTokens, deleteFromWordPress } from "@/lib/wordpress";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -48,7 +50,7 @@ export async function PUT(request: NextRequest, { params }: Params) {
   return NextResponse.json(row);
 }
 
-// DELETE /api/content/[id] — 콘텐츠 삭제
+// DELETE /api/content/[id] — 콘텐츠 + 외부 플랫폼 글 삭제
 export async function DELETE(_request: NextRequest, { params }: Params) {
   const { id } = await params;
 
@@ -57,6 +59,44 @@ export async function DELETE(_request: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  // 외부 플랫폼에서 발행된 글 삭제
+  const pubs = await db.select().from(publications).where(eq(publications.contentId, id));
+  const deleteResults: { platform: string; success: boolean; error?: string }[] = [];
+
+  for (const pub of pubs) {
+    if (pub.status !== "published" || !pub.externalId) continue;
+
+    try {
+      if (pub.platform === "blogger") {
+        const tokens = await getValidBloggerTokens();
+        if (tokens) {
+          const blogs = await listBlogs(tokens.access_token);
+          if (blogs.length > 0) {
+            await deleteFromBlogger({
+              accessToken: tokens.access_token,
+              blogId: blogs[0].id,
+              postId: pub.externalId,
+            });
+          }
+        }
+        deleteResults.push({ platform: "blogger", success: true });
+      } else if (pub.platform === "wordpress") {
+        const tokens = await getValidWordPressTokens();
+        if (tokens) {
+          await deleteFromWordPress({
+            accessToken: tokens.access_token,
+            postId: pub.externalId,
+          });
+        }
+        deleteResults.push({ platform: "wordpress", success: true });
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Delete failed";
+      deleteResults.push({ platform: pub.platform, success: false, error: msg });
+    }
+  }
+
+  // DB에서 삭제 (publications는 cascade로 함께 삭제됨)
   await db.delete(contents).where(eq(contents.id, id));
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, externalDeletes: deleteResults });
 }

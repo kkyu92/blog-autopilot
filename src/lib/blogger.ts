@@ -140,3 +140,25 @@ export async function publishToBlogger(params: {
   const post = await res.json();
   return { id: post.id, url: post.url };
 }
+
+// Blogger 게시물 삭제
+export async function deleteFromBlogger(params: {
+  accessToken: string;
+  blogId: string;
+  postId: string;
+}): Promise<void> {
+  const { accessToken, blogId, postId } = params;
+
+  const res = await fetch(
+    `https://www.googleapis.com/blogger/v3/blogs/${blogId}/posts/${postId}`,
+    {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    }
+  );
+
+  if (!res.ok && res.status !== 404) {
+    const err = await res.text();
+    throw new Error(`Blogger delete failed: ${err}`);
+  }
+}
