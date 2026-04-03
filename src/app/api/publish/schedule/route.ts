@@ -15,9 +15,9 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (!["blogger", "naver", "medium", "substack"].includes(platform)) {
+  if (!["blogger", "wordpress"].includes(platform)) {
     return NextResponse.json(
-      { error: "platform must be blogger, naver, medium, or substack" },
+      { error: "platform must be blogger or wordpress" },
       { status: 400 }
     );
   }
@@ -100,7 +100,7 @@ export async function GET() {
   const results = [];
 
   for (const content of scheduled) {
-    const platform = content.scheduledPlatform as "blogger" | "naver";
+    const platform = content.scheduledPlatform as "blogger" | "wordpress";
 
     try {
       // 내부 발행 API 호출

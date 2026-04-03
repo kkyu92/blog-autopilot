@@ -25,11 +25,9 @@ function SettingsContent() {
   const [searchConsoleSite, setSearchConsoleSite] = useState("");
   const [notification, setNotification] = useState<string | null>(() => {
     const blogger = searchParams.get("blogger");
-    const naver = searchParams.get("naver");
     const wordpress = searchParams.get("wordpress");
     const error = searchParams.get("error");
     if (blogger === "connected") return "Blogger 연결 완료!";
-    if (naver === "connected") return "네이버 블로그 연결 완료!";
     if (wordpress === "connected") return "WordPress 연결 완료!";
     if (error) return `오류: ${error}`;
     return null;
@@ -37,7 +35,7 @@ function SettingsContent() {
 
   const { data } = useQuery<{
     settings: Record<string, string>;
-    connections: { blogger: string; naver: string; wordpress: string };
+    connections: { blogger: string; wordpress: string };
   }>({
     queryKey: ["settings"],
     queryFn: async () => {
@@ -86,7 +84,6 @@ function SettingsContent() {
   });
 
   const bloggerConnected = data?.connections?.blogger === "connected";
-  const naverConnected = data?.connections?.naver === "connected";
   const wordpressConnected = data?.connections?.wordpress === "connected";
 
   return (
@@ -199,21 +196,6 @@ function SettingsContent() {
         </CardContent>
       </Card>
 
-      {/* 네이버 블로그 (API 종료) */}
-      <Card className="opacity-60">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            네이버 블로그
-            <Badge variant="secondary">API 종료</Badge>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-xs text-muted-foreground">
-            네이버 블로그 글쓰기 API는 2020년 5월에 종료되었습니다.
-          </p>
-        </CardContent>
-      </Card>
-
       {/* 기본 톤 설정 */}
       <Card>
         <CardHeader>
@@ -239,21 +221,6 @@ function SettingsContent() {
               저장
             </Button>
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Medium (신규 토큰 발급 중단) */}
-      <Card className="opacity-60">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            Medium
-            <Badge variant="secondary">신규 토큰 발급 중단</Badge>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-xs text-muted-foreground">
-            Medium API는 신규 Integration Token 발급을 중단했습니다. 기존 토큰 보유자만 사용 가능합니다.
-          </p>
         </CardContent>
       </Card>
 

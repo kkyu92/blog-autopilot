@@ -60,7 +60,7 @@ function EditorContent() {
     url?: string;
     error?: string;
   } | null>(null);
-  const [autoPublish, setAutoPublish] = useState<"blogger" | "naver" | null>(null);
+  const [autoPublish, setAutoPublish] = useState<"blogger" | "wordpress" | null>(null);
   const queryClient = useQueryClient();
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -75,7 +75,7 @@ function EditorContent() {
     },
     [autoPublish]
   );
-  const publishRef = useRef<((platform: "blogger" | "naver") => void) | null>(null);
+  const publishRef = useRef<((platform: "blogger" | "wordpress") => void) | null>(null);
   const streaming = useStreaming({ onComplete: handleAutoPublish });
 
   // 콘텐츠 조회
@@ -171,45 +171,8 @@ function EditorContent() {
   }, [keyword, content]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 발행
-  // Medium/Substack 발행
-  const handlePublishExtended = useCallback(
-    async (platform: "medium" | "substack") => {
-      setPublishResult(null);
-      try {
-        await save(streaming.text);
-        const res = await fetch(`/api/publish/${platform}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contentId: id,
-            ...(platform === "medium" ? { publishStatus: "draft" } : { publish: false }),
-          }),
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          setPublishResult({ error: data.error });
-          toast.error(`${platform} 발행 실패: ${data.error}`);
-        } else {
-          setPublishResult({ ok: true, url: data.externalUrl });
-          toast.success(`${platform === "medium" ? "Medium" : "Substack"}에 ${data.published ? "발행" : "초안 저장"} 완료!`, {
-            action: data.externalUrl
-              ? { label: "확인하기", onClick: () => window.open(data.externalUrl, "_blank") }
-              : undefined,
-          });
-          refetch();
-          queryClient.invalidateQueries({ queryKey: ["contents"] });
-        }
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : "Publish failed";
-        setPublishResult({ error: msg });
-        toast.error(`${platform} 발행 실패: ${msg}`);
-      }
-    },
-    [id, streaming.text, save, refetch, queryClient]
-  );
-
   const handlePublish = useCallback(
-    async (platform: "blogger" | "naver") => {
+    async (platform: "blogger" | "wordpress") => {
       setAutoPublish(null); // 자동 발행 플래그 리셋
       setPublishResult(null);
       try {
@@ -427,26 +390,10 @@ function EditorContent() {
         <Button
           size="sm"
           variant="outline"
-          onClick={() => handlePublish("naver")}
+          onClick={() => handlePublish("wordpress")}
           disabled={streaming.isStreaming || !streaming.text}
         >
-          네이버
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => handlePublishExtended("medium")}
-          disabled={streaming.isStreaming || !streaming.text}
-        >
-          Medium
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => handlePublishExtended("substack")}
-          disabled={streaming.isStreaming || !streaming.text}
-        >
-          Substack
+          WordPress
         </Button>
         {content?.status === "published" && (
           <Badge variant="default">발행됨</Badge>
@@ -465,15 +412,15 @@ function EditorContent() {
         <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
           <input
             type="checkbox"
-            checked={autoPublish === "naver"}
-            onChange={(e) => setAutoPublish(e.target.checked ? "naver" : null)}
+            checked={autoPublish === "wordpress"}
+            onChange={(e) => setAutoPublish(e.target.checked ? "wordpress" : null)}
             className="rounded"
           />
-          생성 후 네이버 자동 발행
+          생성 후 WordPress 자동 발행
         </label>
         {autoPublish && streaming.isStreaming && (
           <Badge variant="outline" className="text-xs">
-            생성 완료 시 {autoPublish === "blogger" ? "Blogger" : "네이버"}에 자동 발행됩니다
+            생성 완료 시 {autoPublish === "blogger" ? "Blogger" : "WordPress"}에 자동 발행됩니다
           </Badge>
         )}
       </div>
@@ -534,7 +481,7 @@ function SchedulePublish({
 }) {
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
-  const [platform, setPlatform] = useState<"blogger" | "naver" | "medium" | "substack">("blogger");
+  const [platform, setPlatform] = useState<"blogger" | "wordpress">("blogger");
   const [loading, setLoading] = useState(false);
 
   const handleSchedule = async () => {
@@ -554,7 +501,7 @@ function SchedulePublish({
       if (!res.ok) {
         toast.error(data.error);
       } else {
-        toast.success(`${platform === "blogger" ? "Blogger" : "네이버"}에 ${date} ${time} 발행 예약됨`);
+        toast.success(`${platform === "blogger" ? "Blogger" : "WordPress"}에 ${date} ${time} 발행 예약됨`);
         onScheduled();
       }
     } catch {
@@ -588,7 +535,7 @@ function SchedulePublish({
         <Badge variant="outline">예약됨</Badge>
         <span>
           {dt.toLocaleDateString("ko-KR")} {dt.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}
-          {" "}— {scheduledPlatform === "blogger" ? "Blogger" : "네이버"}
+          {" "}— {scheduledPlatform === "blogger" ? "Blogger" : "WordPress"}
         </span>
         <Button size="sm" variant="ghost" onClick={handleCancel} disabled={loading}>
           취소
@@ -615,13 +562,11 @@ function SchedulePublish({
       />
       <select
         value={platform}
-        onChange={(e) => setPlatform(e.target.value as "blogger" | "naver" | "medium" | "substack")}
+        onChange={(e) => setPlatform(e.target.value as "blogger" | "wordpress")}
         className="border rounded px-2 py-1 text-sm bg-background"
       >
         <option value="blogger">Blogger</option>
-        <option value="naver">네이버</option>
-        <option value="medium">Medium</option>
-        <option value="substack">Substack</option>
+        <option value="wordpress">WordPress</option>
       </select>
       <Button size="sm" variant="outline" onClick={handleSchedule} disabled={disabled || loading || !date || !time}>
         {loading ? "설정 중..." : "예약"}
