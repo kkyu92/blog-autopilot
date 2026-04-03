@@ -168,7 +168,7 @@ export async function deleteFromWordPress(params: {
   if (!site) throw new Error("WORDPRESS_SITE not configured");
 
   const res = await fetch(
-    `https://public-api.wordpress.com/rest/v1.2/sites/${site}/posts/${postId}/delete`,
+    `https://public-api.wordpress.com/rest/v1.1/sites/${site}/posts/${postId}/delete`,
     {
       method: "POST",
       headers: { Authorization: `Bearer ${accessToken}` },
