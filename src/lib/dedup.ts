@@ -1,7 +1,7 @@
 import { and, eq, gte, like, or, sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/better-sqlite3";
+import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import { db } from "./db";
-import { publishedPosts, type Niche, type PublishedPost } from "./schema";
+import { publishedPosts, type Niche, type Platform, type PublishedPost } from "./schema";
 
 // ── checkAndResolve: 4단계 dedup ─────────────────────────────────────────────
 
@@ -26,7 +26,10 @@ export interface DedupResult {
   suggested_slug?: string;
 }
 
-type DrizzleDB = ReturnType<typeof drizzle>;
+// BetterSQLite3Database<Record<string, unknown>>: broad enough for the no-schema
+// test instance; BetterSQLite3Database<typeof schema> (production) is assignable
+// to this type since the class is covariant in TSchema.
+type DrizzleDB = BetterSQLite3Database<Record<string, unknown>>;
 
 /** Maximum number of slug variants to attempt before giving up. */
 const SLUG_MAX_VARIANT = 10;
@@ -51,14 +54,14 @@ function safeParseJson(raw: string | null | undefined): Record<string, unknown> 
  *   >7d: pass
  */
 export async function checkAndResolve(
-  db: DrizzleDB,
+  dbConn: DrizzleDB,
   input: DedupInput,
 ): Promise<DedupResult> {
   const { niche, keyword, evergreen, proposedSlug, trend } = input;
 
   // ── L1: slug 영구 차단 ──────────────────────────────────────────────────
   if (proposedSlug) {
-    const slugHit = (db as any)
+    const slugHit = dbConn
       .select({ id: publishedPosts.id })
       .from(publishedPosts)
       .where(
@@ -71,7 +74,7 @@ export async function checkAndResolve(
       let found: string | null = null;
       for (let v = 2; v <= SLUG_MAX_VARIANT; v++) {
         const candidate = `${proposedSlug}-${v}`;
-        const variantHit = (db as any)
+        const variantHit = dbConn
           .select({ id: publishedPosts.id })
           .from(publishedPosts)
           .where(and(eq(publishedPosts.niche, niche), eq(publishedPosts.slug, candidate)))
@@ -98,7 +101,7 @@ export async function checkAndResolve(
   }
 
   // ── 최근 게시물 조회 (L2 / L3 / L4 공용) ────────────────────────────────
-  const recent: PublishedPost | undefined = (db as any)
+  const recent: PublishedPost | undefined = dbConn
     .select()
     .from(publishedPosts)
     .where(and(eq(publishedPosts.niche, niche), eq(publishedPosts.keyword, keyword)))
@@ -218,7 +221,7 @@ export async function getCategoryDistribution(niche: Niche) {
 }
 
 export async function getOccupiedSlots(
-  platform: string,
+  platform: Platform,
   date: string,
 ): Promise<string[]> {
   const dayStart = `${date}T00:00:00+09:00`;
