@@ -10,20 +10,31 @@ export interface CallClaudeOptions {
 export async function callClaude(opts: CallClaudeOptions): Promise<string> {
   const model = opts.model ?? 'sonnet';
   return new Promise((resolve, reject) => {
-    const fullPrompt = `${opts.systemPrompt}\n\n---\n\n${opts.userMessage}`;
-    const child = spawn('claude', ['-p', fullPrompt, '--dangerously-skip-permissions', '--model', model], {
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    let stdout = '';
-    let stderr = '';
-    child.stdout.on('data', (chunk) => { stdout += chunk.toString(); });
-    child.stderr.on('data', (chunk) => { stderr += chunk.toString(); });
-    child.on('close', (code) => {
-      if (code !== 0) return reject(new Error(`claude CLI exit ${code}: ${stderr}`));
-      if (opts.expectJson) {
-        try { JSON.parse(stdout); } catch (e) { return reject(new Error(`invalid JSON: ${e}`)); }
+    const child = spawn(
+      'claude',
+      [
+        '-p', opts.userMessage,
+        '--system-prompt', opts.systemPrompt,
+        '--dangerously-skip-permissions',
+        '--model', model,
+        '--tools', '',
+      ],
+      { stdio: ['ignore', 'pipe', 'pipe'] },
+    );
+    const stdoutChunks: Buffer[] = [];
+    const stderrChunks: Buffer[] = [];
+    child.stdout.on('data', (chunk: Buffer) => { stdoutChunks.push(chunk); });
+    child.stderr.on('data', (chunk: Buffer) => { stderrChunks.push(chunk); });
+    child.on('close', (code, signal) => {
+      const stdout = Buffer.concat(stdoutChunks).toString('utf8').trim();
+      const stderr = Buffer.concat(stderrChunks).toString('utf8');
+      if (code !== 0) {
+        return reject(new Error(`claude CLI exit ${code ?? `signal ${signal}`}: ${stderr}`));
       }
-      resolve(stdout.trim());
+      if (opts.expectJson) {
+        try { JSON.parse(stdout); } catch (e) { return reject(new Error(`invalid JSON: ${(e as Error).message}`)); }
+      }
+      resolve(stdout);
     });
     child.on('error', reject);
   });

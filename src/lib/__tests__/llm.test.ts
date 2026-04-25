@@ -70,6 +70,10 @@ describe('callClaude', () => {
     const spawnArgs = (spawn as ReturnType<typeof vi.fn>).mock.calls[0];
     expect(spawnArgs[1]).toContain('--model');
     expect(spawnArgs[1]).toContain('sonnet');
+    // --tools '' must be present
+    const toolsIdx = spawnArgs[1].indexOf('--tools');
+    expect(toolsIdx).toBeGreaterThanOrEqual(0);
+    expect(spawnArgs[1][toolsIdx + 1]).toBe('');
   });
 
   it("model='opus' → '--model opus' in args", async () => {
@@ -97,5 +101,76 @@ describe('callClaude', () => {
       },
     });
     await expect(callClaude({ systemPrompt: 'sys', userMessage: 'hi' })).rejects.toThrow('spawn ENOENT');
+  });
+
+  it('UTF-8 multi-byte chars across chunk boundaries', async () => {
+    const { spawn } = await import('node:child_process');
+    const { callClaude } = await import('../llm');
+    // 안 = EC 95 88 — split as [EC] then [95 88]
+    (spawn as ReturnType<typeof vi.fn>).mockReturnValue({
+      stdout: {
+        on: (e: string, cb: any) => {
+          if (e === 'data') {
+            cb(Buffer.from([0xEC]));
+            cb(Buffer.from([0x95, 0x88]));
+          }
+        },
+      },
+      stderr: { on: vi.fn() },
+      on: (e: string, cb: any) => { if (e === 'close') cb(0, null); },
+    });
+    const result = await callClaude({ systemPrompt: 's', userMessage: 'u' });
+    expect(result).toBe('안');
+  });
+
+  it('--tools "" present to disable all tools', async () => {
+    const { spawn } = await import('node:child_process');
+    const { callClaude } = await import('../llm');
+    (spawn as ReturnType<typeof vi.fn>).mockReturnValue({
+      stdout: { on: (e: string, cb: (data: Buffer) => void) => { if (e === 'data') cb(Buffer.from('ok')); } },
+      stderr: { on: vi.fn() },
+      on: (e: string, cb: (code: number) => void) => { if (e === 'close') cb(0); },
+    });
+    await callClaude({ systemPrompt: 'sys', userMessage: 'hi' });
+    const spawnArgs = (spawn as ReturnType<typeof vi.fn>).mock.calls[0];
+    const argv: string[] = spawnArgs[1];
+    const toolsIdx = argv.indexOf('--tools');
+    expect(toolsIdx).toBeGreaterThanOrEqual(0);
+    expect(argv[toolsIdx + 1]).toBe('');
+  });
+
+  it('systemPrompt passed via --system-prompt flag, not concatenated', async () => {
+    const { spawn } = await import('node:child_process');
+    const { callClaude } = await import('../llm');
+    (spawn as ReturnType<typeof vi.fn>).mockReturnValue({
+      stdout: { on: (e: string, cb: (data: Buffer) => void) => { if (e === 'data') cb(Buffer.from('ok')); } },
+      stderr: { on: vi.fn() },
+      on: (e: string, cb: (code: number) => void) => { if (e === 'close') cb(0); },
+    });
+    await callClaude({ systemPrompt: 'SYS', userMessage: 'USR' });
+    const spawnArgs = (spawn as ReturnType<typeof vi.fn>).mock.calls[0];
+    const argv: string[] = spawnArgs[1];
+    // --system-prompt SYS must be present
+    const sysIdx = argv.indexOf('--system-prompt');
+    expect(sysIdx).toBeGreaterThanOrEqual(0);
+    expect(argv[sysIdx + 1]).toBe('SYS');
+    // -p USR must be present
+    const pIdx = argv.indexOf('-p');
+    expect(pIdx).toBeGreaterThanOrEqual(0);
+    expect(argv[pIdx + 1]).toBe('USR');
+    // userMessage must NOT contain systemPrompt or separator
+    expect(argv[pIdx + 1]).not.toContain('SYS');
+    expect(argv[pIdx + 1]).not.toContain('---');
+  });
+
+  it('signal kill → error mentions signal name', async () => {
+    const { spawn } = await import('node:child_process');
+    const { callClaude } = await import('../llm');
+    (spawn as ReturnType<typeof vi.fn>).mockReturnValue({
+      stdout: { on: vi.fn() },
+      stderr: { on: vi.fn() },
+      on: (e: string, cb: any) => { if (e === 'close') cb(null, 'SIGTERM'); },
+    });
+    await expect(callClaude({ systemPrompt: 'sys', userMessage: 'hi' })).rejects.toThrow('signal SIGTERM');
   });
 });
