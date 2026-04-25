@@ -8,7 +8,7 @@ let _db: ReturnType<typeof drizzle<typeof schema>> | null = null;
 
 export function getDb() {
   if (!_db) {
-    const dbPath = process.env.DATABASE_PATH || path.join(process.cwd(), "data", "content.db");
+    const dbPath = process.env.DATABASE_PATH || path.join(process.cwd(), "data", "blog.db");
     const dataDir = path.dirname(dbPath);
     if (!fs.existsSync(dataDir)) {
       fs.mkdirSync(dataDir, { recursive: true });
