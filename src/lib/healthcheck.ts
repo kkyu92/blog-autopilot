@@ -45,7 +45,8 @@ async function pingPexels(): Promise<HealthResult> {
 async function pingWordPress(niche: 'WS' | 'TS'): Promise<HealthResult> {
   const token = process.env[`WORDPRESS_${niche}_TOKEN`];
   const blogId = process.env[`WORDPRESS_${niche}_BLOG_ID`];
-  if (!token || !blogId) return { service: `WP-${niche}`, ok: false, reason: 'env missing' };
+  if (!token) return { service: `WP-${niche}`, ok: false, reason: `WORDPRESS_${niche}_TOKEN missing` };
+  if (!blogId) return { service: `WP-${niche}`, ok: false, reason: `WORDPRESS_${niche}_BLOG_ID missing` };
   try {
     const res = await fetchWithTimeout(
       `https://public-api.wordpress.com/rest/v1.1/sites/${blogId}/posts?number=1`,
@@ -62,9 +63,10 @@ async function pingBlogger(niche: 'AS' = 'AS'): Promise<HealthResult> {
   const blogId = process.env[`BLOGGER_${niche}_BLOG_ID`];
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  if (!refreshToken || !blogId || !clientId || !clientSecret) {
-    return { service: `Blogger-${niche}`, ok: false, reason: 'env missing' };
-  }
+  if (!refreshToken) return { service: `Blogger-${niche}`, ok: false, reason: `BLOGGER_${niche}_REFRESH_TOKEN missing` };
+  if (!blogId) return { service: `Blogger-${niche}`, ok: false, reason: `BLOGGER_${niche}_BLOG_ID missing` };
+  if (!clientId) return { service: `Blogger-${niche}`, ok: false, reason: 'GOOGLE_CLIENT_ID missing' };
+  if (!clientSecret) return { service: `Blogger-${niche}`, ok: false, reason: 'GOOGLE_CLIENT_SECRET missing' };
   try {
     // Step 1: refresh access token
     const tokRes = await fetchWithTimeout('https://oauth2.googleapis.com/token', {
@@ -94,15 +96,25 @@ async function pingBlogger(niche: 'AS' = 'AS'): Promise<HealthResult> {
 }
 
 async function pingClaudeCli(): Promise<HealthResult> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<HealthResult>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`claude-cli timeout after ${TIMEOUT_MS}ms`)), TIMEOUT_MS);
+  });
   try {
-    const res = await callClaude({ systemPrompt: 'You are a healthcheck.', userMessage: 'reply with exactly: OK' });
-    return {
-      service: 'claude-cli',
-      ok: res.includes('OK'),
-      reason: res.includes('OK') ? undefined : `unexpected: ${res.slice(0, 50)}`,
-    };
+    const result = await Promise.race<HealthResult>([
+      callClaude({ systemPrompt: 'You are a healthcheck.', userMessage: 'reply with exactly: OK' })
+        .then((res): HealthResult => ({
+          service: 'claude-cli',
+          ok: res.includes('OK'),
+          reason: res.includes('OK') ? undefined : `unexpected: ${res.slice(0, 50)}`,
+        })),
+      timeoutPromise,
+    ]);
+    return result;
   } catch (e) {
     return { service: 'claude-cli', ok: false, reason: String(e) };
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 

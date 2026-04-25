@@ -115,7 +115,7 @@ describe('healthcheck.runAll', () => {
     expect(pixabay!.reason).toBe('PIXABAY_API_KEY missing');
   });
 
-  it('WordPress WS env missing → WP-WS ok=false, reason = env missing', async () => {
+  it('WordPress WS env missing → WP-WS ok=false, reason = WORDPRESS_WS_TOKEN missing', async () => {
     vi.stubEnv('WORDPRESS_WS_TOKEN', '');
 
     global.fetch = vi.fn()
@@ -135,7 +135,30 @@ describe('healthcheck.runAll', () => {
     const wpWs = report.results.find(r => r.service === 'WP-WS');
     expect(wpWs).toBeDefined();
     expect(wpWs!.ok).toBe(false);
-    expect(wpWs!.reason).toBe('env missing');
+    expect(wpWs!.reason).toBe('WORDPRESS_WS_TOKEN missing');
+  });
+
+  it('WordPress WS blogId missing → WP-WS ok=false, reason = WORDPRESS_WS_BLOG_ID missing', async () => {
+    vi.stubEnv('WORDPRESS_WS_BLOG_ID', '');
+
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce({ ok: true, status: 200 }) // Pixabay
+      .mockResolvedValueOnce({ ok: true, status: 200 }) // Pexels
+      // WP-WS skips fetch (env missing)
+      .mockResolvedValueOnce({ ok: true, status: 200 }) // WP-TS
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ access_token: 'tok' }) }) // Blogger token
+      .mockResolvedValueOnce({ ok: true, status: 200 }) as any; // Blogger blogs GET
+
+    const { callClaude } = await import('../llm');
+    vi.mocked(callClaude).mockResolvedValue('OK');
+
+    const { runAll } = await import('../healthcheck');
+    const report = await runAll();
+
+    const wpWs = report.results.find(r => r.service === 'WP-WS');
+    expect(wpWs).toBeDefined();
+    expect(wpWs!.ok).toBe(false);
+    expect(wpWs!.reason).toBe('WORDPRESS_WS_BLOG_ID missing');
   });
 
   it('Blogger token refresh HTTP 400 → Blogger-AS ok=false', async () => {
@@ -245,7 +268,7 @@ describe('healthcheck.runAll', () => {
     expect(report.results).toHaveLength(6);
   });
 
-  it('Blogger env missing → Blogger-AS ok=false, reason = env missing', async () => {
+  it('Blogger env missing → Blogger-AS ok=false, reason = BLOGGER_AS_REFRESH_TOKEN missing', async () => {
     vi.stubEnv('BLOGGER_AS_REFRESH_TOKEN', '');
 
     global.fetch = vi.fn()
@@ -263,6 +286,29 @@ describe('healthcheck.runAll', () => {
     const blogger = report.results.find(r => r.service === 'Blogger-AS');
     expect(blogger).toBeDefined();
     expect(blogger!.ok).toBe(false);
-    expect(blogger!.reason).toBe('env missing');
+    expect(blogger!.reason).toBe('BLOGGER_AS_REFRESH_TOKEN missing');
+  });
+
+  it('claude CLI timeout → ok=false, reason contains "timeout"', async () => {
+    vi.useFakeTimers();
+
+    // Unstub all env vars so all other services short-circuit on missing-env synchronously
+    vi.unstubAllEnvs();
+
+    const { callClaude } = await import('../llm');
+    vi.mocked(callClaude).mockImplementation(() => new Promise(() => {})); // never resolves
+
+    const { runAll } = await import('../healthcheck');
+    const promise = runAll();
+
+    // Advance past TIMEOUT_MS (10_000ms)
+    await vi.advanceTimersByTimeAsync(11_000);
+
+    const report = await promise;
+    const claudeResult = report.results.find(r => r.service === 'claude-cli');
+    expect(claudeResult?.ok).toBe(false);
+    expect(claudeResult?.reason).toMatch(/timeout/);
+
+    vi.useRealTimers();
   });
 });
