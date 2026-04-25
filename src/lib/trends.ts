@@ -180,3 +180,88 @@ function decodeHtmlEntities(str: string): string {
     .replace(/&apos;/g, "'")
     .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n)));
 }
+
+// ── LLM 기반 키워드 큐 (pickQueue) ──
+
+import { callClaude } from './llm';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+import fs from 'node:fs';
+
+const __filename_trends = fileURLToPath(import.meta.url);
+const __dirname_trends = path.dirname(__filename_trends);
+const TREND_HUNTER_PROMPT = fs.readFileSync(
+  path.resolve(__dirname_trends, '../../prompts/agents/trend-hunter.md'),
+  'utf-8'
+);
+
+export interface KeywordCandidate {
+  keyword: string;
+  category: string;
+  content_type: '정보형' | 'how-to' | '비교형' | '리스트형' | '뉴스형';
+  search_volume_trend: '급상승' | '상승' | '안정';
+  priority_score: number;
+  evergreen: boolean;
+  image_keywords: string[];
+}
+
+export interface PickQueueOptions {
+  niche: 'WS' | 'TS' | 'AS';
+  count?: number;
+  /** Optional pre-fetched signals to feed LLM. If omitted, fetches Google daily trends. */
+  signals?: {
+    daily_trends?: TrendingKeyword[];
+    related?: RelatedKeywordResult[];
+  };
+}
+
+export async function pickQueue(opts: PickQueueOptions): Promise<KeywordCandidate[]> {
+  const count = opts.count ?? 5;
+
+  // Gather raw signals (with graceful fallback if external sources fail)
+  let dailyTrends: TrendingKeyword[] = opts.signals?.daily_trends ?? [];
+  if (!opts.signals?.daily_trends) {
+    try { dailyTrends = await getGoogleDailyTrends(); } catch { dailyTrends = []; }
+  }
+
+  const userMessage = JSON.stringify({
+    niche: opts.niche,
+    count,
+    daily_trends_kr: dailyTrends.slice(0, 20).map(t => ({ keyword: t.keyword, traffic: t.trafficVolume })),
+  });
+
+  const raw = await callClaude({
+    systemPrompt: TREND_HUNTER_PROMPT,
+    userMessage,
+    expectJson: true,
+  });
+
+  const parsed = JSON.parse(raw);
+
+  // Persona may return either an array directly or {keywords: [...]} / {candidates: [...]} envelope
+  const candidates: unknown[] = Array.isArray(parsed)
+    ? parsed
+    : (parsed.keywords ?? parsed.candidates ?? []);
+
+  if (!Array.isArray(candidates)) {
+    throw new Error(`trends.pickQueue: unexpected LLM response shape`);
+  }
+
+  return candidates.slice(0, count).map(validateCandidate);
+}
+
+function validateCandidate(raw: unknown): KeywordCandidate {
+  const c = raw as Record<string, unknown>;
+  if (typeof c.keyword !== 'string') throw new Error('KeywordCandidate.keyword required');
+  if (typeof c.priority_score !== 'number') throw new Error('KeywordCandidate.priority_score required');
+
+  return {
+    keyword: c.keyword,
+    category: typeof c.category === 'string' ? c.category : '',
+    content_type: (c.content_type as KeywordCandidate['content_type']) ?? '정보형',
+    search_volume_trend: (c.search_volume_trend as KeywordCandidate['search_volume_trend']) ?? '안정',
+    priority_score: c.priority_score,
+    evergreen: c.evergreen === true,  // strict: false unless explicitly true
+    image_keywords: Array.isArray(c.image_keywords) ? (c.image_keywords as string[]) : [],
+  };
+}
