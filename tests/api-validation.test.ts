@@ -98,8 +98,8 @@ describe("POST /api/publish/schedule validation", () => {
     if (!contentId || !scheduledAt || !platform) {
       return { error: "contentId, scheduledAt, platform are required", status: 400 };
     }
-    if (!["blogger", "naver"].includes(platform as string)) {
-      return { error: "platform must be blogger or naver", status: 400 };
+    if (!["wordpress_ws", "wordpress_ts", "blogger_as"].includes(platform as string)) {
+      return { error: "platform must be wordpress_ws, wordpress_ts, or blogger_as", status: 400 };
     }
     const scheduled = new Date(scheduledAt as string);
     if (isNaN(scheduled.getTime()) || scheduled <= new Date()) {
@@ -127,7 +127,7 @@ describe("POST /api/publish/schedule validation", () => {
     const err = validateSchedule({
       contentId: "a",
       scheduledAt: "2020-01-01T00:00:00Z",
-      platform: "blogger",
+      platform: "blogger_as",
     });
     expect(err?.error).toContain("future date");
   });
@@ -136,7 +136,7 @@ describe("POST /api/publish/schedule validation", () => {
     const err = validateSchedule({
       contentId: "a",
       scheduledAt: "not-a-date",
-      platform: "blogger",
+      platform: "blogger_as",
     });
     expect(err?.error).toContain("future date");
   });
@@ -145,7 +145,7 @@ describe("POST /api/publish/schedule validation", () => {
     const err = validateSchedule({
       contentId: "a",
       scheduledAt: "2030-06-15T10:00:00Z",
-      platform: "naver",
+      platform: "wordpress_ws",
     });
     expect(err).toBeNull();
   });
