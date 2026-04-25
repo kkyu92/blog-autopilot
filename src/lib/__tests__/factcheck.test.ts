@@ -213,6 +213,17 @@ describe('factcheck', () => {
     );
   });
 
+  // Test 10: LLM returns hallucinated verdict — runtime guard throws
+  it('LLM returns malformed verdict → throws', async () => {
+    const { callClaude } = await import('../llm');
+    vi.mocked(callClaude).mockResolvedValue(JSON.stringify({ verdict: 'unknown' }));
+
+    const { factcheck } = await import('../factcheck');
+    await expect(
+      factcheck({ niche: 'WS', draft: { content_html: '<p>x</p>', title: 't', keyword: 'k' } }),
+    ).rejects.toThrow(/unexpected verdict/);
+  });
+
   // Test 9: userMessage payload includes niche/title/keyword/content_html
   it('callClaude userMessage JSON에 niche/title/keyword/content_html 4개 필드 모두 포함', async () => {
     const { callClaude } = await import('../llm');

@@ -1,8 +1,11 @@
 import { callClaude } from './llm';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const PROMPT_PATH = path.join(process.cwd(), 'prompts/agents/fact-checker.md');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const PROMPT_PATH = path.resolve(__dirname, '../../prompts/agents/fact-checker.md');
 const PROMPT = fs.readFileSync(PROMPT_PATH, 'utf-8');
 
 export interface FactCheckInput {
@@ -12,7 +15,11 @@ export interface FactCheckInput {
 
 export interface FactCheckResult {
   verdict: 'pass' | 'needs_revision' | 'skipped';
-  issues?: Array<{ type: string; description: string; suggested_fix: string }>;
+  issues?: Array<{
+    type: 'source' | 'recency' | 'disclaimer' | 'forbidden';
+    description: string;
+    suggested_fix: string;
+  }>;
   disclaimer_added?: boolean;
   modified_html?: string;
 }
@@ -33,5 +40,9 @@ export async function factcheck(input: FactCheckInput): Promise<FactCheckResult>
     expectJson: true,
   });
 
-  return JSON.parse(raw) as FactCheckResult;
+  const parsed = JSON.parse(raw);
+  if (parsed.verdict !== 'pass' && parsed.verdict !== 'needs_revision') {
+    throw new Error(`factcheck: unexpected verdict "${parsed.verdict}" from LLM`);
+  }
+  return parsed as FactCheckResult;
 }
