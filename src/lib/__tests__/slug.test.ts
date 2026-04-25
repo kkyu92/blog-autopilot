@@ -2,9 +2,25 @@ import { describe, it, expect } from "vitest";
 import { makeSlug, resolveBatchCollisions } from "../slug";
 
 describe("makeSlug", () => {
-  it("한글 제목 → matches /[a-z0-9-]+/", () => {
-    const result = makeSlug("봄나들이 좋은 명소 5곳");
-    expect(result).toMatch(/[a-z0-9-]+/);
+  it("한글+숫자 제목 → strict:true가 Hangul 제거 ('5'만 남음)", () => {
+    expect(makeSlug("봄나들이 좋은 명소 5곳")).toBe("5");
+  });
+
+  it("순수 한글 제목 → post-HASH 형식 fallback", () => {
+    const result = makeSlug("완전한글제목");
+    expect(result).toMatch(/^post-[a-z0-9]+$/);
+  });
+
+  it("이모지만 → post-HASH 형식 fallback", () => {
+    const result = makeSlug("🔥🔥🔥");
+    expect(result).toMatch(/^post-[a-z0-9]+$/);
+  });
+
+  it("같은 한글 제목 → 같은 hash (deterministic)", () => {
+    const a = makeSlug("동일제목");
+    const b = makeSlug("동일제목");
+    expect(a).toBe(b);
+    expect(a).toMatch(/^post-[a-z0-9]+$/);
   });
 
   it("특수문자·이모지 제거", () => {
