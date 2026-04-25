@@ -489,3 +489,19 @@ PR5/PR6에 포함하지 않음. 운영 데이터 누적 후 패턴 보고 자동
 - 메모리 `feedback_claude_code_subscription.md`: Claude Code Max 구독 우선
 - 메모리 `feedback_first_principles_simplification.md`: DB·GUI·분석 레이어 추가 전 위임·CLI 먼저 검토
 - 체크포인트 `~/.gstack/projects/kyusikkim/checkpoints/20260425-190008-blog-autopilot-phase1-pr1-4-llm-pattern-pending.md` (PR4까지 완료 상태)
+
+## GSTACK REVIEW REPORT
+
+| Review | Trigger | Why | Runs | Status | Findings |
+|--------|---------|-----|------|--------|----------|
+| Brainstorming | `superpowers:brainstorming` | Requirements/design 발굴 | 1 | CLEAR | PLAN_v2 충돌 6 + gap 2 + 결정 매트릭스 16개 |
+| Eng Review | `/plan-eng-review` | Architecture & tests (required) | 1 | CLEAR (PLAN) | 7 issues 결정 (D1~D7), 0 critical gaps |
+| Codex (Outside Voice) | codex challenge | 독립 2nd opinion | 1 | issues_found | 9 발견 (Critical 3 + High 4 + Medium 2). 6개 PR5/PR6 spec 추가, 2개 Phase 1.5 분리, 1개 Phase 2 |
+| CEO Review | `/plan-ceo-review` | Scope & strategy | 0 | — | not run (scope locked, conversational covered) |
+| Design Review | `/plan-design-review` | UI/UX gaps | 0 | — | not applicable (backend CLI only) |
+
+**CROSS-MODEL**: plan-eng-review(technical layer) + codex(architectural/scope layer)가 보완. layer가 달라서 충돌 0. layer가 다르다는 것이 핵심 insight (capture learning에 박힘).
+
+**UNRESOLVED**: 0개 (D1~D7 + C1~C9 모두 결정 완료. PR5 작업 시점 재논의 항목은 §10b)
+
+**VERDICT**: ENG + CODEX CLEARED — PR5 spec scope 확정. 다음 단계: writing-plans skill로 implementation plan 작성.
