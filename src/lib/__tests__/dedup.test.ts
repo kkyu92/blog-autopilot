@@ -102,7 +102,7 @@ describe("dedup.checkAndResolve", () => {
       .values({
         ...BASE,
         publishedAt: daysAgoISO(80),
-        metadata: JSON.stringify({ evergreen: true }),
+        metadata: JSON.stringify({}), // old post has no evergreen flag — L4 must still fire
       })
       .run();
 
@@ -113,6 +113,26 @@ describe("dedup.checkAndResolve", () => {
     });
 
     expect(result.action).toBe("skip");
+  });
+
+  it("L4 divergence: input.evergreen=true + old post non-evergreen + 80d → skip (spec-correct)", async () => {
+    db
+      .insert(publishedPosts)
+      .values({
+        ...BASE,
+        publishedAt: daysAgoISO(80),
+        metadata: JSON.stringify({ evergreen: false }), // explicitly non-evergreen old post
+      })
+      .run();
+
+    const result = await checkAndResolve(db, {
+      niche: "WS",
+      keyword: BASE.keyword,
+      evergreen: true,
+    });
+
+    expect(result.action).toBe("skip");
+    expect(result.reason).toContain("evergreen");
   });
 
   it("L4: evergreen + 95d ago (> 90d) → pass", async () => {

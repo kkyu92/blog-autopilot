@@ -116,18 +116,13 @@ export async function checkAndResolve(
   const elapsedDays = elapsedMs / 86_400_000;
 
   // ── L4: evergreen 90d strict ─────────────────────────────────────────────
-  // Only applies when the NEW post is flagged evergreen.
-  // We check the recent post's metadata.evergreen to confirm the keyword IS evergreen.
-  if (evergreen) {
-    const meta = safeParseJson(recent.metadata);
-    const recentIsEvergreen = meta.evergreen === true;
-    if (recentIsEvergreen && elapsedDays < 90) {
-      return {
-        action: "skip",
-        reason: `evergreen 키워드 — 최근 발행 ${Math.floor(elapsedDays)}일 전 (90d 재발행 금지)`,
-        recent_post: recent,
-      };
-    }
+  // Only the NEW request's evergreen flag matters — not the old post's metadata.
+  if (evergreen && elapsedDays < 90) {
+    return {
+      action: "skip",
+      reason: `evergreen 키워드 — 최근 발행 ${Math.floor(elapsedDays)}일 전 (90d 재발행 금지)`,
+      recent_post: recent,
+    };
   }
 
   // ── L2: 24h strict ───────────────────────────────────────────────────────
