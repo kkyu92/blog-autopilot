@@ -29,6 +29,13 @@ export interface EditorReviewResult {
   feedback?: string;
   disclaimer_inserted?: boolean; // signals caller to update draft.content_html
   modified_html?: string;        // returned separately — caller decides to apply
+  final_html?: string;           // from LLM persona output, present when LLM approves (status='approved')
+  final_meta?: {                 // from LLM persona output, present when LLM approves
+    title: string;
+    meta_description: string;
+    slug: string;
+    labels: string[];
+  };
 }
 
 export async function review(input: EditorReviewInput): Promise<EditorReviewResult> {
@@ -68,37 +75,35 @@ export async function review(input: EditorReviewInput): Promise<EditorReviewResu
   });
 
   const parsed = JSON.parse(raw);
-  if (parsed.verdict !== 'pass' && parsed.verdict !== 'revision_needed') {
-    throw new Error(`editor: unexpected verdict "${parsed.verdict}" from LLM`);
+  // Persona schema uses 'status' with values 'approved' | 'revision_needed'
+  if (parsed.status !== 'approved' && parsed.status !== 'revision_needed') {
+    throw new Error(`editor: unexpected status "${parsed.status}" from LLM`);
   }
 
-  const llmResult = parsed as {
-    verdict: 'pass' | 'revision_needed';
-    score?: number;
-    reason?: string;
-    feedback?: string;
-  };
+  const llmRevisionNeeded = parsed.status === 'revision_needed';
+  const score = parsed.quality_score ?? (llmRevisionNeeded ? 60 : 85);
+  const llmFeedback = parsed.revision_notes ?? '';
 
   // Combine all failure signals
-  if (issues.length > 0 || llmResult.verdict === 'revision_needed') {
+  if (issues.length > 0 || llmRevisionNeeded) {
     const feedbackParts = [...issues];
-    if (llmResult.feedback) feedbackParts.push(llmResult.feedback);
-
-    const reasonParts = [...issues];
-    if (llmResult.reason) reasonParts.push(llmResult.reason);
+    if (llmFeedback) feedbackParts.push(llmFeedback);
 
     return {
       verdict: 'revision_needed',
-      score: llmResult.score ?? 60,
-      reason: reasonParts.join('; '),
+      score,
+      reason: feedbackParts.join('; '),
       feedback: feedbackParts.join('\n'),
       ...(disclaimerInserted && { disclaimer_inserted: true, modified_html: modifiedHtml }),
     };
   }
 
+  // LLM approved — carry through final_html and final_meta from persona output
   return {
     verdict: 'pass',
-    score: llmResult.score ?? 85,
+    score,
     ...(disclaimerInserted && { disclaimer_inserted: true, modified_html: modifiedHtml }),
+    ...(parsed.final_html !== undefined && { final_html: parsed.final_html }),
+    ...(parsed.final_meta !== undefined && { final_meta: parsed.final_meta }),
   };
 }

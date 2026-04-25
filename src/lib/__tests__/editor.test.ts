@@ -34,7 +34,12 @@ describe('editor.review', () => {
     const { callClaude } = await import('../llm');
     const { factcheck } = await import('../factcheck');
     vi.mocked(callClaude).mockResolvedValue(
-      JSON.stringify({ verdict: 'pass', score: 88 }),
+      JSON.stringify({
+        status: 'approved',
+        quality_score: 88,
+        final_html: '<p>polished</p>',
+        final_meta: { title: 't', meta_description: 'd', slug: 's', labels: ['l'] },
+      }),
     );
     vi.mocked(factcheck).mockResolvedValue({ verdict: 'pass' });
 
@@ -50,7 +55,12 @@ describe('editor.review', () => {
     const { callClaude } = await import('../llm');
     const { factcheck } = await import('../factcheck');
     vi.mocked(callClaude).mockResolvedValue(
-      JSON.stringify({ verdict: 'pass', score: 85 }),
+      JSON.stringify({
+        status: 'approved',
+        quality_score: 85,
+        final_html: '<p>polished</p>',
+        final_meta: { title: 't', meta_description: 'd', slug: 's', labels: ['l'] },
+      }),
     );
     vi.mocked(factcheck).mockResolvedValue({ verdict: 'pass' });
 
@@ -67,7 +77,12 @@ describe('editor.review', () => {
     const { callClaude } = await import('../llm');
     const { factcheck } = await import('../factcheck');
     vi.mocked(callClaude).mockResolvedValue(
-      JSON.stringify({ verdict: 'pass', score: 85 }),
+      JSON.stringify({
+        status: 'approved',
+        quality_score: 85,
+        final_html: '<p>polished</p>',
+        final_meta: { title: 't', meta_description: 'd', slug: 's', labels: ['l'] },
+      }),
     );
     vi.mocked(factcheck).mockResolvedValue({ verdict: 'pass' });
 
@@ -84,7 +99,12 @@ describe('editor.review', () => {
     const { callClaude } = await import('../llm');
     const { factcheck } = await import('../factcheck');
     vi.mocked(callClaude).mockResolvedValue(
-      JSON.stringify({ verdict: 'pass', score: 85 }),
+      JSON.stringify({
+        status: 'approved',
+        quality_score: 85,
+        final_html: '<p>polished</p>',
+        final_meta: { title: 't', meta_description: 'd', slug: 's', labels: ['l'] },
+      }),
     );
     vi.mocked(factcheck).mockResolvedValue({ verdict: 'pass' });
 
@@ -100,7 +120,12 @@ describe('editor.review', () => {
     const { callClaude } = await import('../llm');
     const { factcheck } = await import('../factcheck');
     vi.mocked(callClaude).mockResolvedValue(
-      JSON.stringify({ verdict: 'pass', score: 85 }),
+      JSON.stringify({
+        status: 'approved',
+        quality_score: 85,
+        final_html: '<p>polished</p>',
+        final_meta: { title: 't', meta_description: 'd', slug: 's', labels: ['l'] },
+      }),
     );
     vi.mocked(factcheck).mockResolvedValue({ verdict: 'pass' });
 
@@ -116,7 +141,12 @@ describe('editor.review', () => {
     const { callClaude } = await import('../llm');
     const { factcheck } = await import('../factcheck');
     vi.mocked(callClaude).mockResolvedValue(
-      JSON.stringify({ verdict: 'pass', score: 85 }),
+      JSON.stringify({
+        status: 'approved',
+        quality_score: 85,
+        final_html: '<p>polished</p>',
+        final_meta: { title: 't', meta_description: 'd', slug: 's', labels: ['l'] },
+      }),
     );
 
     const { review } = await import('../editor');
@@ -130,7 +160,12 @@ describe('editor.review', () => {
     const { callClaude } = await import('../llm');
     const { factcheck } = await import('../factcheck');
     vi.mocked(callClaude).mockResolvedValue(
-      JSON.stringify({ verdict: 'pass', score: 85 }),
+      JSON.stringify({
+        status: 'approved',
+        quality_score: 85,
+        final_html: '<p>polished</p>',
+        final_meta: { title: 't', meta_description: 'd', slug: 's', labels: ['l'] },
+      }),
     );
     vi.mocked(factcheck).mockResolvedValue({
       verdict: 'needs_revision',
@@ -152,7 +187,12 @@ describe('editor.review', () => {
     const { factcheck } = await import('../factcheck');
     const modifiedHtml = '<p>본문</p><p>이 글은 정보 제공 목적이며 전문 상담을 대체하지 않습니다.</p>';
     vi.mocked(callClaude).mockResolvedValue(
-      JSON.stringify({ verdict: 'pass', score: 85 }),
+      JSON.stringify({
+        status: 'approved',
+        quality_score: 85,
+        final_html: '<p>polished</p>',
+        final_meta: { title: 't', meta_description: 'd', slug: 's', labels: ['l'] },
+      }),
     );
     vi.mocked(factcheck).mockResolvedValue({
       verdict: 'pass',
@@ -176,7 +216,11 @@ describe('editor.review', () => {
     const { callClaude } = await import('../llm');
     const { factcheck } = await import('../factcheck');
     vi.mocked(callClaude).mockResolvedValue(
-      JSON.stringify({ verdict: 'revision_needed', score: 55, reason: '톤이 딱딱함', feedback: 'CTA가 누락되었습니다' }),
+      JSON.stringify({
+        status: 'revision_needed',
+        quality_score: 55,
+        revision_notes: 'CTA가 누락되었습니다',
+      }),
     );
     vi.mocked(factcheck).mockResolvedValue({ verdict: 'pass' });
 
@@ -187,18 +231,18 @@ describe('editor.review', () => {
     expect(result.feedback).toContain('CTA가 누락되었습니다');
   });
 
-  // Test 10: LLM returns unexpected verdict → throws with runtime guard
-  it('LLM 예상치 못한 verdict → 런타임 가드 에러 throw', async () => {
+  // Test 10: LLM returns unexpected status → throws with runtime guard
+  it('LLM 예상치 못한 status → 런타임 가드 에러 throw', async () => {
     const { callClaude } = await import('../llm');
     const { factcheck } = await import('../factcheck');
     vi.mocked(callClaude).mockResolvedValue(
-      JSON.stringify({ verdict: 'unknown', score: 70 }),
+      JSON.stringify({ status: 'unknown' }),
     );
     vi.mocked(factcheck).mockResolvedValue({ verdict: 'pass' });
 
     const { review } = await import('../editor');
     await expect(review({ draft: validDraft(), niche: 'TS' })).rejects.toThrow(
-      /unexpected verdict/,
+      /unexpected status/,
     );
   });
 
@@ -207,7 +251,12 @@ describe('editor.review', () => {
     const { callClaude } = await import('../llm');
     const { factcheck } = await import('../factcheck');
     vi.mocked(callClaude).mockResolvedValue(
-      JSON.stringify({ verdict: 'pass', score: 85 }),
+      JSON.stringify({
+        status: 'approved',
+        quality_score: 85,
+        final_html: '<p>polished</p>',
+        final_meta: { title: 't', meta_description: 'd', slug: 's', labels: ['l'] },
+      }),
     );
     vi.mocked(factcheck).mockResolvedValue({
       verdict: 'needs_revision',
@@ -226,14 +275,14 @@ describe('editor.review', () => {
     expect(result.feedback).toContain('면책 문구 누락');
   });
 
-  // Test 12: Score defaults — 60 on revision (no LLM score), 85 on pass (no LLM score)
-  it('LLM score 없을 때 기본값: revision_needed → 60, pass → 85', async () => {
+  // Test 12: Score defaults — 60 on revision (no LLM quality_score), 85 on pass (no LLM quality_score)
+  it('LLM quality_score 없을 때 기본값: revision_needed → 60, pass → 85', async () => {
     const { callClaude } = await import('../llm');
     const { factcheck } = await import('../factcheck');
 
-    // revision case: no score field
+    // revision case: no quality_score field
     vi.mocked(callClaude).mockResolvedValueOnce(
-      JSON.stringify({ verdict: 'revision_needed', reason: '품질 미달' }),
+      JSON.stringify({ status: 'revision_needed', revision_notes: '품질 미달' }),
     );
     vi.mocked(factcheck).mockResolvedValue({ verdict: 'pass' });
 
@@ -244,14 +293,44 @@ describe('editor.review', () => {
 
     vi.resetAllMocks();
 
-    // pass case: no score field
+    // pass case: no quality_score field
     vi.mocked(callClaude).mockResolvedValueOnce(
-      JSON.stringify({ verdict: 'pass' }),
+      JSON.stringify({ status: 'approved' }),
     );
     vi.mocked(factcheck).mockResolvedValue({ verdict: 'pass' });
 
     const passResult = await review({ draft: validDraft(), niche: 'TS' });
     expect(passResult.verdict).toBe('pass');
     expect(passResult.score).toBe(85);
+  });
+
+  // Test 13: LLM status='approved' → final_html and final_meta forwarded in result
+  it('LLM status=approved → EditorReviewResult에 final_html + final_meta 포함', async () => {
+    const { callClaude } = await import('../llm');
+    const { factcheck } = await import('../factcheck');
+    const finalHtml = '<article><p>최종 편집된 내용입니다.</p></article>';
+    const finalMeta = {
+      title: '건강한 생활습관 완전 가이드',
+      meta_description: '건강한 생활습관을 위한 10가지 핵심 전략',
+      slug: 'healthy-lifestyle-guide',
+      labels: ['건강', '생활습관', '웰빙'],
+    };
+    vi.mocked(callClaude).mockResolvedValue(
+      JSON.stringify({
+        status: 'approved',
+        quality_score: 92,
+        final_html: finalHtml,
+        final_meta: finalMeta,
+      }),
+    );
+    vi.mocked(factcheck).mockResolvedValue({ verdict: 'pass' });
+
+    const { review } = await import('../editor');
+    const result = await review({ draft: validDraft(), niche: 'TS' });
+
+    expect(result.verdict).toBe('pass');
+    expect(result.score).toBe(92);
+    expect(result.final_html).toBe(finalHtml);
+    expect(result.final_meta).toEqual(finalMeta);
   });
 });
