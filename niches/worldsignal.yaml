@@ -12,6 +12,14 @@ platform:
   site: worldsignalblog.wordpress.com
   wp_category_id: 43656672  # 건강/웰빙
   oauth_env_prefix: WORDPRESS_WS
+  env_vars:
+    access_token: WORDPRESS_WS_ACCESS_TOKEN
+    blog_id: WORDPRESS_WS_BLOG_ID
+    client_id: WORDPRESS_WS_CLIENT_ID
+    client_secret: WORDPRESS_WS_CLIENT_SECRET
+    site: WORDPRESS_WS_SITE
+    category_id: WORDPRESS_WS_CATEGORY_ID
+    redirect_uri: WORDPRESS_WS_REDIRECT_URI
 
 content:
   daily_post_count: 3
