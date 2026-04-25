@@ -1,0 +1,104 @@
+# WorldSignal — 건강·의료 전문 블로그
+# Source: paperclip worldsignal-lead AGENTS.md + 추가 카테고리
+
+niche:
+  code: WS
+  name: WorldSignal
+  description: 건강·의료 전문 블로그
+  language: ko
+
+platform:
+  type: wordpress
+  site: worldsignalblog.wordpress.com
+  wp_category_id: 43656672  # 건강/웰빙
+  oauth_env_prefix: WORDPRESS_WS
+
+content:
+  daily_post_count: 3
+  min_word_count: 1200
+  max_word_count: 3000
+  required_sections:
+    - hook  # 도입부 훅
+    - h2_sections  # 3~5개
+    - conclusion
+    - cta
+    - faq  # 1개 이상
+  image_count:
+    min: 2
+    recommended: 3
+  chart_max_per_post: 3
+
+categories:
+  - name: 질환·증상
+    weight: 25
+    examples: [고혈압, 당뇨, 갑상선, 알러지, 두통, 위장]
+    ymyl: true
+
+  - name: 영양·식단
+    weight: 20
+    examples: [지중해식, 저탄고지, 단백질, 비타민, 칼슘, 식단표]
+    ymyl: true
+
+  - name: 운동·피트니스
+    weight: 15
+    examples: [홈트, 웨이트, 유산소, 스트레칭, 요가, 필라테스]
+
+  - name: 의약품·보조제
+    weight: 10
+    examples: [영양제, 프로바이오틱스, 오메가3, 종합비타민, 처방약]
+    ymyl: true
+
+  - name: 정신건강
+    weight: 10
+    examples: [불면증, 스트레스, 우울, 명상, 번아웃, 사회불안]
+    ymyl: true
+
+  - name: 건강검진·예방
+    weight: 10
+    examples: [건강검진 항목, 암 예방, 백신, 주기적 검사, 가족력]
+    ymyl: true
+
+  # 추가 (paperclip에 없던 카테고리)
+  - name: 가족건강
+    weight: 5
+    examples: [노인건강, 어린이건강, 임산부, 갱년기, 가족 응급처치]
+
+  - name: 라이프스타일 헬스
+    weight: 5
+    examples: [수면 위생, 명상, 호흡법, 디지털 디톡스, 일과 균형]
+
+publishing:
+  slot_pool: ["09:00", "11:00", "13:00", "15:00", "17:00", "19:00"]
+  slots_per_day: 3
+  slot_selection: random
+  timezone: Asia/Seoul
+  rule: 예약발행만 허용. 즉시 발행 금지. 슬롯당 1건.
+
+quality:
+  framework: Google E-E-A-T
+  ymyl_caution: 건강·의료 정보 수준만, 전문 조언 회피. 면책 문구 필수.
+  spam_prevention: 색인 품질·체류 시간 우선. 대량 포스팅 지양.
+  min_quality_score: 80  # Content Editor 기준
+  max_revision_attempts: 2
+
+dedup:
+  default_window_days: 30
+  evergreen_window_days: 90
+  evergreen_keywords:  # 시간 무관, 항상 검색되는 키워드
+    - 고혈압
+    - 당뇨
+    - 다이어트
+    - 면역력
+    - 단백질
+    - 비타민
+  similar_title_threshold: 0.8  # Levenshtein 유사도
+
+trend_hunter:
+  category_distribution_max: 30  # 한 카테고리 30% 초과 금지
+  trending_to_evergreen_ratio: 6:4
+  use_seasonal_calendar: true
+  seasonal_boost_multiplier: 1.2  # 시즌 매칭 카테고리 가중치 +20%
+  sources:
+    - google_trends_kr
+    - naver_realtime_search
+    - sns_topics

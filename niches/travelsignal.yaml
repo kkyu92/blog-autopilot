@@ -1,0 +1,104 @@
+# TravelSignal — 여행·레저 블로그
+# Source: paperclip travelsignal-lead AGENTS.md + 추가 카테고리
+
+niche:
+  code: TS
+  name: TravelSignal
+  description: 여행·레저 블로그
+  language: ko
+
+platform:
+  type: wordpress
+  site: travelsignalblog.wordpress.com
+  oauth_env_prefix: WORDPRESS_TS
+
+content:
+  daily_post_count: 3
+  min_word_count: 1200
+  max_word_count: 3000
+  required_sections:
+    - hook
+    - h2_sections
+    - conclusion
+    - cta
+    - faq
+  required_practical_info:  # 여행 콘텐츠 특화
+    - 비용
+    - 소요시간
+    - 접근방법
+  image_count:
+    min: 2
+    recommended: 3
+  chart_max_per_post: 3
+
+categories:
+  - name: 국내여행
+    weight: 20
+    examples: [제주도, 부산, 강릉, 경주, 전주, 가평]
+
+  - name: 해외여행
+    weight: 20
+    examples: [일본, 동남아, 유럽, 미국, 호주, 대만]
+
+  - name: 숙소·항공권 딜
+    weight: 15
+    examples: [호텔 추천, 항공권 특가, 숙소 비교, 부킹 팁]
+
+  - name: 레저·액티비티
+    weight: 10
+    examples: [스쿠버다이빙, 등산, 캠핑, 골프, 서핑, 스키]
+
+  - name: 여행 팁·준비물
+    weight: 10
+    examples: [짐 싸기, 환전, 보험, 로밍, 여행 앱, 안전수칙]
+
+  - name: 비자·입국정보
+    weight: 5
+    examples: [무비자, ESTA, 신청 절차, 입국심사, 출입국]
+
+  # 추가 (paperclip에 없던 카테고리)
+  - name: 시즌 여행지
+    weight: 10
+    examples: [봄꽃, 단풍, 여름휴양지, 겨울 온천, 시즌 페스티벌]
+
+  - name: 맛집·로컬 음식
+    weight: 5
+    examples: [현지 맛집, 미식 여행, 길거리 음식, 야시장, 로컬 카페]
+
+  - name: 디지털 노마드
+    weight: 5
+    examples: [원격근무 도시, 코워킹, 장기 체류, 노마드 비자, 인터넷 환경]
+
+publishing:
+  slot_pool: ["09:00", "11:00", "13:00", "15:00", "17:00", "19:00"]
+  slots_per_day: 3
+  slot_selection: random
+  timezone: Asia/Seoul
+  rule: 예약발행만 허용. 즉시 발행 금지. 슬롯당 1건.
+
+quality:
+  framework: Google E-E-A-T
+  spam_prevention: 색인 품질·체류 시간 우선. 대량 포스팅 지양.
+  min_quality_score: 80
+  max_revision_attempts: 2
+  practical_info_required: true  # 비용·시간·접근방법 누락 시 revision_needed
+
+dedup:
+  default_window_days: 30
+  evergreen_window_days: 60  # 여행은 트렌드 영향 큼
+  evergreen_keywords:
+    - 제주도 여행
+    - 일본 여행
+    - 환전 팁
+    - 짐 싸기
+  similar_title_threshold: 0.8
+
+trend_hunter:
+  category_distribution_max: 30
+  trending_to_evergreen_ratio: 7:3  # 여행은 트렌드 비중 높음
+  use_seasonal_calendar: true
+  seasonal_boost_multiplier: 1.3  # 여행은 시즌 영향 더 큼
+  sources:
+    - google_trends_kr
+    - naver_realtime_search
+    - sns_topics
