@@ -11,12 +11,12 @@ describe('healthcheck.runAll', () => {
     // Default: all env vars present
     vi.stubEnv('PIXABAY_API_KEY', 'px-key');
     vi.stubEnv('PEXELS_API_KEY', 'pe-key');
-    vi.stubEnv('WORDPRESS_WS_TOKEN', 'ws-token');
+    vi.stubEnv('WORDPRESS_WS_ACCESS_TOKEN', 'ws-token');
     vi.stubEnv('WORDPRESS_WS_BLOG_ID', 'ws-blog');
-    vi.stubEnv('WORDPRESS_TS_TOKEN', 'ts-token');
+    vi.stubEnv('WORDPRESS_TS_ACCESS_TOKEN', 'ts-token');
     vi.stubEnv('WORDPRESS_TS_BLOG_ID', 'ts-blog');
-    vi.stubEnv('BLOGGER_AS_REFRESH_TOKEN', 'as-refresh');
-    vi.stubEnv('BLOGGER_AS_BLOG_ID', 'as-blog');
+    vi.stubEnv('GOOGLE_REFRESH_TOKEN', 'as-refresh');
+    vi.stubEnv('GOOGLE_BLOG_ID', 'as-blog');
     vi.stubEnv('GOOGLE_CLIENT_ID', 'g-client-id');
     vi.stubEnv('GOOGLE_CLIENT_SECRET', 'g-client-secret');
   });
@@ -115,8 +115,8 @@ describe('healthcheck.runAll', () => {
     expect(pixabay!.reason).toBe('PIXABAY_API_KEY missing');
   });
 
-  it('WordPress WS env missing → WP-WS ok=false, reason = WORDPRESS_WS_TOKEN missing', async () => {
-    vi.stubEnv('WORDPRESS_WS_TOKEN', '');
+  it('WordPress WS env missing → WP-WS ok=false, reason = WORDPRESS_WS_ACCESS_TOKEN missing', async () => {
+    vi.stubEnv('WORDPRESS_WS_ACCESS_TOKEN', '');
 
     global.fetch = vi.fn()
       .mockResolvedValueOnce({ ok: true, status: 200 }) // Pixabay
@@ -135,7 +135,7 @@ describe('healthcheck.runAll', () => {
     const wpWs = report.results.find(r => r.service === 'WP-WS');
     expect(wpWs).toBeDefined();
     expect(wpWs!.ok).toBe(false);
-    expect(wpWs!.reason).toBe('WORDPRESS_WS_TOKEN missing');
+    expect(wpWs!.reason).toBe('WORDPRESS_WS_ACCESS_TOKEN missing');
   });
 
   it('WordPress WS blogId missing → WP-WS ok=false, reason = WORDPRESS_WS_BLOG_ID missing', async () => {
@@ -268,8 +268,8 @@ describe('healthcheck.runAll', () => {
     expect(report.results).toHaveLength(6);
   });
 
-  it('Blogger env missing → Blogger-AS ok=false, reason = BLOGGER_AS_REFRESH_TOKEN missing', async () => {
-    vi.stubEnv('BLOGGER_AS_REFRESH_TOKEN', '');
+  it('Blogger env missing → Blogger-AS ok=false, reason = GOOGLE_REFRESH_TOKEN missing', async () => {
+    vi.stubEnv('GOOGLE_REFRESH_TOKEN', '');
 
     global.fetch = vi.fn()
       .mockResolvedValueOnce({ ok: true, status: 200 }) // Pixabay
@@ -286,7 +286,7 @@ describe('healthcheck.runAll', () => {
     const blogger = report.results.find(r => r.service === 'Blogger-AS');
     expect(blogger).toBeDefined();
     expect(blogger!.ok).toBe(false);
-    expect(blogger!.reason).toBe('BLOGGER_AS_REFRESH_TOKEN missing');
+    expect(blogger!.reason).toBe('GOOGLE_REFRESH_TOKEN missing');
   });
 
   it('claude CLI timeout → ok=false, reason contains "timeout"', async () => {

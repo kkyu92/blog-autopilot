@@ -43,9 +43,9 @@ async function pingPexels(): Promise<HealthResult> {
 }
 
 async function pingWordPress(niche: 'WS' | 'TS'): Promise<HealthResult> {
-  const token = process.env[`WORDPRESS_${niche}_TOKEN`];
+  const token = process.env[`WORDPRESS_${niche}_ACCESS_TOKEN`];
   const blogId = process.env[`WORDPRESS_${niche}_BLOG_ID`];
-  if (!token) return { service: `WP-${niche}`, ok: false, reason: `WORDPRESS_${niche}_TOKEN missing` };
+  if (!token) return { service: `WP-${niche}`, ok: false, reason: `WORDPRESS_${niche}_ACCESS_TOKEN missing` };
   if (!blogId) return { service: `WP-${niche}`, ok: false, reason: `WORDPRESS_${niche}_BLOG_ID missing` };
   try {
     const res = await fetchWithTimeout(
@@ -59,12 +59,12 @@ async function pingWordPress(niche: 'WS' | 'TS'): Promise<HealthResult> {
 }
 
 async function pingBlogger(niche: 'AS' = 'AS'): Promise<HealthResult> {
-  const refreshToken = process.env[`BLOGGER_${niche}_REFRESH_TOKEN`];
-  const blogId = process.env[`BLOGGER_${niche}_BLOG_ID`];
+  const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
+  const blogId = process.env.GOOGLE_BLOG_ID;
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  if (!refreshToken) return { service: `Blogger-${niche}`, ok: false, reason: `BLOGGER_${niche}_REFRESH_TOKEN missing` };
-  if (!blogId) return { service: `Blogger-${niche}`, ok: false, reason: `BLOGGER_${niche}_BLOG_ID missing` };
+  if (!refreshToken) return { service: `Blogger-${niche}`, ok: false, reason: 'GOOGLE_REFRESH_TOKEN missing' };
+  if (!blogId) return { service: `Blogger-${niche}`, ok: false, reason: 'GOOGLE_BLOG_ID missing' };
   if (!clientId) return { service: `Blogger-${niche}`, ok: false, reason: 'GOOGLE_CLIENT_ID missing' };
   if (!clientSecret) return { service: `Blogger-${niche}`, ok: false, reason: 'GOOGLE_CLIENT_SECRET missing' };
   try {
