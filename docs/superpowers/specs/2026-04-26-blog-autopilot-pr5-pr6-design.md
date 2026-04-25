@@ -28,8 +28,41 @@ PLAN_v2_autopilot_workers.md (2026-04-25 작성, APPROVED)는 blog-autopilot 마
 
 | Gap | 위험 | 해결 |
 |---|---|---|
-| 사전 헬스체크 부재 | 토큰 만료 silent fail → 며칠간 발행 0 | cron 첫 step에 5종 healthcheck. 1개라도 fail → cron skip + Issue |
+| 사전 헬스체크 부재 | 토큰 만료 silent fail → 며칠간 발행 0 | cron 첫 step에 5종 → **6종 healthcheck**(claude CLI 추가). 1개라도 fail → cron skip + Issue |
 | 같은 cron 내 slug 충돌 | `UNIQUE(niche, slug)` constraint로 9개 중 일부 INSERT 실패 | 9개 batch INSERT 전 자체 중복 체크 + suffix `-2` 자동 변형 |
+
+### plan-eng-review 결정 (D2~D7, 7개)
+
+| # | 결정 |
+|---|---|
+| D2 | macOS pmset wake schedule (`sudo pmset repeat wake MTWRFSU 01:10:00`). PC 자동 깨움 → cron 통과 → 절전 복귀 |
+| D3 | per-call timeout 없음 (정상 응답 안 자름). workflow `timeout-minutes: 45`이 단일 안전망 |
+| D4 | PR5에 로컬 DB 백업 추가 (cp + 30일 retention). 매 cron 끝 step |
+| D5 | PR5에 `lib/claude.ts` 삭제 + `package.json` `@anthropic-ai/sdk` dep 제거 |
+| D6 | 통합 테스트 #8 추가 (trends 큐 5개 모두 dedup skip → dispatch + continue) |
+| D7 | workflow `timeout-minutes: 45` (worst case 25분 + 80% margin) |
+| (스코프) | as-is 17파일 PR 유지 (D1) |
+
+### Codex Outside Voice 발견 (Critical 6개, PR5/PR6 스코프 추가)
+
+plan-eng-review 종료 후 codex가 spec scope 자체에서 6개 critical/high gap 발견. PR5/PR6에 spec 추가 처리.
+
+| # | Severity | 발견 | 해결 (PR5/PR6에 추가) |
+|---|---|---|---|
+| C1 | Critical | YMYL 사실 검증 단계 부재 (WS 의료, AS 부동산) — trends→writer→editor만, 실제 source 검증 없음 | `lib/factcheck.ts` 신규 OR `lib/editor.ts`에 source citation·정책 최신성 검증 강화. WS·AS niche에 한해 publisher 전 추가 단계. 면책 문구 자동 삽입 |
+| C2 | Critical | 멀티사이트 OAuth/토큰 모델 누락 — `wordpress.ts`는 단일 `WORDPRESS_SITE`만, 우리는 WS·TS 두 사이트 | 환경변수 분리: `WORDPRESS_WS_TOKEN`/`WORDPRESS_WS_BLOG_ID`/`WORDPRESS_TS_TOKEN`/`WORDPRESS_TS_BLOG_ID`. `lib/wordpress.ts` `publishScheduled(niche, post, slot_time)` 시그니처. `lib/tokens.ts` niche별 토큰 라우팅 |
+| C3 | Critical | publishScheduled 추상화 잘못 — WordPress.com (`status=future` + `date` 1단계) vs Blogger (draft → `posts.publish` + `publishDate` 2단계) 다름 | 공용 인터페이스 분리. `lib/wordpress.ts.publishScheduled` 1단계, `lib/blogger.ts.publishScheduled` 2단계 (draft 생성 → posts.publish). AptSignal 슬러그·타이틀 플로우 보존 |
+| C4 | High | claude CLI 자체 healthcheck 누락 — 가장 critical 의존성인데 5종에 LLM 없음 | healthcheck 5종 → **6종**: `claude --version` + 비대화식 ping (`claude -p "say hello" --dangerously-skip-permissions`) 추가. 바이너리 존재·OAuth 세션·비대화식 실행 모두 검증 |
+| C5 | High | 성공 신호 거짓 — 헬스체크 fail이나 슬롯 폐기 시도 workflow ✅ 표시 → silent fail | `scripts/auto-publish.ts` 종료 시 정책: 헬스체크 fail = `process.exit(2)` (workflow ❌). 9 슬롯 중 폐기 비율 ≥ 50% = `exit 1` (workflow ❌). 정상 = `exit 0` |
+| C9 | High | 기존 repo 드리프트 — `vitest` 이미 있음, 일부 테스트가 `wordpress`를 invalid platform 취급 | PR5 첫 commit: 기존 테스트·schema 드리프트 정리 (vitest dep 중복 제거, `wordpress` valid platform 인정). 이후 신규 lib 작업 |
+
+### Codex 발견 — Phase 1.5로 분리 (PR5/PR6 외)
+
+| # | 항목 | 분리 사유 |
+|---|---|---|
+| C6 | 큐 5개로 9슬롯 underfill 위험 (dedup + category cap + editor reject + slug 변형) | 큐 재보충 로직 = trend subsystem 구조 개편 일부. C7과 함께 |
+| C7 | Trend subsystem 신규 구축 (sns_topics, naver_realtime_search, 국토부_보도자료, 한국부동산원_시세, seasonal boost, evergreen 분류, category balancing) | paperclip 22일 검증 패턴 보존. 큰 변경이라 별도 PR로 risk 격리 |
+| C8 | Reconciliation job (예약 발행 후 플랫폼 측 취소·실패·지연 동기화) | Phase 2 backlog. 운영 데이터 누적 후 패턴 보고 |
 
 ---
 
@@ -392,26 +425,42 @@ gh workflow run auto-publish.yml -f niche=WS -f slot_count=1
 
 ---
 
-## 9. Out of Scope (Phase 2 backlog)
+## 9. Out of Scope (Phase 1.5 분리 + Phase 2 backlog)
+
+### Phase 1.5 분리 (PR5/PR6 land 후 별도 PR)
+
+| 항목 | 분리 사유 |
+|---|---|
+| C6: 큐 재보충 로직 (5개 모두 dedup skip 시 추가 fetch) | trend subsystem 개편 일부. C7과 함께 |
+| C7: Trend subsystem 신규 구축 (sns_topics, naver_realtime_search, 국토부_보도자료, 한국부동산원_시세, seasonal boost, evergreen 분류, category balancing) | paperclip 22일 검증 패턴 보존. 큰 변경이라 별도 PR로 risk 격리 |
+
+### Phase 2 backlog
 
 PR5/PR6에 포함하지 않음. 운영 데이터 누적 후 패턴 보고 자동화 추가.
 
 | 항목 | 미루는 사유 |
 |---|---|
-| AdSense 수익 모니터링 | WordPress/Blogger 어드민 native 활용. 자동화는 Phase 2 |
-| DB 백업 자동화 | gitignored .db만 별도 cron. PR5/PR6 범위 밖 |
+| C8: Reconciliation job (예약 발행 후 플랫폼 측 취소·실패·지연 동기화) | 운영 데이터 누적 후 패턴 보고 |
+| AdSense 수익 모니터링 | WordPress/Blogger 어드민 native 활용 |
+| DB 백업 cloud upload (PR5는 로컬만) | PR5에서 로컬 백업 1차. cloud는 PC 전소 대응 |
 | Emergency unpublish 자동화 | 사람 수동 (WordPress/Blogger UI 직접) |
 | 페르소나 A/B testing | over-engineering. 운영 데이터로 페르소나 효과 평가 후 도입 |
-| WordPress 401 토큰 자동 갱신 | 헬스체크 통합 필요. PR5는 감지만, 갱신은 사람 수동 |
+| WordPress 401 토큰 자동 갱신 | 헬스체크 통합 필요. PR5는 감지만 |
 | 같은 키워드 N회 reject 시 블랙리스트 자동 추가 | 운영 패턴 보고 결정 |
-| publisher 5xx 같은 cron 내 30분 후 단발 재시도 | 신선도 살아있지만 코드 복잡도. Phase 2 |
+| publisher 5xx 같은 cron 내 30분 후 단발 재시도 | 신선도 살아있지만 코드 복잡도 |
 | repository_dispatch (Playbook hub 통합) | PLAN_v2 §3.6. PR5/PR6 범위 밖 |
 
 ---
 
 ## 10. Open Questions
 
-없음. brainstorming 단계에서 모든 결정 락인.
+없음. brainstorming + plan-eng-review (D1~D7) + Codex outside voice (C1~C9) 모두 락인.
+
+## 10b. PR5 작업 시 결정 보류 (구현 시점에 자세히)
+
+- C1 YMYL 사실 검증을 `lib/factcheck.ts` 신규 vs `lib/editor.ts` 강화 — 코드 복잡도 보고 결정
+- C2 multi-site 토큰 환경변수 정확 명명 (`WORDPRESS_WS_*` vs `WP_WS_*` 등) — 기존 .env.local 키 패턴과 일치 우선
+- C5 폐기 비율 임계값 정확 (50% vs 33% vs 100% — 1건이라도 폐기면 ❌?) — 사용 패턴 보고 결정
 
 ---
 
