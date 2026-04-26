@@ -10,6 +10,8 @@ import { callClaude } from '../src/lib/llm';
 import { review, type EditorReviewResult } from '../src/lib/editor';
 
 const PROMPTS_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'prompts', 'agents');
+const WRITER_PROMPT = readFileSync(join(PROMPTS_DIR, 'content-writer.md'), 'utf8');
+const REQUIRED_DRAFT_FIELDS = ['title', 'slug', 'meta_description', 'content_html', 'word_count'] as const;
 
 function errMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
@@ -119,8 +121,6 @@ async function writeAndReview(
   keyword: string,
   contentType: string | undefined,
 ): Promise<{ draft: WriterDraft; review: EditorReviewResult }> {
-  const writerPrompt = readFileSync(join(PROMPTS_DIR, 'content-writer.md'), 'utf8');
-
   let lastFeedback = '';
 
   for (let attempt = 1; attempt <= 2; attempt++) {
@@ -132,22 +132,33 @@ async function writeAndReview(
     });
 
     const writerOutput = await callClaude({
-      systemPrompt: writerPrompt,
+      systemPrompt: WRITER_PROMPT,
       userMessage,
       expectJson: true,
     });
-    const parsed = JSON.parse(writerOutput) as Partial<WriterDraft> & {
-      title: string;
-      slug: string;
-      meta_description: string;
-      content_html: string;
-      word_count: number;
-      image_slots: Array<{ slot_id: string; search_query: string; alt_text: string }>;
-      chart_slots: unknown[];
-      faq_schema: unknown[];
+    const parsed = JSON.parse(writerOutput) as Record<string, unknown>;
+    for (const field of REQUIRED_DRAFT_FIELDS) {
+      if (parsed[field] == null) {
+        throw new Error(`writer: missing field ${field}`);
+      }
+    }
+    // LLM occasionally drifts from persona schema; backfill defensively
+    if (parsed.keyword == null) {
+      console.warn(`[${niche}] writer omitted keyword field (LLM drift); backfilling from input`);
+    }
+    const draft: WriterDraft = {
+      ...(parsed as Partial<WriterDraft> & {
+        title: string;
+        slug: string;
+        meta_description: string;
+        content_html: string;
+        word_count: number;
+        image_slots: Array<{ slot_id: string; search_query: string; alt_text: string }>;
+        chart_slots: unknown[];
+        faq_schema: unknown[];
+      }),
+      keyword: (parsed.keyword as string | undefined) ?? keyword,
     };
-    // editor.review() requires draft.keyword for factcheck/LLM input — backfill if persona omits it
-    const draft: WriterDraft = { ...parsed, keyword: parsed.keyword ?? keyword };
 
     // Spread satisfies EditorReviewInput's index signature; WriterDraft is structurally compatible
     const result = await review({ draft: { ...draft }, niche });
