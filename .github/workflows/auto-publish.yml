@@ -30,7 +30,7 @@ jobs:
     # cron 발동 시 inputs.runner는 빈 문자열 → 'home' fallback (paperclip 환경 재사용)
     # workflow_dispatch 시 사용자 선택 (home / office)
     runs-on: [self-hosted, "${{ inputs.runner || 'home' }}"]
-    timeout-minutes: 45
+    timeout-minutes: 90  # 9 slots × ~10-15min/slot (claude long output) — 45min은 부족
     steps:
       - uses: actions/checkout@v4
 
