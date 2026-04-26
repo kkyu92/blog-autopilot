@@ -238,10 +238,11 @@ export async function pickQueue(opts: PickQueueOptions): Promise<KeywordCandidat
 
   const parsed = JSON.parse(raw);
 
-  // Persona may return either an array directly or {keywords: [...]} / {candidates: [...]} envelope
+  // Persona may return either an array directly or various envelope shapes
+  // (paperclip persona uses {daily_queue: [...]}; older variants use keywords/candidates)
   const candidates: unknown[] = Array.isArray(parsed)
     ? parsed
-    : (parsed.keywords ?? parsed.candidates ?? []);
+    : (parsed.keywords ?? parsed.candidates ?? parsed.daily_queue ?? parsed.queue ?? []);
 
   if (!Array.isArray(candidates)) {
     throw new Error(`trends.pickQueue: unexpected LLM response shape`);
