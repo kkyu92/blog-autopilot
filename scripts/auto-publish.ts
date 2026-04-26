@@ -13,7 +13,9 @@ import { fetchForSlots, type ImageResult } from '../src/lib/images';
 const PROMPTS_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'prompts', 'agents');
 const WRITER_PROMPT = readFileSync(join(PROMPTS_DIR, 'content-writer.md'), 'utf8');
 const REQUIRED_DRAFT_FIELDS = ['title', 'slug', 'meta_description', 'content_html', 'word_count'] as const;
-const PUBLISH_HOURS_KST = ['09:00', '11:00', '13:00', '15:00', '17:00', '19:00'];
+// Note: 슬롯은 sequential pick (테스트 결정성). 모든 niche가 동일하게 09:00→11:00→13:00 순서로 채움 —
+// niche 간 wall-clock stagger 없음. H7 publisher는 동시 호출 가능성 인지 필요.
+const PUBLISH_HOURS_KST = ['09:00', '11:00', '13:00', '15:00', '17:00', '19:00'] as const;
 
 function pickSlotTime(used: Set<string>): string {
   const available = PUBLISH_HOURS_KST.filter((h) => !used.has(h));
@@ -21,7 +23,9 @@ function pickSlotTime(used: Set<string>): string {
     throw new Error('all_slots_used');
   }
   // sequential pick (deterministic for tests; niche당 3슬롯이라 충돌 가능성 낮음)
-  return available[0];
+  const picked = available[0];
+  used.add(picked); // mutate internally for symmetry with assignSlug
+  return picked;
 }
 
 function assignSlug(rawSlug: string, usedSlugs: Set<string>): string {
@@ -39,6 +43,11 @@ function assignSlug(rawSlug: string, usedSlugs: Set<string>): string {
   throw new Error('slug_exhausted');
 }
 
+// 'HH:MM' KST → next available UTC ISO instant.
+// Example: baseDate=2026-04-26 02:00 UTC (= 11:00 KST), slotTimeKst='13:00'
+//   → 2026-04-26 04:00 UTC (= 13:00 KST today, no rollover)
+// Example: baseDate=2026-04-26 05:00 UTC (= 14:00 KST), slotTimeKst='13:00'
+//   → 2026-04-27 04:00 UTC (= 13:00 KST tomorrow, rolled over)
 function toIsoUtc(slotTimeKst: string, baseDate: Date = new Date()): string {
   // 'HH:MM' KST → next available UTC ISO (KST = UTC+9)
   const [hh, mm] = slotTimeKst.split(':').map(Number);
@@ -272,7 +281,6 @@ async function processSlot(
   let slotTimeKst: string;
   try {
     slotTimeKst = pickSlotTime(state.usedSlotTimes);
-    state.usedSlotTimes.add(slotTimeKst);
   } catch (err) {
     return {
       niche,
