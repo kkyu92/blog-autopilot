@@ -155,8 +155,9 @@ describe('editor.review', () => {
     expect(factcheck).not.toHaveBeenCalled();
   });
 
-  // Test 7: factcheck needs_revision → editor revision_needed with factcheck issues in feedback
-  it('factcheck needs_revision → editor revision_needed, feedback에 factcheck issues 포함', async () => {
+  // Test 7: factcheck needs_revision → soft-warn only (NOT hard reject) per 운영 정책.
+  // 학술 출처(DOI/URL/저널) 강제는 첫 운영부터 비현실적; LLM editor의 quality_score만 신뢰.
+  it('factcheck needs_revision → soft warn (verdict pass 유지)', async () => {
     const { callClaude } = await import('../llm');
     const { factcheck } = await import('../factcheck');
     vi.mocked(callClaude).mockResolvedValue(
@@ -177,8 +178,8 @@ describe('editor.review', () => {
     const { review } = await import('../editor');
     const result = await review({ draft: validDraft(), niche: 'WS' });
 
-    expect(result.verdict).toBe('revision_needed');
-    expect(result.feedback).toContain('출처 없음');
+    // 새 정책: factcheck needs_revision은 hard reject 안 함, LLM editor가 approved하면 pass
+    expect(result.verdict).toBe('pass');
   });
 
   // Test 8: factcheck disclaimer_added → editor returns modified_html + disclaimer_inserted=true (no input mutation)
@@ -246,8 +247,8 @@ describe('editor.review', () => {
     );
   });
 
-  // Test 11: Multiple issues combined — word_count + image_slots + factcheck
-  it('복합 실패: word_count 부족 + image_slots 부족 + factcheck needs_revision → 3개 이슈 feedback에 포함', async () => {
+  // Test 11: 정량 issues (word_count + image_slots) — factcheck는 soft-warn이므로 hard reject 안 함
+  it('정량 실패: word_count 부족 + image_slots 부족 → 2개 이슈 feedback에 포함 (factcheck는 soft-warn)', async () => {
     const { callClaude } = await import('../llm');
     const { factcheck } = await import('../factcheck');
     vi.mocked(callClaude).mockResolvedValue(
@@ -269,10 +270,12 @@ describe('editor.review', () => {
     const draft = { ...validDraft(), word_count: 500, image_slots: [] };
     const result = await review({ draft, niche: 'WS' });
 
+    // word_count + image_slots 정량 fail은 hard reject 유지
     expect(result.verdict).toBe('revision_needed');
     expect(result.feedback).toContain('1200');
     expect(result.feedback).toMatch(/image_slots/i);
-    expect(result.feedback).toContain('면책 문구 누락');
+    // factcheck issue는 더 이상 feedback에 포함 안 됨 (soft-warn 정책)
+    expect(result.feedback).not.toContain('면책 문구 누락');
   });
 
   // Test 12: Score defaults — 60 on revision (no LLM quality_score), 85 on pass (no LLM quality_score)

@@ -264,6 +264,26 @@ function escAttr(s: string): string {
 // content-writer.md spec: HTML uses `<!-- IMAGE_SLOT_N -->` comment markers.
 // image_slots[].slot_id is the literal string "IMAGE_SLOT_N" (e.g., "IMAGE_SLOT_1").
 // We replace the entire HTML comment with a real <img> tag.
+// Editor persona가 요구하는 표준 image figure (editor.md 검수 기준):
+// loading="lazy" + border-radius:8px + max-width:100% + width:100% + display:block + figcaption.
+// 단순 <img> 태그면 매번 revision_needed reject 됨 (운영 중 발견).
+function buildImageFigure(r: ImageResult): string {
+  const credit =
+    r.source === 'placeholder'
+      ? 'Placeholder'
+      : r.photographer
+        ? `${r.source.charAt(0).toUpperCase() + r.source.slice(1)} · ${r.photographer}`
+        : r.source.charAt(0).toUpperCase() + r.source.slice(1);
+  return (
+    `<figure style="margin:24px 0;">` +
+    `<img src="${escAttr(r.image_url)}" alt="${escAttr(r.alt_text)}" loading="lazy" ` +
+    `style="border-radius:8px;max-width:100%;width:100%;display:block;" />` +
+    `<figcaption style="font-size:13px;color:#888888;text-align:center;margin-top:8px;">` +
+    `📷 Photo: ${escAttr(credit)}` +
+    `</figcaption></figure>`
+  );
+}
+
 function injectImages(html: string, results: ImageResult[]): string {
   let out = html;
   const matched = new Set<string>();
@@ -272,9 +292,11 @@ function injectImages(html: string, results: ImageResult[]): string {
     if (out.includes(marker)) {
       matched.add(r.slot_id);
     }
-    const imgTag = `<img src="${escAttr(r.image_url)}" alt="${escAttr(r.alt_text)}" />`;
-    out = out.split(marker).join(imgTag);
+    out = out.split(marker).join(buildImageFigure(r));
   }
+  // Writer가 직접 만들어 둔 raw <img> 태그가 있을 수 있음 (editor revision attempt에서 LLM이 placeholder 옆에
+  // 임의 inject). 이 경우 IMAGE_SLOT placeholder 옆 raw <img>는 위 split 후 stray로 남음. 운영 안정화 후
+  // 별도 정리 (now: 단순 stray marker 경고만).
   const unmatched = results.filter((r) => !matched.has(r.slot_id));
   if (unmatched.length > 0) {
     console.warn(
