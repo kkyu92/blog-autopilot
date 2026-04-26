@@ -1,0 +1,74 @@
+name: Auto-publish
+
+on:
+  schedule:
+    - cron: '17 1 * * *'  # 매일 KST 10:17 (UTC 01:17)
+  workflow_dispatch:
+    inputs:
+      niche:
+        description: '대상 niche (all | WS | TS | AS)'
+        type: choice
+        options: [all, WS, TS, AS]
+        default: all
+      slot_count:
+        description: 'niche당 슬롯 수'
+        type: string
+        default: '3'
+      mode:
+        description: '실행 모드'
+        type: choice
+        options: [normal, healthcheck-only]
+        default: normal
+
+jobs:
+  publish:
+    runs-on: self-hosted
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm tsx scripts/auto-publish.ts --niche=${{ inputs.niche || 'all' }} --slot-count=${{ inputs.slot_count || '3' }} --mode=${{ inputs.mode || 'normal' }}
+        env:
+          # 외부 이미지 API
+          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+
+          # WordPress 멀티사이트 (WS / TS)
+          # healthcheck.ts + tokens.ts 가 사용하는 실제 키 이름
+          WORDPRESS_WS_ACCESS_TOKEN: ${{ secrets.WORDPRESS_WS_ACCESS_TOKEN }}
+          WORDPRESS_WS_BLOG_ID: ${{ secrets.WORDPRESS_WS_BLOG_ID }}
+          WORDPRESS_WS_CLIENT_ID: ${{ secrets.WORDPRESS_WS_CLIENT_ID }}
+          WORDPRESS_WS_CLIENT_SECRET: ${{ secrets.WORDPRESS_WS_CLIENT_SECRET }}
+          WORDPRESS_WS_SITE: ${{ secrets.WORDPRESS_WS_SITE }}
+          WORDPRESS_WS_CATEGORY_ID: ${{ secrets.WORDPRESS_WS_CATEGORY_ID }}
+          WORDPRESS_TS_ACCESS_TOKEN: ${{ secrets.WORDPRESS_TS_ACCESS_TOKEN }}
+          WORDPRESS_TS_BLOG_ID: ${{ secrets.WORDPRESS_TS_BLOG_ID }}
+          WORDPRESS_TS_CLIENT_ID: ${{ secrets.WORDPRESS_TS_CLIENT_ID }}
+          WORDPRESS_TS_CLIENT_SECRET: ${{ secrets.WORDPRESS_TS_CLIENT_SECRET }}
+          WORDPRESS_TS_SITE: ${{ secrets.WORDPRESS_TS_SITE }}
+          WORDPRESS_TS_CATEGORY_ID: ${{ secrets.WORDPRESS_TS_CATEGORY_ID }}
+
+          # Blogger (AS) — healthcheck.ts + tokens.ts 가 사용하는 실제 키 이름
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
+          GOOGLE_BLOG_ID: ${{ secrets.GOOGLE_BLOG_ID }}
+
+          # DB / 백업 (self-hosted runner의 영속 경로)
+          DATABASE_PATH: ${{ secrets.DATABASE_PATH }}
+
+          # Issue dispatch (auto-publish.ts queue_exhausted / publish_failed)
+          # GITHUB_REPOSITORY는 Actions 가 자동 주입하지만 명확성 위해 유지
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
