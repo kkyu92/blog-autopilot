@@ -1,4 +1,5 @@
 import { parseArgs } from 'node:util';
+import { runAll } from '../src/lib/healthcheck';
 
 type Niche = 'WS' | 'TS' | 'AS';
 type Mode = 'normal' | 'healthcheck-only';
@@ -46,7 +47,23 @@ function parseCliArgs(argv: string[]): CliArgs {
 async function main(): Promise<number> {
   const args = parseCliArgs(process.argv);
   console.log(`[auto-publish] start mode=${args.mode} niches=${args.niches.join(',')} slotCount=${args.slotCount}`);
-  // healthcheck/loop는 H2 이후 task에서 추가
+
+  // Step 1: healthcheck
+  const hc = await runAll();
+  console.log(`[auto-publish] healthcheck: ${hc.allPassed ? 'PASS' : 'FAIL'}`);
+  if (!hc.allPassed) {
+    for (const failed of hc.results.filter(r => !r.ok)) {
+      console.error(`  FAIL ${failed.service}: ${failed.reason ?? 'unknown reason'}`);
+    }
+    return 2;  // workflow ❌, 9 슬롯 진입 안 함
+  }
+
+  if (args.mode === 'healthcheck-only') {
+    console.log('[auto-publish] healthcheck-only mode, exit 0');
+    return 0;
+  }
+
+  // 9-slot loop는 H3 이후 task에서 추가
   return 0;
 }
 
