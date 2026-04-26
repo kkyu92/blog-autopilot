@@ -1,8 +1,15 @@
 import { parseArgs } from 'node:util';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import { runAll } from '../src/lib/healthcheck';
 import { pickQueue, type KeywordCandidate } from '../src/lib/trends';
 import { checkAndResolve, type DedupResult } from '../src/lib/dedup';
 import { getDb } from '../src/lib/db';
+import { callClaude } from '../src/lib/llm';
+import { review, type EditorReviewResult } from '../src/lib/editor';
+
+const PROMPTS_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'prompts', 'agents');
 
 function errMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
@@ -95,6 +102,71 @@ async function pickViableCandidate(
   return null;
 }
 
+interface WriterDraft {
+  title: string;
+  slug: string;
+  meta_description: string;
+  content_html: string;
+  image_slots: Array<{ slot_id: string; search_query: string; alt_text: string }>;
+  chart_slots: unknown[];
+  faq_schema: unknown[];
+  word_count: number;
+  keyword: string; // editor.review() requires this; we backfill from input keyword
+}
+
+async function writeAndReview(
+  niche: Niche,
+  keyword: string,
+  contentType: string | undefined,
+): Promise<{ draft: WriterDraft; review: EditorReviewResult }> {
+  const writerPrompt = readFileSync(join(PROMPTS_DIR, 'content-writer.md'), 'utf8');
+
+  let lastFeedback = '';
+
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const userMessage = JSON.stringify({
+      niche,
+      keyword,
+      content_type: contentType,
+      revision_feedback: attempt === 1 ? null : lastFeedback,
+    });
+
+    const writerOutput = await callClaude({
+      systemPrompt: writerPrompt,
+      userMessage,
+      expectJson: true,
+    });
+    const parsed = JSON.parse(writerOutput) as Partial<WriterDraft> & {
+      title: string;
+      slug: string;
+      meta_description: string;
+      content_html: string;
+      word_count: number;
+      image_slots: Array<{ slot_id: string; search_query: string; alt_text: string }>;
+      chart_slots: unknown[];
+      faq_schema: unknown[];
+    };
+    // editor.review() requires draft.keyword for factcheck/LLM input — backfill if persona omits it
+    const draft: WriterDraft = { ...parsed, keyword: parsed.keyword ?? keyword };
+
+    // Spread satisfies EditorReviewInput's index signature; WriterDraft is structurally compatible
+    const result = await review({ draft: { ...draft }, niche });
+
+    if (result.verdict === 'pass') {
+      return { draft, review: result };
+    }
+
+    const feedback = result.feedback ?? result.reason ?? '';
+    console.log(
+      `[${niche}] writer attempt ${attempt} revision_needed (score=${result.score}): ${feedback}`,
+    );
+    lastFeedback = feedback;
+  }
+
+  // Both attempts produced revision_needed
+  throw new Error('editor_reject_x2');
+}
+
 // 주의: state.queueIdx를 mutation (pickViableCandidate 내부). 슬롯 순차 처리 가정. 병렬화 시 재설계 필요.
 async function processSlot(
   state: NicheState,
@@ -108,15 +180,35 @@ async function processSlot(
     return { niche, slotIdx, status: 'skipped', failureReason: 'queue_exhausted' };
   }
 
-  const { candidate /*, dedupResult */ } = picked;
+  const { candidate, dedupResult } = picked;
 
-  // H5: writer + editor revision (placeholder until H5 lands)
+  // H5: writer + editor revision loop (max 2 attempts)
+  let draft: WriterDraft;
+  try {
+    const out = await writeAndReview(
+      niche,
+      candidate.keyword,
+      dedupResult.suggested_content_type,
+    );
+    draft = out.draft;
+  } catch (err) {
+    return {
+      niche,
+      slotIdx,
+      keyword: candidate.keyword,
+      status: 'failed',
+      failureReason: `writer: ${errMessage(err)}`,
+    };
+  }
+
+  // H6/H7: image curation + publish (placeholder)
   return {
     niche,
     slotIdx,
     keyword: candidate.keyword,
+    slug: draft.slug,
     status: 'failed',
-    failureReason: 'TODO_H5',
+    failureReason: 'TODO_H6_H7',
   };
 }
 
