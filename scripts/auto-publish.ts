@@ -776,13 +776,40 @@ export async function runMain(argv: string[] = process.argv): Promise<number> {
 
   // Step 3: 9-slot sequential loop (각 niche × slotCount)
   const db = getDb();
-  const states: NicheState[] = queues.map(q => ({
-    niche: q.niche,
-    queue: q.keywords,
-    queueIdx: 0,
-    usedSlugs: new Set(),
-    usedSlotTimes: new Set(),
-  }));
+
+  // 운영 안정성: 같은 niche에서 향후 24h 내 이미 예약된 scheduled_slot을 미리 usedSlotTimes에 채워
+  // 동일 시간 슬롯 중복 방지. paperclip 시절 누락된 동시성 보호.
+  const states: NicheState[] = await Promise.all(
+    queues.map(async (q) => {
+      const usedSlotTimes = new Set<string>();
+      const usedSlugs = new Set<string>();
+      try {
+        const rows = await db.select().from(publishedPosts).all();
+        const now = Date.now();
+        const cutoff = now + 24 * 60 * 60 * 1000; // 24h ahead window
+        for (const r of rows) {
+          if (r.niche !== q.niche || r.status !== 'published') continue;
+          if (r.slug) usedSlugs.add(r.slug);
+          if (!r.scheduledSlot) continue;
+          const t = new Date(r.scheduledSlot).getTime();
+          if (Number.isNaN(t) || t < now - 60_000 || t > cutoff) continue;
+          const d = new Date(r.scheduledSlot);
+          const kstH = (d.getUTCHours() + 9) % 24;
+          const kstM = d.getUTCMinutes();
+          usedSlotTimes.add(`${String(kstH).padStart(2, '0')}:${String(kstM).padStart(2, '0')}`);
+        }
+      } catch (err) {
+        console.warn(`[state] preload usedSlotTimes/Slugs failed for ${q.niche}:`, errMessage(err));
+      }
+      return {
+        niche: q.niche,
+        queue: q.keywords,
+        queueIdx: 0,
+        usedSlugs,
+        usedSlotTimes,
+      };
+    }),
+  );
   const results: SlotResult[] = [];
 
   for (const state of states) {
