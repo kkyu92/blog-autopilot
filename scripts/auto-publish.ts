@@ -326,10 +326,13 @@ async function publishToPlatform(
   niche: Niche,
   draft: WriterDraft,
   finalSlug: string,
-  _imageResults: ImageResult[], // kept for signature compatibility; images already injected in writeAndReview
+  imageResults: ImageResult[],
   scheduledFor: Date,
 ): Promise<PublishedRecord> {
   // draft.content_html is already image-injected by writeAndReview (paperclip flow)
+  // featured_image: imageResults 첫 항목의 image_url을 썸네일/대표 이미지로 자동 사용 (paperclip 누락 fix)
+  const firstImage = imageResults.find((r) => r.image_url && r.source !== 'placeholder')?.image_url
+    ?? imageResults[0]?.image_url;
   if (niche === 'WS' || niche === 'TS') {
     return wpPublish(
       niche,
@@ -340,6 +343,7 @@ async function publishToPlatform(
         excerpt: draft.meta_description,
         categories: draft.category ? [draft.category] : undefined,
         tags: draft.labels,
+        featured_image_url: firstImage,
       },
       scheduledFor,
     );

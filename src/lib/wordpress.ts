@@ -190,6 +190,8 @@ export interface WPScheduledPost {
   excerpt?: string;
   categories?: string[];
   tags?: string[];
+  /** 썸네일/대표 이미지 URL. WP.com이 자동으로 attachment 등록 후 featured로 설정 */
+  featured_image_url?: string;
 }
 
 /** WP.com REST API response shape for POST /sites/:id/posts/new */
@@ -248,6 +250,9 @@ export async function publishScheduled(
   if (post.excerpt !== undefined) body.excerpt = post.excerpt;
   if (post.categories !== undefined) body.categories = post.categories;
   if (post.tags !== undefined) body.tags = post.tags;
+  // featured_image: 썸네일/대표 이미지. paperclip 시절 누락된 부분 (사용자 지적).
+  // WP.com REST API v1.1은 URL 또는 attachment ID 받음 → 자동으로 attachment 등록 후 featured 설정.
+  if (post.featured_image_url !== undefined) body.featured_image = post.featured_image_url;
 
   const url = `https://public-api.wordpress.com/rest/v1.1/sites/${blogId}/posts/new`;
   const init: RequestInit = {
