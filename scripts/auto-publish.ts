@@ -1,5 +1,6 @@
 import { parseArgs } from 'node:util';
 import { runAll } from '../src/lib/healthcheck';
+import { pickQueue, type KeywordCandidate } from '../src/lib/trends';
 
 type Niche = 'WS' | 'TS' | 'AS';
 type Mode = 'normal' | 'healthcheck-only';
@@ -8,6 +9,25 @@ interface CliArgs {
   niches: Niche[];
   slotCount: number;
   mode: Mode;
+}
+
+interface NicheQueue {
+  niche: Niche;
+  keywords: KeywordCandidate[];
+}
+
+async function pickAllQueues(niches: Niche[]): Promise<NicheQueue[]> {
+  const queues: NicheQueue[] = [];
+  for (const niche of niches) {
+    const keywords = await pickQueue({ niche });
+    console.log(`[auto-publish] queue ${niche}: ${keywords.length} keywords`);
+    if (keywords.length === 0) {
+      console.warn(`[auto-publish] WARN ${niche} queue empty, skipping niche`);
+      continue;
+    }
+    queues.push({ niche, keywords });
+  }
+  return queues;
 }
 
 function parseCliArgs(argv: string[]): CliArgs {
@@ -61,6 +81,13 @@ async function main(): Promise<number> {
   if (args.mode === 'healthcheck-only') {
     console.log('[auto-publish] healthcheck-only mode, exit 0');
     return 0;
+  }
+
+  // Step 2: trends → niche 큐 준비
+  const queues = await pickAllQueues(args.niches);
+  if (queues.length === 0) {
+    console.error('[auto-publish] all queues empty, exit 1');
+    return 1;
   }
 
   // 9-slot loop는 H3 이후 task에서 추가
