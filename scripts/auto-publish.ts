@@ -180,11 +180,14 @@ interface WriterDraft {
   labels?: string[]; // writer persona output (3-5 한글 태그); WP tags / Blogger labels
 }
 
+// paperclip 흐름: Writer → Image Curator → Editor → Publisher.
+// editor가 image placeholder를 미삽입으로 reject하는 것을 막기 위해 image inject를
+// editor 호출 *전*에 수행. chart는 우리 파이프라인 미지원 → writer userMessage에 비활성 명시.
 async function writeAndReview(
   niche: Niche,
   keyword: string,
   contentType: string | undefined,
-): Promise<{ draft: WriterDraft; review: EditorReviewResult }> {
+): Promise<{ draft: WriterDraft; images: ImageResult[]; review: EditorReviewResult }> {
   let lastFeedback = '';
 
   for (let attempt = 1; attempt <= 2; attempt++) {
@@ -192,6 +195,8 @@ async function writeAndReview(
       niche,
       keyword,
       content_type: contentType,
+      include_charts: false, // 차트는 파이프라인 미지원 (chart_slots 빈 배열 강제)
+      chart_recommended: false,
       revision_feedback: attempt === 1 ? null : lastFeedback,
     });
 
@@ -206,11 +211,10 @@ async function writeAndReview(
         throw new Error(`writer: missing field ${field}`);
       }
     }
-    // LLM occasionally drifts from persona schema; backfill defensively
     if (parsed.keyword == null) {
       console.warn(`[${niche}] writer omitted keyword field (LLM drift); backfilling from input`);
     }
-    const draft: WriterDraft = {
+    const rawDraft: WriterDraft = {
       ...(parsed as Partial<WriterDraft> & {
         title: string;
         slug: string;
@@ -224,11 +228,17 @@ async function writeAndReview(
       keyword: (parsed.keyword as string | undefined) ?? keyword,
     };
 
-    // Spread satisfies EditorReviewInput's index signature; WriterDraft is structurally compatible
-    const result = await review({ draft: { ...draft }, niche });
+    // Image fetch + inject BEFORE editor — editor sees final HTML with real <img> tags
+    const images = await fetchForSlots(rawDraft.image_slots);
+    const draftWithImages: WriterDraft = {
+      ...rawDraft,
+      content_html: injectImages(rawDraft.content_html, images),
+    };
+
+    const result = await review({ draft: { ...draftWithImages }, niche });
 
     if (result.verdict === 'pass') {
-      return { draft, review: result };
+      return { draft: draftWithImages, images, review: result };
     }
 
     const feedback = result.feedback ?? result.reason ?? '';
@@ -238,7 +248,6 @@ async function writeAndReview(
     lastFeedback = feedback;
   }
 
-  // Both attempts produced revision_needed
   throw new Error('editor_reject_x2');
 }
 
@@ -289,17 +298,16 @@ async function publishToPlatform(
   niche: Niche,
   draft: WriterDraft,
   finalSlug: string,
-  imageResults: ImageResult[],
+  _imageResults: ImageResult[], // kept for signature compatibility; images already injected in writeAndReview
   scheduledFor: Date,
 ): Promise<PublishedRecord> {
-  const contentWithImages = injectImages(draft.content_html, imageResults);
-
+  // draft.content_html is already image-injected by writeAndReview (paperclip flow)
   if (niche === 'WS' || niche === 'TS') {
     return wpPublish(
       niche,
       {
         title: draft.title,
-        content: contentWithImages,
+        content: draft.content_html,
         slug: finalSlug,
         excerpt: draft.meta_description,
         categories: draft.category ? [draft.category] : undefined,
@@ -314,7 +322,7 @@ async function publishToPlatform(
     'AS',
     {
       title: draft.title,
-      content: contentWithImages,
+      content: draft.content_html,
       labels: draft.labels,
     },
     scheduledFor,
@@ -342,8 +350,10 @@ async function processSlot(
 
   const { candidate, dedupResult } = picked;
 
-  // H5: writer + editor revision loop (max 2 attempts)
+  // H5+H6: writer → image fetch+inject → editor (paperclip 흐름).
+  // writeAndReview 내부에서 fetchForSlots + injectImages 후 editor.review 호출.
   let draft: WriterDraft;
+  let imageResults: ImageResult[];
   try {
     const out = await writeAndReview(
       niche,
@@ -351,6 +361,7 @@ async function processSlot(
       dedupResult.suggested_content_type,
     );
     draft = out.draft;
+    imageResults = out.images;
   } catch (err) {
     return {
       niche,
@@ -358,22 +369,6 @@ async function processSlot(
       keyword: candidate.keyword,
       status: 'failed',
       failureReason: `writer: ${errMessage(err)}`,
-    };
-  }
-
-  // H6: images
-  let imageResults: ImageResult[];
-  try {
-    imageResults = await fetchForSlots(draft.image_slots);
-  } catch (err) {
-    return {
-      niche,
-      slotIdx,
-      keyword: candidate.keyword,
-      slug: draft.slug,
-      title: draft.title,
-      status: 'failed',
-      failureReason: `images: ${errMessage(err)}`,
     };
   }
   // H6: slug 충돌 회피 (in-memory niche state)
