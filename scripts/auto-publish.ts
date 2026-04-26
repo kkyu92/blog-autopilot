@@ -2,7 +2,7 @@ import { parseArgs } from 'node:util';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { runAll } from '../src/lib/healthcheck';
 import { pickQueue, type KeywordCandidate } from '../src/lib/trends';
 import { checkAndResolve, type DedupResult } from '../src/lib/dedup';
@@ -484,14 +484,57 @@ function dispatchFailureIssue(
 
   const title = `[blog-autopilot] 게시물 폐기: ${niche} / ${keyword ?? 'N/A'}`;
 
+  // SECURITY: execFileSync (no shell) — keyword/title/body originate from third-party RSS, Naver,
+  // and LLM output. JSON.stringify escapes "/\ but NOT backticks `, $(), ${VAR} — a shell would
+  // execute those. execFileSync passes args directly to gh, bypassing shell interpolation entirely.
   try {
-    execSync(
-      `gh issue create --title ${JSON.stringify(title)} --body ${JSON.stringify(body)} --label "blog-autopilot,auto-discard"`,
-      { stdio: 'pipe' },
-    );
+    const args = [
+      'issue', 'create',
+      '--title', title,
+      '--body', body,
+      '--label', 'blog-autopilot,auto-discard',
+    ];
+    // --repo makes dispatch deterministic regardless of cwd. GITHUB_REPOSITORY is auto-set in Actions.
+    if (process.env.GITHUB_REPOSITORY) {
+      args.push('--repo', process.env.GITHUB_REPOSITORY);
+    }
+    execFileSync('gh', args, { stdio: 'pipe', timeout: 30_000 });
     console.log(`[dispatch] issue created for ${niche}/${keyword ?? 'N/A'}`);
   } catch (err) {
     console.error('[dispatch] failed:', errMessage(err));
+  }
+}
+
+// H8 fix-up: queue exhaustion is a content-pipeline health signal (trends/dedup gave nothing usable).
+// Separate label from auto-discard so triage is distinct. Best-effort like dispatchFailureIssue.
+function dispatchQueueExhaustedIssue(niche: Niche, slotIdx: number): void {
+  if (!process.env.GITHUB_TOKEN && !process.env.GH_TOKEN) {
+    console.warn('[dispatch] GITHUB_TOKEN/GH_TOKEN 없음, queue_exhausted dispatch skip');
+    return;
+  }
+  const title = `[blog-autopilot] queue exhausted: ${niche} slot${slotIdx}`;
+  const body = [
+    `niche: ${niche}`,
+    `slot: ${slotIdx}`,
+    '',
+    '큐 후보가 모두 dedup skip되어 슬롯 채우지 못함.',
+    '',
+    '권장 조치: 키워드 풀 점검 / 수동 키워드 추가 / dedup 정책 검토',
+  ].join('\n');
+  try {
+    const args = [
+      'issue', 'create',
+      '--title', title,
+      '--body', body,
+      '--label', 'blog-autopilot,queue-exhausted',
+    ];
+    if (process.env.GITHUB_REPOSITORY) {
+      args.push('--repo', process.env.GITHUB_REPOSITORY);
+    }
+    execFileSync('gh', args, { stdio: 'pipe', timeout: 30_000 });
+    console.log(`[dispatch] queue_exhausted issue created for ${niche} slot${slotIdx}`);
+  } catch (err) {
+    console.error('[dispatch queue_exhausted] failed:', errMessage(err));
   }
 }
 
@@ -541,6 +584,10 @@ async function recordFailure(
   }
 
   // Post-draft failure: INSERT with the data we have.
+  // TODO(post-PR6): uniqueIndex(slug, platform) collides on retry of a previously-failed slot
+  // (failed row with same slug exists; new attempt's published INSERT throws). Mitigation options:
+  // (a) Suffix failed-row slug with timestamp; (b) Partial uniqueIndex WHERE status='published';
+  // (c) Delete failed rows with same niche+keyword at retry start. Not blocking H8.
   try {
     await db.insert(publishedPosts).values({
       niche: result.niche,
@@ -666,6 +713,14 @@ async function main(): Promise<number> {
           await recordFailure(db, result, null);
         } catch (err) {
           console.error(`[${state.niche} slot${slotIdx}] recordFailure threw:`, errMessage(err));
+        }
+      } else if (result.status === 'skipped' && result.failureReason === 'queue_exhausted') {
+        // Queue exhaustion is a content-pipeline health signal — dispatch a
+        // separate-labeled Issue so it doesn't get treated as content failure.
+        try {
+          dispatchQueueExhaustedIssue(result.niche, result.slotIdx);
+        } catch (err) {
+          console.error(`[dispatch queue_exhausted] failed:`, errMessage(err));
         }
       }
     }
