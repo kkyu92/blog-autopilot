@@ -215,6 +215,23 @@ export interface PickQueueOptions {
   };
 }
 
+// Niche definition yaml은 trend-hunter persona에 niche-specific 카테고리 가이드를 inject하기 위해 사용.
+// paperclip 시절은 SHARED_RULES.md + AGENTS.md 인프라가 자동 로드했지만 우리 lib은 독립이라 명시 inject.
+const NICHE_YAML_FILES: Record<'WS' | 'TS' | 'AS', string> = {
+  WS: 'worldsignal.yaml',
+  TS: 'travelsignal.yaml',
+  AS: 'aptsignal.yaml',
+};
+
+function loadNicheYaml(niche: 'WS' | 'TS' | 'AS'): string {
+  const filePath = path.resolve(__dirname_trends, '../../niches', NICHE_YAML_FILES[niche]);
+  try {
+    return fs.readFileSync(filePath, 'utf8');
+  } catch {
+    return '';
+  }
+}
+
 export async function pickQueue(opts: PickQueueOptions): Promise<KeywordCandidate[]> {
   const count = opts.count ?? 5;
 
@@ -227,7 +244,16 @@ export async function pickQueue(opts: PickQueueOptions): Promise<KeywordCandidat
   const userMessage = JSON.stringify({
     niche: opts.niche,
     count,
+    niche_definition_yaml: loadNicheYaml(opts.niche),
     daily_trends_kr: dailyTrends.slice(0, 20).map(t => ({ keyword: t.keyword, traffic: t.trafficVolume })),
+    instruction:
+      'CRITICAL: niche_definition_yaml에 정의된 categories 중 하나에 속하는 키워드만 선택하라. ' +
+      '예: WS=건강/의료(질환·증상·영양·운동·의약품·정신건강·예방·가족건강·라이프스타일), ' +
+      'TS=여행/레저(국내·해외·숙소·항공·액티비티·여행팁·맛집·여행정보), ' +
+      'AS=부동산/청약(청약·매매전세월세·정책·세금·인테리어·생활). ' +
+      'daily_trends_kr 항목 중 niche 카테고리에 안 맞는 키워드(예: 스포츠·연예인·정치·해외주식)는 절대 포함하지 마라. ' +
+      '맞는 항목이 부족하면 daily_trends를 무시하고 niche categories 안에서 시즌성·검색량 높은 evergreen 키워드를 직접 제안하라. ' +
+      '각 키워드의 category 필드는 niche yaml의 categories[].name 중 하나와 정확히 일치해야 한다.',
   });
 
   const raw = await callClaude({

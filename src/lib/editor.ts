@@ -75,13 +75,28 @@ export async function review(input: EditorReviewInput): Promise<EditorReviewResu
   });
 
   const parsed = JSON.parse(raw);
-  // Persona schema uses 'status' with values 'approved' | 'revision_needed'
-  if (parsed.status !== 'approved' && parsed.status !== 'revision_needed') {
-    throw new Error(`editor: unexpected status "${parsed.status}" from LLM`);
-  }
+  // Persona schema는 'status' = 'approved'|'revision_needed' 이지만 LLM이 verdict/approved/quality_score만
+  // 반환하는 drift 케이스 대응 (운영 중 발견). 다양한 키 fallback.
+  const inferStatus = (p: Record<string, unknown>): 'approved' | 'revision_needed' => {
+    if (p.status === 'approved' || p.status === 'revision_needed') return p.status;
+    if (p.verdict === 'approved' || p.verdict === 'pass') return 'approved';
+    if (p.verdict === 'revision_needed' || p.verdict === 'fail') return 'revision_needed';
+    if (typeof p.approved === 'boolean') return p.approved ? 'approved' : 'revision_needed';
+    const score =
+      typeof p.quality_score === 'number'
+        ? p.quality_score
+        : typeof p.score === 'number'
+          ? p.score
+          : null;
+    if (score !== null) return score >= 80 ? 'approved' : 'revision_needed';
+    throw new Error(
+      `editor: missing status/verdict (raw keys: ${Object.keys(p).join(',')})`,
+    );
+  };
+  const status = inferStatus(parsed);
 
-  const llmRevisionNeeded = parsed.status === 'revision_needed';
-  const score = parsed.quality_score ?? (llmRevisionNeeded ? 60 : 85);
+  const llmRevisionNeeded = status === 'revision_needed';
+  const score = parsed.quality_score ?? parsed.score ?? (llmRevisionNeeded ? 60 : 85);
   const llmFeedback = parsed.revision_notes ?? '';
 
   // Combine all failure signals

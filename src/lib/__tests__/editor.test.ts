@@ -242,7 +242,7 @@ describe('editor.review', () => {
 
     const { review } = await import('../editor');
     await expect(review({ draft: validDraft(), niche: 'TS' })).rejects.toThrow(
-      /unexpected status/,
+      /missing status\/verdict/,
     );
   });
 
