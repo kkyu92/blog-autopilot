@@ -59,17 +59,23 @@ function assignSlug(rawSlug: string, usedSlugs: Set<string>): string {
 // 'HH:MM' KST → next available UTC ISO instant.
 // Example: baseDate=2026-04-26 02:00 UTC (= 11:00 KST), slotTimeKst='13:00'
 //   → 2026-04-26 04:00 UTC (= 13:00 KST today, no rollover)
-// Example: baseDate=2026-04-26 05:00 UTC (= 14:00 KST), slotTimeKst='13:00'
-//   → 2026-04-27 04:00 UTC (= 13:00 KST tomorrow, rolled over)
+// 'HH:MM' KST → 오늘 KST 날짜의 그 시각 (UTC ISO). 키워드 신선도 보장: 트렌드는
+// 그날 기준이라 발행도 같은 날(KST). cron(KST 01:17) 발화 시 모든 slot(09~19시)이 미래라 정상.
+// manual dispatch에서 slot 시간이 이미 지났으면 그대로 과거 시간 ISO 반환 (publisher가
+// 처리; WordPress는 status='future'+과거date에 대해 보통 immediate publish로 변환).
+//
+// Example: baseDate=2026-04-27 16:17 UTC (= 4/27 KST 01:17 cron 발화), slotTimeKst='13:00'
+//   → 2026-04-27 04:00 UTC (= 4/27 KST 13:00 today). 같은 날.
 function toIsoUtc(slotTimeKst: string, baseDate: Date = new Date()): string {
-  // 'HH:MM' KST → next available UTC ISO (KST = UTC+9)
   const [hh, mm] = slotTimeKst.split(':').map(Number);
-  const next = new Date(baseDate);
-  next.setUTCHours(hh - 9, mm, 0, 0);
-  if (next <= baseDate) {
-    next.setUTCDate(next.getUTCDate() + 1);
-  }
-  return next.toISOString();
+  // baseDate를 KST 날짜로 변환 후 그날의 HH:MM 슬롯 시각 만들기.
+  const kstNow = new Date(baseDate.getTime() + 9 * 60 * 60 * 1000); // UTC + 9h = KST clock
+  const yyyy = kstNow.getUTCFullYear();
+  const mo = kstNow.getUTCMonth();
+  const dd = kstNow.getUTCDate();
+  // 오늘 KST 날짜의 HH:MM → UTC: KST HH:MM = UTC HH-9:MM (전날 00시 ~ 09시 사이는 음수 → setUTCHours 정규화)
+  const slot = new Date(Date.UTC(yyyy, mo, dd, hh - 9, mm, 0, 0));
+  return slot.toISOString();
 }
 
 function errMessage(err: unknown): string {
