@@ -2,6 +2,7 @@ import { parseArgs } from 'node:util';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { execSync } from 'node:child_process';
 import { runAll } from '../src/lib/healthcheck';
 import { pickQueue, type KeywordCandidate } from '../src/lib/trends';
 import { checkAndResolve, type DedupResult } from '../src/lib/dedup';
@@ -89,6 +90,9 @@ interface SlotResult {
   slotIdx: number;
   keyword?: string;
   slug?: string;
+  // H8: threaded through so post-draft failures can INSERT title (NOT NULL).
+  // Populated only after writer success. Pre-draft failures leave undefined.
+  title?: string;
   status: SlotStatus;
   externalId?: string;
   externalUrl?: string;
@@ -358,6 +362,7 @@ async function processSlot(
       slotIdx,
       keyword: candidate.keyword,
       slug: draft.slug,
+      title: draft.title,
       status: 'failed',
       failureReason: `images: ${errMessage(err)}`,
     };
@@ -375,6 +380,7 @@ async function processSlot(
       slotIdx,
       keyword: candidate.keyword,
       slug: finalSlug,
+      title: draft.title,
       status: 'failed',
       failureReason: `slot: ${errMessage(err)}`,
     };
@@ -397,6 +403,7 @@ async function processSlot(
       slotIdx,
       keyword: candidate.keyword,
       slug: finalSlug,
+      title: draft.title,
       scheduledFor,
       status: 'failed',
       failureReason: `publish: ${errMessage(err)}`,
@@ -428,6 +435,7 @@ async function processSlot(
       slotIdx,
       keyword: candidate.keyword,
       slug: finalSlug,
+      title: draft.title,
       scheduledFor,
       externalId: pubRecord.externalId,
       externalUrl: pubRecord.externalUrl,
@@ -441,11 +449,127 @@ async function processSlot(
     slotIdx,
     keyword: candidate.keyword,
     slug: finalSlug,
+    title: draft.title,
     scheduledFor,
     externalId: pubRecord.externalId,
     externalUrl: pubRecord.externalUrl,
     status: 'published',
   };
+}
+
+// H8: GitHub Issue dispatch via `gh` CLI. Best-effort — failures only logged, never thrown.
+// Token guard: skip silently if neither GITHUB_TOKEN nor GH_TOKEN is set (e.g., local dev).
+function dispatchFailureIssue(
+  niche: Niche,
+  keyword: string | undefined,
+  failureReason: string,
+  draftJson: string | null,
+): void {
+  if (!process.env.GITHUB_TOKEN && !process.env.GH_TOKEN) {
+    console.warn('[dispatch] GITHUB_TOKEN/GH_TOKEN 없음, dispatch skip');
+    return;
+  }
+
+  const body = [
+    `niche: ${niche}`,
+    `keyword: ${keyword ?? '(N/A)'}`,
+    `폐기 사유: ${failureReason}`,
+    '',
+    '```json',
+    draftJson ?? '(no draft)',
+    '```',
+    '',
+    '권장 조치: 키워드 폐기 / 수동 트리거 / 페르소나 검토',
+  ].join('\n');
+
+  const title = `[blog-autopilot] 게시물 폐기: ${niche} / ${keyword ?? 'N/A'}`;
+
+  try {
+    execSync(
+      `gh issue create --title ${JSON.stringify(title)} --body ${JSON.stringify(body)} --label "blog-autopilot,auto-discard"`,
+      { stdio: 'pipe' },
+    );
+    console.log(`[dispatch] issue created for ${niche}/${keyword ?? 'N/A'}`);
+  } catch (err) {
+    console.error('[dispatch] failed:', errMessage(err));
+  }
+}
+
+// H8: failure-path record. Approach B (commit message documents this):
+//   - Skip 'db:'-prefixed reasons → H7 orphan case (publish OK, DB INSERT failed). Re-INSERTing would loop.
+//   - Pre-draft failures (no title/slug) → dispatch Issue + console only; NO DB INSERT.
+//     publishedPosts.{title, slug, platform, externalUrl} are NOT NULL; empty-string placeholders
+//     would pollute analytics + risk uniqueIndex(slug, platform) collisions across empty slugs.
+//   - Post-draft failures (title + slug present) → INSERT status='failed' with whatever we have.
+//     externalUrl is '' since publish failed; uniqueness constraints don't fire on status='failed' uniquely
+//     but slug uniqueness still applies — finalSlug already deduped via assignSlug, so safe.
+async function recordFailure(
+  db: ReturnType<typeof getDb>,
+  result: SlotResult,
+  draftJson: string | null,
+): Promise<void> {
+  // CRITICAL (H7 edge case): skip 'db:'-prefixed reasons. SlotResult was already attempting INSERT;
+  // re-INSERTing the same row would loop on the same DB error.
+  if (result.failureReason?.startsWith('db:')) {
+    console.warn(
+      `[recordFailure] skip 'db:'-prefixed (H7 orphan): ${result.niche}/${result.keyword ?? 'N/A'}`,
+    );
+    // Still dispatch an Issue for visibility — the post is live but unrecorded; operator must reconcile.
+    dispatchFailureIssue(
+      result.niche,
+      result.keyword,
+      result.failureReason ?? 'unknown',
+      draftJson,
+    );
+    return;
+  }
+
+  // Approach B: skip INSERT for pre-draft failures. We require both title and slug
+  // before we have anything coherent to record; pre-draft slots (queue_exhausted,
+  // writer reject, dedup-only-skip) get only the Issue dispatch.
+  if (!result.title || !result.slug) {
+    console.warn(
+      `[recordFailure] no draft for ${result.niche}/${result.keyword ?? 'N/A'}: ${result.failureReason ?? 'unknown'}`,
+    );
+    dispatchFailureIssue(
+      result.niche,
+      result.keyword,
+      result.failureReason ?? 'unknown',
+      null,
+    );
+    return;
+  }
+
+  // Post-draft failure: INSERT with the data we have.
+  try {
+    await db.insert(publishedPosts).values({
+      niche: result.niche,
+      keyword: result.keyword ?? '',
+      title: result.title,
+      slug: result.slug,
+      platform: platformForNiche(result.niche),
+      externalPostId: result.externalId ?? null,
+      externalUrl: result.externalUrl ?? '',
+      publishedAt: new Date().toISOString(),
+      scheduledSlot: result.scheduledFor ?? null,
+      status: 'failed',
+      failureReason: result.failureReason ?? 'unknown',
+      draftJson,
+    });
+  } catch (err) {
+    // Don't rethrow — failure-path INSERT must not crash the loop. Log + continue to Issue dispatch.
+    console.error(
+      `[recordFailure] INSERT(failed) errored for ${result.niche}/${result.keyword ?? 'N/A'}:`,
+      errMessage(err),
+    );
+  }
+
+  dispatchFailureIssue(
+    result.niche,
+    result.keyword,
+    result.failureReason ?? 'unknown',
+    draftJson,
+  );
 }
 
 function parseCliArgs(argv: string[]): CliArgs {
@@ -521,17 +645,28 @@ async function main(): Promise<number> {
 
   for (const state of states) {
     for (let slotIdx = 1; slotIdx <= args.slotCount; slotIdx++) {
+      let result: SlotResult;
       try {
-        const result = await processSlot(state, slotIdx, db);
-        results.push(result);
+        result = await processSlot(state, slotIdx, db);
       } catch (err) {
         console.error(`[${state.niche} slot${slotIdx}] uncaught:`, err);
-        results.push({
+        result = {
           niche: state.niche,
           slotIdx,
           status: 'failed',
           failureReason: `uncaught: ${errMessage(err)}`,
-        });
+        };
+      }
+      results.push(result);
+
+      // H8: error-path side effects (DB INSERT failed-row + GitHub Issue dispatch).
+      // draftJson=null for now; H10 may revise after integration test scenarios.
+      if (result.status === 'failed') {
+        try {
+          await recordFailure(db, result, null);
+        } catch (err) {
+          console.error(`[${state.niche} slot${slotIdx}] recordFailure threw:`, errMessage(err));
+        }
       }
     }
   }
