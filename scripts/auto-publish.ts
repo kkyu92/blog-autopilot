@@ -1,8 +1,14 @@
 import { parseArgs } from 'node:util';
 import { runAll } from '../src/lib/healthcheck';
 import { pickQueue, type KeywordCandidate } from '../src/lib/trends';
-import { checkAndResolve } from '../src/lib/dedup';
+import { checkAndResolve, type DedupResult } from '../src/lib/dedup';
 import { getDb } from '../src/lib/db';
+
+function errMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === 'string') return err;
+  try { return JSON.stringify(err); } catch { return String(err); }
+}
 
 type Niche = 'WS' | 'TS' | 'AS';
 type Mode = 'normal' | 'healthcheck-only';
@@ -54,11 +60,11 @@ async function pickAllQueues(niches: Niche[]): Promise<NicheQueue[]> {
   return queues;
 }
 
-async function processSlot(
+async function pickViableCandidate(
   state: NicheState,
   slotIdx: number,
   db: ReturnType<typeof getDb>,
-): Promise<SlotResult> {
+): Promise<{ candidate: KeywordCandidate; dedupResult: DedupResult } | null> {
   const niche = state.niche;
 
   while (state.queueIdx < state.queue.length) {
@@ -82,22 +88,35 @@ async function processSlot(
       continue;
     }
 
-    // dedupResult.action ∈ {'pass', 'follow_up', 'slug_variant'} → 진행 (H5에서 구현)
-    return {
-      niche,
-      slotIdx,
-      keyword: candidate.keyword,
-      status: 'failed', // placeholder, H5에서 채움
-      failureReason: 'TODO_H5',
-    };
+    // dedupResult.action ∈ {'pass', 'follow_up', 'slug_variant'} → 진행
+    return { candidate, dedupResult };
   }
 
-  console.warn(`[${niche} slot${slotIdx}] queue exhausted`);
+  return null;
+}
+
+// 주의: state.queueIdx를 mutation (pickViableCandidate 내부). 슬롯 순차 처리 가정. 병렬화 시 재설계 필요.
+async function processSlot(
+  state: NicheState,
+  slotIdx: number,
+  db: ReturnType<typeof getDb>,
+): Promise<SlotResult> {
+  const niche = state.niche;
+  const picked = await pickViableCandidate(state, slotIdx, db);
+  if (picked === null) {
+    console.warn(`[${niche} slot${slotIdx}] queue exhausted`);
+    return { niche, slotIdx, status: 'skipped', failureReason: 'queue_exhausted' };
+  }
+
+  const { candidate /*, dedupResult */ } = picked;
+
+  // H5: writer + editor revision (placeholder until H5 lands)
   return {
     niche,
     slotIdx,
-    status: 'skipped',
-    failureReason: 'queue_exhausted',
+    keyword: candidate.keyword,
+    status: 'failed',
+    failureReason: 'TODO_H5',
   };
 }
 
@@ -183,7 +202,7 @@ async function main(): Promise<number> {
           niche: state.niche,
           slotIdx,
           status: 'failed',
-          failureReason: `uncaught: ${(err as Error).message}`,
+          failureReason: `uncaught: ${errMessage(err)}`,
         });
       }
     }
