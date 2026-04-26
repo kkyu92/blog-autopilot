@@ -11,6 +11,13 @@ platform:
   type: wordpress
   site: travelsignalblog.wordpress.com
   oauth_env_prefix: WORDPRESS_TS
+  env_vars:
+    access_token: WORDPRESS_TS_ACCESS_TOKEN
+    blog_id: WORDPRESS_TS_BLOG_ID
+    client_id: WORDPRESS_TS_CLIENT_ID
+    client_secret: WORDPRESS_TS_CLIENT_SECRET
+    site: WORDPRESS_TS_SITE
+    redirect_uri: WORDPRESS_TS_REDIRECT_URI
 
 content:
   daily_post_count: 3

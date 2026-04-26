@@ -1,4 +1,4 @@
-import { getValidTokens, type OAuthTokens } from "@/lib/tokens";
+import { getValidTokens, getWordPressCredentials, type OAuthTokens } from "@/lib/tokens";
 
 const WP_CLIENT_ID = process.env.WORDPRESS_CLIENT_ID!;
 const WP_CLIENT_SECRET = process.env.WORDPRESS_CLIENT_SECRET!;
@@ -179,4 +179,124 @@ export async function deleteFromWordPress(params: {
     const err = await res.text();
     throw new Error(`WordPress delete failed (${res.status}): ${err}`);
   }
+}
+
+// ─── Multi-site scheduled publishing (PR5 D2) ────────────────────────────────
+
+export interface WPScheduledPost {
+  title: string;
+  content: string; // HTML
+  slug: string;
+  excerpt?: string;
+  categories?: string[];
+  tags?: string[];
+}
+
+/** WP.com REST API response shape for POST /sites/:id/posts/new */
+interface WPCreatePostResponse {
+  ID: number;
+  URL: string;
+  date: string;
+  // other fields ignored
+}
+
+/** Non-retryable (4xx) error — caller bug; retrying won't help */
+class WPNonRetryableError extends Error {
+  constructor(message: string, public readonly status: number) {
+    super(message);
+    this.name = 'WPNonRetryableError';
+  }
+}
+
+const PUBLISH_TIMEOUT_MS = 30_000;
+
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs = PUBLISH_TIMEOUT_MS
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(url, { ...init, signal: controller.signal }).finally(() =>
+    clearTimeout(timer)
+  );
+}
+
+/**
+ * Publish a scheduled post to a niche-routed WordPress.com site.
+ * Uses niche credentials from env vars via getWordPressCredentials (D1).
+ * Retries up to 3× with exponential backoff (1s / 2s) for 5xx and network errors.
+ * 4xx errors (auth/bad-request) fail fast without retrying.
+ */
+export async function publishScheduled(
+  niche: 'WS' | 'TS',
+  post: WPScheduledPost,
+  scheduledFor: Date
+): Promise<{ externalId: string; externalUrl: string; scheduledAt: string }> {
+  const { accessToken, blogId } = getWordPressCredentials(niche);
+
+  const body: Record<string, unknown> = {
+    title: post.title,
+    content: post.content,
+    slug: post.slug,
+    status: 'future',
+    date: scheduledFor.toISOString(),
+  };
+
+  // Only include optional fields if they are defined (JSON.stringify omits undefined,
+  // but being explicit keeps the intent clear and avoids null being serialized)
+  if (post.excerpt !== undefined) body.excerpt = post.excerpt;
+  if (post.categories !== undefined) body.categories = post.categories;
+  if (post.tags !== undefined) body.tags = post.tags;
+
+  const url = `https://public-api.wordpress.com/rest/v1.1/sites/${blogId}/posts/new`;
+  const init: RequestInit = {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  };
+
+  let lastErr: unknown;
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const res = await fetchWithTimeout(url, init);
+
+      if (!res.ok) {
+        const errText = await res.text();
+        // 4xx = caller bug (bad auth, bad payload) — don't retry
+        if (res.status >= 400 && res.status < 500) {
+          throw new WPNonRetryableError(
+            `WP-${niche} HTTP ${res.status}: ${errText}`,
+            res.status
+          );
+        }
+        // 5xx = server-side transient — retryable
+        throw new Error(`WP-${niche} HTTP ${res.status}: ${errText}`);
+      }
+
+      const data = (await res.json()) as WPCreatePostResponse;
+      return {
+        externalId: String(data.ID),
+        externalUrl: data.URL,
+        scheduledAt: data.date,
+      };
+    } catch (e) {
+      // 4xx: fail fast, no backoff
+      if (e instanceof WPNonRetryableError) throw e;
+
+      lastErr = e;
+      // Apply exponential backoff before the next attempt (1s, 2s)
+      if (attempt < 2) {
+        await new Promise<void>((r) =>
+          setTimeout(r, 1000 * Math.pow(2, attempt))
+        );
+      }
+    }
+  }
+
+  throw lastErr;
 }

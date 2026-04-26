@@ -33,11 +33,12 @@ describe("tone validation", () => {
 });
 
 describe("platform validation", () => {
-  const validPlatforms = ["blogger", "naver"];
+  const validPlatforms = ["wordpress_ws", "wordpress_ts", "blogger_as"];
 
   it("accepts valid platforms", () => {
-    expect(validPlatforms.includes("blogger")).toBe(true);
-    expect(validPlatforms.includes("naver")).toBe(true);
+    expect(validPlatforms.includes("wordpress_ws")).toBe(true);
+    expect(validPlatforms.includes("wordpress_ts")).toBe(true);
+    expect(validPlatforms.includes("blogger_as")).toBe(true);
   });
 
   it("rejects invalid platform", () => {

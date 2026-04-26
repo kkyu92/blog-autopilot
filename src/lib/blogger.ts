@@ -192,3 +192,167 @@ export async function deleteFromBlogger(params: {
     throw new Error(`Blogger delete failed: ${err}`);
   }
 }
+
+// ─── Scheduled publishing (PR5 D3) ───────────────────────────────────────────
+// Uses server-side refresh-token flow (env vars) via getBloggerCredentials from D1.
+// Coexists with the interactive OAuth path above — they serve different code paths.
+
+import { getBloggerCredentials } from './tokens';
+
+interface BloggerTokenResponse {
+  access_token: string;
+  expires_in: number;
+  token_type?: string;
+  scope?: string;
+}
+
+interface BloggerDraftResponse {
+  id: string;
+  // other fields ignored
+}
+
+interface BloggerPublishResponse {
+  id: string;
+  url: string;
+  published: string;
+  // other fields ignored
+}
+
+/** Non-retryable (4xx) error — caller bug; retrying won't help */
+class BloggerNonRetryableError extends Error {
+  constructor(message: string, public readonly status: number) {
+    super(message);
+    this.name = 'BloggerNonRetryableError';
+  }
+}
+
+const BLOGGER_TIMEOUT_MS = 30_000;
+
+async function bloggerFetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs = BLOGGER_TIMEOUT_MS
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(url, { ...init, signal: controller.signal }).finally(() =>
+    clearTimeout(timer)
+  );
+}
+
+/**
+ * Retry helper for Blogger publishing fetches.
+ * Retries up to `retries` times with exponential backoff (1s, 2s).
+ * 4xx BloggerNonRetryableError fails fast without retrying.
+ */
+async function withRetry<T>(fn: () => Promise<T>, retries = 3): Promise<T> {
+  let lastErr: unknown;
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      if (e instanceof BloggerNonRetryableError) throw e;
+      lastErr = e;
+      if (i < retries - 1) await new Promise<void>((r) => setTimeout(r, 1000 * Math.pow(2, i)));
+    }
+  }
+  throw lastErr;
+}
+
+/**
+ * Server-side token refresh using env-based credentials (no DB).
+ * One-shot — no retry. Fails loudly so caller gets a clear error.
+ */
+async function getAccessToken(): Promise<string> {
+  const { refreshToken, clientId, clientSecret } = getBloggerCredentials();
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+      client_id: clientId,
+      client_secret: clientSecret,
+    }),
+  });
+  if (!res.ok) throw new Error(`Blogger token refresh fail: ${res.status}`);
+  const data = (await res.json()) as BloggerTokenResponse;
+  return data.access_token;
+}
+
+/**
+ * Publish a scheduled post to Blogger (niche AS — only valid value currently).
+ * Two-step: create draft (isDraft=true) → publish with publishDate.
+ *
+ * NOTE on orphan drafts: each step is retried independently. If step 1 (draft)
+ * succeeds but step 2 (publish) exhausts all retries, the draft remains in
+ * Blogger admin as an orphan. This is acceptable since draft visibility is
+ * not user-facing for the AS niche.
+ *
+ * @param niche - Only 'AS' is currently valid.
+ */
+export async function publishScheduled(
+  niche: 'AS' = 'AS',
+  post: { title: string; content: string; labels?: string[] },
+  scheduledFor: Date
+): Promise<{ externalId: string; externalUrl: string; scheduledAt: string }> {
+  const { blogId } = getBloggerCredentials();
+  const accessToken = await getAccessToken();
+
+  // Step 1: create draft (isDraft=true) — retried independently
+  const draft = await withRetry(async () => {
+    const draftBody: Record<string, unknown> = {
+      title: post.title,
+      content: post.content,
+    };
+    if (post.labels !== undefined) draftBody.labels = post.labels;
+
+    const res = await bloggerFetchWithTimeout(
+      `https://www.googleapis.com/blogger/v3/blogs/${blogId}/posts?isDraft=true`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(draftBody),
+      }
+    );
+
+    if (!res.ok) {
+      const errText = await res.text();
+      if (res.status >= 400 && res.status < 500) {
+        throw new BloggerNonRetryableError(`Blogger draft fail: ${res.status}: ${errText}`, res.status);
+      }
+      throw new Error(`Blogger draft fail: ${res.status}: ${errText}`);
+    }
+
+    return (await res.json()) as BloggerDraftResponse;
+  });
+
+  // Step 2: publish with publishDate — retried independently
+  // If this step fails after retries, the draft from step 1 remains as an orphan.
+  const published = await withRetry(async () => {
+    const pubUrl = `https://www.googleapis.com/blogger/v3/blogs/${blogId}/posts/${draft.id}/publish?publishDate=${encodeURIComponent(scheduledFor.toISOString())}`;
+    const res = await bloggerFetchWithTimeout(pubUrl, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      if (res.status >= 400 && res.status < 500) {
+        throw new BloggerNonRetryableError(`Blogger publish fail: ${res.status}: ${errText}`, res.status);
+      }
+      throw new Error(`Blogger publish fail: ${res.status}: ${errText}`);
+    }
+
+    return (await res.json()) as BloggerPublishResponse;
+  });
+
+  return {
+    externalId: published.id,
+    externalUrl: published.url,
+    scheduledAt: published.published,
+  };
+}

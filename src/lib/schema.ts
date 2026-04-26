@@ -19,6 +19,11 @@ export const publishedPosts = sqliteTable(
     scheduledSlot: text("scheduled_slot"),
     qualityScore: integer("quality_score"),
     metadata: text("metadata"),
+    status: text("status", { enum: ["published", "failed"] })
+      .notNull()
+      .default("published"),
+    failureReason: text("failure_reason"),
+    draftJson: text("draft_json"),
     createdAt: text("created_at")
       .notNull()
       .default(sql`(datetime('now'))`),
@@ -28,6 +33,7 @@ export const publishedPosts = sqliteTable(
     index("idx_pp_published_at").on(table.publishedAt),
     index("idx_pp_niche_published_at").on(table.niche, table.publishedAt),
     uniqueIndex("idx_pp_slug_platform").on(table.slug, table.platform),
+    uniqueIndex("idx_pp_niche_slug").on(table.niche, table.slug),
   ],
 );
 
