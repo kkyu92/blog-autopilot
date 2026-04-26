@@ -1,10 +1,14 @@
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
+import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import path from "path";
 import fs from "fs";
 import * as schema from "./schema";
 
 let _db: ReturnType<typeof drizzle<typeof schema>> | null = null;
+
+// 마이그레이션 폴더 — repo root 기준. cwd 의존 (Actions runner는 _work/repo/repo/).
+const MIGRATIONS_DIR = path.resolve(process.cwd(), "drizzle/migrations");
 
 export function getDb() {
   if (!_db) {
@@ -19,6 +23,15 @@ export function getDb() {
     sqlite.pragma("foreign_keys = ON");
 
     _db = drizzle(sqlite, { schema });
+
+    // 첫 호출 시 자동 마이그레이션 (drizzle-kit migrate idempotent)
+    if (fs.existsSync(MIGRATIONS_DIR)) {
+      try {
+        migrate(_db, { migrationsFolder: MIGRATIONS_DIR });
+      } catch (err) {
+        console.error("[db] migrate failed:", (err as Error).message);
+      }
+    }
   }
   return _db;
 }
