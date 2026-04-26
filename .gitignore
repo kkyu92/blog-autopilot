@@ -9,6 +9,8 @@ __pycache__/
 .venv/
 .next/
 dist/
+coverage/
+tsconfig.tsbuildinfo
 data/
 *.db
 *.db-wal
