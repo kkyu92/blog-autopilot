@@ -1,5 +1,14 @@
 import { parseArgs } from 'node:util';
-import { readFileSync } from 'node:fs';
+import {
+  appendFileSync,
+  copyFileSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+  unlinkSync,
+} from 'node:fs';
+import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -619,6 +628,72 @@ async function recordFailure(
   );
 }
 
+// H9: 한 줄 요약 (console + ~/logs/blog-autopilot.log).
+// 로그 디스크 쓰기 실패는 cron 실패 아님 — soft warn.
+function writeSummary(results: SlotResult[]): { published: number; failed: number; skipped: number } {
+  const published = results.filter(r => r.status === 'published').length;
+  const failed = results.filter(r => r.status === 'failed').length;
+  const skipped = results.filter(r => r.status === 'skipped').length;
+
+  const line = `${new Date().toISOString()} success: ${published}, failed: ${failed}, skipped: ${skipped}`;
+  console.log(`[auto-publish] ${line}`);
+
+  try {
+    const logDir = join(homedir(), 'logs');
+    mkdirSync(logDir, { recursive: true });
+    appendFileSync(join(logDir, 'blog-autopilot.log'), line + '\n');
+  } catch (err) {
+    console.warn('[summary] log write failed:', errMessage(err));
+  }
+
+  return { published, failed, skipped };
+}
+
+// H9: DB 백업 + 30일 retention.
+// PR5 lib/db.ts는 DATABASE_PATH env 사용 (default: ./data/blog.db).
+// 백업 실패는 cron 실패 아님 (소프트 에러).
+function backupDb(): void {
+  const dbPath = process.env.DATABASE_PATH ?? join(process.cwd(), 'data', 'blog.db');
+  const backupDir = join(homedir(), 'backups');
+  const yyyymmdd = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const backupPath = join(backupDir, `blog-autopilot-${yyyymmdd}.db`);
+
+  try {
+    mkdirSync(backupDir, { recursive: true });
+    copyFileSync(dbPath, backupPath);
+    console.log(`[backup] ${backupPath}`);
+
+    // 30일 retention
+    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    for (const f of readdirSync(backupDir)) {
+      if (!f.startsWith('blog-autopilot-') || !f.endsWith('.db')) continue;
+      const fp = join(backupDir, f);
+      if (statSync(fp).mtimeMs < cutoff) {
+        unlinkSync(fp);
+        console.log(`[backup] retention cleanup: ${f}`);
+      }
+    }
+  } catch (err) {
+    console.error('[backup] failed:', errMessage(err));
+    // 백업 실패는 cron 실패 아님 (소프트 에러)
+  }
+}
+
+// H9: exit code policy.
+//   total=0 (nothing happened) → 1 (cron 알림 필요)
+//   discard ratio (failed+skipped)/total ≥ 50% → 1 (콘텐츠 파이프라인 health 경고)
+//   else → 0
+function decideExitCode(summary: { published: number; failed: number; skipped: number }): number {
+  const total = summary.published + summary.failed + summary.skipped;
+  if (total === 0) return 1;
+  const discardRatio = (summary.failed + summary.skipped) / total;
+  if (discardRatio >= 0.5) {
+    console.error(`[exit] discard ratio ${(discardRatio * 100).toFixed(0)}% >= 50%, exit 1`);
+    return 1;
+  }
+  return 0;
+}
+
 function parseCliArgs(argv: string[]): CliArgs {
   const { values } = parseArgs({
     args: argv.slice(2),
@@ -726,14 +801,9 @@ async function main(): Promise<number> {
     }
   }
 
-  const published = results.filter(r => r.status === 'published').length;
-  const failed = results.filter(r => r.status === 'failed').length;
-  const skipped = results.filter(r => r.status === 'skipped').length;
-  console.log(
-    `[auto-publish] slot results: published=${published} failed=${failed} skipped=${skipped} (total=${results.length})`,
-  );
-
-  return 0;
+  const summary = writeSummary(results);
+  backupDb();
+  return decideExitCode(summary);
 }
 
 main().then(
