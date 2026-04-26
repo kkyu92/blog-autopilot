@@ -163,6 +163,8 @@ interface WriterDraft {
   faq_schema: unknown[];
   word_count: number;
   keyword: string; // editor.review() requires this; we backfill from input keyword
+  category?: string; // writer persona output; wired through to publisher (WP categories / DB column)
+  labels?: string[]; // writer persona output (3-5 한글 태그); WP tags / Blogger labels
 }
 
 async function writeAndReview(
@@ -227,15 +229,39 @@ async function writeAndReview(
   throw new Error('editor_reject_x2');
 }
 
+// HTML attribute escaper. image_url은 third-party JSON (Pexels/Pixabay), alt_text는 LLM 출력 —
+// 둘 다 신뢰 불가. 한글 따옴표/꺾쇠 등으로 attribute injection 또는 broken HTML 방지.
+function escAttr(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 // content-writer.md spec: HTML uses `<!-- IMAGE_SLOT_N -->` comment markers.
 // image_slots[].slot_id is the literal string "IMAGE_SLOT_N" (e.g., "IMAGE_SLOT_1").
 // We replace the entire HTML comment with a real <img> tag.
 function injectImages(html: string, results: ImageResult[]): string {
   let out = html;
+  const matched = new Set<string>();
   for (const r of results) {
     const marker = `<!-- ${r.slot_id} -->`;
-    const imgTag = `<img src="${r.image_url}" alt="${r.alt_text}" />`;
+    if (out.includes(marker)) {
+      matched.add(r.slot_id);
+    }
+    const imgTag = `<img src="${escAttr(r.image_url)}" alt="${escAttr(r.alt_text)}" />`;
     out = out.split(marker).join(imgTag);
+  }
+  const unmatched = results.filter((r) => !matched.has(r.slot_id));
+  if (unmatched.length > 0) {
+    console.warn(
+      `[injectImages] unmatched results: ${unmatched.map((r) => r.slot_id).join(',')}`,
+    );
+  }
+  const stray = out.match(/<!-- IMAGE_SLOT_\d+ -->/g);
+  if (stray) {
+    console.warn(`[injectImages] stray markers in published HTML: ${stray.join(',')}`);
   }
   return out;
 }
@@ -263,6 +289,8 @@ async function publishToPlatform(
         content: contentWithImages,
         slug: finalSlug,
         excerpt: draft.meta_description,
+        categories: draft.category ? [draft.category] : undefined,
+        tags: draft.labels,
       },
       scheduledFor,
     );
@@ -274,6 +302,7 @@ async function publishToPlatform(
     {
       title: draft.title,
       content: contentWithImages,
+      labels: draft.labels,
     },
     scheduledFor,
   );
@@ -378,6 +407,7 @@ async function processSlot(
   try {
     await db.insert(publishedPosts).values({
       niche,
+      category: draft.category ?? null,
       keyword: candidate.keyword,
       slug: finalSlug,
       title: draft.title,
@@ -389,9 +419,9 @@ async function processSlot(
       status: 'published',
     });
   } catch (err) {
-    // Publish succeeded but DB write failed — log loudly. The post is live on the
-    // platform but unrecorded; H8 will not catch this case (it's not a publish
-    // failure). For now, surface as a slot failure with a distinct reason.
+    // Publish succeeded but DB write failed — log loudly. The post is live on the platform but unrecorded.
+    // 주의: H8 failure-path INSERT는 'db:'-prefixed failureReason을 SKIP해야 함 (이미 INSERT 실패한 row를 재INSERT 시도 → deadloop 위험).
+    // 운영자는 externalUrl로 platform에서 수동 reconcile.
     console.error(`[${niche} slot${slotIdx}] DB INSERT failed after successful publish:`, err);
     return {
       niche,
