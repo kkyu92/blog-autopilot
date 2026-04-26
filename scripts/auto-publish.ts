@@ -9,6 +9,9 @@ import { getDb } from '../src/lib/db';
 import { callClaude } from '../src/lib/llm';
 import { review, type EditorReviewResult } from '../src/lib/editor';
 import { fetchForSlots, type ImageResult } from '../src/lib/images';
+import { publishScheduled as wpPublish } from '../src/lib/wordpress';
+import { publishScheduled as bloggerPublish } from '../src/lib/blogger';
+import { publishedPosts } from '../src/lib/schema';
 
 const PROMPTS_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'prompts', 'agents');
 const WRITER_PROMPT = readFileSync(join(PROMPTS_DIR, 'content-writer.md'), 'utf8');
@@ -224,6 +227,64 @@ async function writeAndReview(
   throw new Error('editor_reject_x2');
 }
 
+// content-writer.md spec: HTML uses `<!-- IMAGE_SLOT_N -->` comment markers.
+// image_slots[].slot_id is the literal string "IMAGE_SLOT_N" (e.g., "IMAGE_SLOT_1").
+// We replace the entire HTML comment with a real <img> tag.
+function injectImages(html: string, results: ImageResult[]): string {
+  let out = html;
+  for (const r of results) {
+    const marker = `<!-- ${r.slot_id} -->`;
+    const imgTag = `<img src="${r.image_url}" alt="${r.alt_text}" />`;
+    out = out.split(marker).join(imgTag);
+  }
+  return out;
+}
+
+interface PublishedRecord {
+  externalId: string;
+  externalUrl: string;
+  scheduledAt: string;
+}
+
+async function publishToPlatform(
+  niche: Niche,
+  draft: WriterDraft,
+  finalSlug: string,
+  imageResults: ImageResult[],
+  scheduledFor: Date,
+): Promise<PublishedRecord> {
+  const contentWithImages = injectImages(draft.content_html, imageResults);
+
+  if (niche === 'WS' || niche === 'TS') {
+    return wpPublish(
+      niche,
+      {
+        title: draft.title,
+        content: contentWithImages,
+        slug: finalSlug,
+        excerpt: draft.meta_description,
+      },
+      scheduledFor,
+    );
+  }
+
+  // AS → Blogger
+  return bloggerPublish(
+    'AS',
+    {
+      title: draft.title,
+      content: contentWithImages,
+    },
+    scheduledFor,
+  );
+}
+
+function platformForNiche(niche: Niche): 'wordpress_ws' | 'wordpress_ts' | 'blogger_as' {
+  if (niche === 'WS') return 'wordpress_ws';
+  if (niche === 'TS') return 'wordpress_ts';
+  return 'blogger_as';
+}
+
 // 주의: state.queueIdx를 mutation (pickViableCandidate 내부). 슬롯 순차 처리 가정. 병렬화 시 재설계 필요.
 async function processSlot(
   state: NicheState,
@@ -272,8 +333,6 @@ async function processSlot(
       failureReason: `images: ${errMessage(err)}`,
     };
   }
-  void imageResults; // consumed by H7 publisher
-
   // H6: slug 충돌 회피 (in-memory niche state)
   const finalSlug = assignSlug(draft.slug, state.usedSlugs);
 
@@ -293,15 +352,69 @@ async function processSlot(
   }
   const scheduledFor = toIsoUtc(slotTimeKst);
 
-  // H7: publish (placeholder)
+  // H7: publish to platform (WS/TS → wordpress, AS → blogger)
+  let pubRecord: PublishedRecord;
+  try {
+    pubRecord = await publishToPlatform(
+      niche,
+      draft,
+      finalSlug,
+      imageResults,
+      new Date(scheduledFor),
+    );
+  } catch (err) {
+    return {
+      niche,
+      slotIdx,
+      keyword: candidate.keyword,
+      slug: finalSlug,
+      scheduledFor,
+      status: 'failed',
+      failureReason: `publish: ${errMessage(err)}`,
+    };
+  }
+
+  // H7: DB INSERT (success path). H8 will add the failure-path INSERT.
+  try {
+    await db.insert(publishedPosts).values({
+      niche,
+      keyword: candidate.keyword,
+      slug: finalSlug,
+      title: draft.title,
+      platform: platformForNiche(niche),
+      externalPostId: pubRecord.externalId,
+      externalUrl: pubRecord.externalUrl,
+      publishedAt: new Date().toISOString(),
+      scheduledSlot: scheduledFor,
+      status: 'published',
+    });
+  } catch (err) {
+    // Publish succeeded but DB write failed — log loudly. The post is live on the
+    // platform but unrecorded; H8 will not catch this case (it's not a publish
+    // failure). For now, surface as a slot failure with a distinct reason.
+    console.error(`[${niche} slot${slotIdx}] DB INSERT failed after successful publish:`, err);
+    return {
+      niche,
+      slotIdx,
+      keyword: candidate.keyword,
+      slug: finalSlug,
+      scheduledFor,
+      externalId: pubRecord.externalId,
+      externalUrl: pubRecord.externalUrl,
+      status: 'failed',
+      failureReason: `db: ${errMessage(err)}`,
+    };
+  }
+
   return {
     niche,
     slotIdx,
     keyword: candidate.keyword,
     slug: finalSlug,
     scheduledFor,
-    status: 'failed',
-    failureReason: 'TODO_H7',
+    externalId: pubRecord.externalId,
+    externalUrl: pubRecord.externalUrl,
+    status: 'published',
   };
 }
 
