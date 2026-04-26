@@ -731,8 +731,8 @@ function parseCliArgs(argv: string[]): CliArgs {
   return { niches, slotCount, mode };
 }
 
-async function main(): Promise<number> {
-  const args = parseCliArgs(process.argv);
+export async function runMain(argv: string[] = process.argv): Promise<number> {
+  const args = parseCliArgs(argv);
   console.log(`[auto-publish] start mode=${args.mode} niches=${args.niches.join(',')} slotCount=${args.slotCount}`);
 
   // Step 1: healthcheck
@@ -809,10 +809,23 @@ async function main(): Promise<number> {
   return decideExitCode(summary);
 }
 
-main().then(
-  (code) => process.exit(code),
-  (err) => {
-    console.error('[auto-publish] fatal:', err);
-    process.exit(3);
+// Smoke-run entrypoint. Tests import { runMain } directly and never trigger this branch.
+// We detect "ran as a script" via import.meta.url match against process.argv[1] —
+// vitest sets argv[1] to its own runner, so this guard prevents process.exit() during tests.
+const isMain = (() => {
+  try {
+    return process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
+  } catch {
+    return false;
   }
-);
+})();
+
+if (isMain) {
+  runMain().then(
+    (code) => process.exit(code),
+    (err) => {
+      console.error('[auto-publish] fatal:', err);
+      process.exit(3);
+    }
+  );
+}
