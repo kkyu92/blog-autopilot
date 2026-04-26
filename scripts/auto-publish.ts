@@ -8,10 +8,47 @@ import { checkAndResolve, type DedupResult } from '../src/lib/dedup';
 import { getDb } from '../src/lib/db';
 import { callClaude } from '../src/lib/llm';
 import { review, type EditorReviewResult } from '../src/lib/editor';
+import { fetchForSlots, type ImageResult } from '../src/lib/images';
 
 const PROMPTS_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'prompts', 'agents');
 const WRITER_PROMPT = readFileSync(join(PROMPTS_DIR, 'content-writer.md'), 'utf8');
 const REQUIRED_DRAFT_FIELDS = ['title', 'slug', 'meta_description', 'content_html', 'word_count'] as const;
+const PUBLISH_HOURS_KST = ['09:00', '11:00', '13:00', '15:00', '17:00', '19:00'];
+
+function pickSlotTime(used: Set<string>): string {
+  const available = PUBLISH_HOURS_KST.filter((h) => !used.has(h));
+  if (available.length === 0) {
+    throw new Error('all_slots_used');
+  }
+  // sequential pick (deterministic for tests; niche당 3슬롯이라 충돌 가능성 낮음)
+  return available[0];
+}
+
+function assignSlug(rawSlug: string, usedSlugs: Set<string>): string {
+  if (!usedSlugs.has(rawSlug)) {
+    usedSlugs.add(rawSlug);
+    return rawSlug;
+  }
+  for (let i = 2; i <= 99; i++) {
+    const candidate = `${rawSlug}-${i}`;
+    if (!usedSlugs.has(candidate)) {
+      usedSlugs.add(candidate);
+      return candidate;
+    }
+  }
+  throw new Error('slug_exhausted');
+}
+
+function toIsoUtc(slotTimeKst: string, baseDate: Date = new Date()): string {
+  // 'HH:MM' KST → next available UTC ISO (KST = UTC+9)
+  const [hh, mm] = slotTimeKst.split(':').map(Number);
+  const next = new Date(baseDate);
+  next.setUTCHours(hh - 9, mm, 0, 0);
+  if (next <= baseDate) {
+    next.setUTCDate(next.getUTCDate() + 1);
+  }
+  return next.toISOString();
+}
 
 function errMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
@@ -212,14 +249,51 @@ async function processSlot(
     };
   }
 
-  // H6/H7: image curation + publish (placeholder)
+  // H6: images
+  let imageResults: ImageResult[];
+  try {
+    imageResults = await fetchForSlots(draft.image_slots);
+  } catch (err) {
+    return {
+      niche,
+      slotIdx,
+      keyword: candidate.keyword,
+      slug: draft.slug,
+      status: 'failed',
+      failureReason: `images: ${errMessage(err)}`,
+    };
+  }
+  void imageResults; // consumed by H7 publisher
+
+  // H6: slug 충돌 회피 (in-memory niche state)
+  const finalSlug = assignSlug(draft.slug, state.usedSlugs);
+
+  // H6: slot_time (KST) → UTC ISO
+  let slotTimeKst: string;
+  try {
+    slotTimeKst = pickSlotTime(state.usedSlotTimes);
+    state.usedSlotTimes.add(slotTimeKst);
+  } catch (err) {
+    return {
+      niche,
+      slotIdx,
+      keyword: candidate.keyword,
+      slug: finalSlug,
+      status: 'failed',
+      failureReason: `slot: ${errMessage(err)}`,
+    };
+  }
+  const scheduledFor = toIsoUtc(slotTimeKst);
+
+  // H7: publish (placeholder)
   return {
     niche,
     slotIdx,
     keyword: candidate.keyword,
-    slug: draft.slug,
+    slug: finalSlug,
+    scheduledFor,
     status: 'failed',
-    failureReason: 'TODO_H6_H7',
+    failureReason: 'TODO_H7',
   };
 }
 
