@@ -665,8 +665,10 @@ function backupDb(): void {
 
     // 30일 retention
     const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    const todayBackup = `blog-autopilot-${yyyymmdd}.db`;
     for (const f of readdirSync(backupDir)) {
       if (!f.startsWith('blog-autopilot-') || !f.endsWith('.db')) continue;
+      if (f === todayBackup) continue; // never prune the file we just wrote
       const fp = join(backupDir, f);
       if (statSync(fp).mtimeMs < cutoff) {
         unlinkSync(fp);
@@ -676,6 +678,7 @@ function backupDb(): void {
   } catch (err) {
     console.error('[backup] failed:', errMessage(err));
     // 백업 실패는 cron 실패 아님 (소프트 에러)
+    // TODO(post-PR6): N consecutive 백업 fail 시 dispatchIssue (queue_exhausted 패턴 참고)
   }
 }
 
