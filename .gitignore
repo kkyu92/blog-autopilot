@@ -1,6 +1,9 @@
 node_modules/
 .env
 .env.local
+.env.local.*
+.env.*.backup
+.env.*.backup-*
 __pycache__/
 *.pyc
 .venv/

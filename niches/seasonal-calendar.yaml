@@ -1,0 +1,104 @@
+# 시즌성 캘린더 — Trend Hunter가 매일 참고하여 시즌 boost 카테고리 가중치 +20%
+
+holidays:
+  - date: "2026-01-01"
+    name: 신정
+    duration_days: 7
+    boost:
+      WS: ["건강검진·예방", "정신건강"]
+      TS: ["국내여행"]
+      AS: ["부동산 정책"]
+
+  - date: "2026-02-17"
+    name: 설연휴
+    duration_days: 7
+    boost:
+      WS: ["가족건강", "정신건강"]
+      TS: ["국내여행", "맛집·로컬 음식"]
+      AS: ["인테리어·리모델링"]
+
+  - date: "2026-05-05"
+    name: 어린이날
+    duration_days: 5
+    boost:
+      WS: ["가족건강"]
+      TS: ["국내여행", "레저·액티비티"]
+      AS: []
+
+  - date: "2026-09-26"
+    name: 추석
+    duration_days: 7
+    boost:
+      WS: ["가족건강"]
+      TS: ["국내여행"]
+      AS: ["부동산 정책", "신도시·택지지구"]
+
+  - date: "2026-12-25"
+    name: 크리스마스
+    duration_days: 7
+    boost:
+      WS: ["라이프스타일 헬스"]
+      TS: ["국내여행", "시즌 여행지"]
+      AS: ["인테리어·리모델링"]
+
+events:
+  - period_start: "2026-04-01"
+    period_end: "2026-06-30"
+    name: 이사철 (봄)
+    boost:
+      WS: []
+      TS: []
+      AS: ["매매·전세·월세", "임대·임차", "인테리어·리모델링"]
+
+  - period_start: "2026-07-01"
+    period_end: "2026-08-31"
+    name: 여름휴가
+    boost:
+      WS: ["라이프스타일 헬스"]  # 다이어트·여름건강
+      TS: ["해외여행", "숙소·항공권 딜", "레저·액티비티", "시즌 여행지"]
+      AS: []
+
+  - period_start: "2026-09-01"
+    period_end: "2026-09-30"
+    name: 환절기
+    boost:
+      WS: ["질환·증상", "건강검진·예방"]
+      TS: []
+      AS: []
+
+  - period_start: "2026-10-01"
+    period_end: "2026-12-31"
+    name: 이사철 (가을·연말)
+    boost:
+      WS: []
+      TS: []
+      AS: ["매매·전세·월세", "부동산 세금"]
+
+  - period_start: "2026-11-01"
+    period_end: "2026-02-28"
+    name: 겨울 건강
+    boost:
+      WS: ["질환·증상", "건강검진·예방", "정신건강"]
+      TS: ["국내여행"]  # 따뜻한 곳·온천·스키
+      AS: []
+
+  # 부동산 특화 정기 이벤트
+  - period_start: "2026-01-01"
+    period_end: "2026-12-31"
+    name: 청약 일정 (월 1회 자동 boost — 청약 일정 발표 주간)
+    recurrence: monthly
+    boost:
+      AS: ["청약"]
+
+  # 정책 발표 시즌 (예측 가능한 시기만)
+  - period_start: "2026-12-01"
+    period_end: "2026-12-31"
+    name: 연말 세제 개편 발표
+    boost:
+      AS: ["부동산 세금", "부동산 정책"]
+
+# 사용 규칙:
+# - Trend Hunter가 매일 01:00 cron 트리거 시 현재 날짜를 holidays + events와 매칭
+# - 매칭된 boost 카테고리에 niche YAML 가중치의 +20% (multiplier 1.2)
+# - 여러 매칭이 겹치면 가장 큰 boost 1개만 적용 (가중치 폭주 방지)
+# - 정확한 매칭 알고리즘은 Phase 1 코드의 lib/seasonal.ts 참조
