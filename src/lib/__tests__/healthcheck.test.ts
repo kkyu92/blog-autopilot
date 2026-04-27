@@ -289,7 +289,7 @@ describe('healthcheck.runAll', () => {
     expect(blogger!.reason).toBe('GOOGLE_REFRESH_TOKEN missing');
   });
 
-  it('claude CLI timeout → ok=false, reason contains "timeout"', async () => {
+  it('claude CLI timeout → ok=false, reason contains "timeout" + retry exhaustion', async () => {
     vi.useFakeTimers();
 
     // Unstub all env vars so all other services short-circuit on missing-env synchronously
@@ -301,14 +301,132 @@ describe('healthcheck.runAll', () => {
     const { runAll } = await import('../healthcheck');
     const promise = runAll();
 
-    // Advance past TIMEOUT_MS (10_000ms)
-    await vi.advanceTimersByTimeAsync(11_000);
+    // 3 attempts × 10s timeout + 500ms + 1000ms backoffs = 31.5s. 35s 안전 마진.
+    await vi.advanceTimersByTimeAsync(35_000);
 
     const report = await promise;
     const claudeResult = report.results.find(r => r.service === 'claude-cli');
     expect(claudeResult?.ok).toBe(false);
     expect(claudeResult?.reason).toMatch(/timeout/);
+    expect(claudeResult?.reason).toContain('after 3 attempts');
 
     vi.useRealTimers();
+  });
+
+  // ─── Retry 정책 ───────────────────────────────────────────────
+
+  it('retry: 5xx → 2번째 시도 success → 최종 ok=true (recovery)', async () => {
+    // Promise.all parallel — fetch는 병렬 호출 순서대로 mock 소비.
+    // Pixabay 1st → Pexels → WP-WS → WP-TS → Blogger token → Blogger blogs → Pixabay 2nd (backoff 후).
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce({ ok: false, status: 500 })  // 1: Pixabay attempt 1 (transient)
+      .mockResolvedValueOnce({ ok: true, status: 200 })   // 2: Pexels
+      .mockResolvedValueOnce({ ok: true, status: 200 })   // 3: WP-WS
+      .mockResolvedValueOnce({ ok: true, status: 200 })   // 4: WP-TS
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ access_token: 'tok' }) }) // 5: Blogger token
+      .mockResolvedValueOnce({ ok: true, status: 200 })   // 6: Blogger blogs GET
+      .mockResolvedValueOnce({ ok: true, status: 200 }) as any; // 7: Pixabay attempt 2 (recover)
+
+    const { callClaude } = await import('../llm');
+    vi.mocked(callClaude).mockResolvedValue('OK');
+
+    const { runAll } = await import('../healthcheck');
+    const report = await runAll();
+
+    expect(report.allPassed).toBe(true);
+    const pixabay = report.results.find(r => r.service === 'Pixabay');
+    expect(pixabay!.ok).toBe(true);
+  }, 10_000);
+
+  it('retry: 5xx 3회 모두 실패 → reason "after 3 attempts" 포함', async () => {
+    // 병렬 ordering: 다른 5 services 먼저 (mocks 1-6, Blogger 2번 포함), 그 다음 Pixabay 2nd/3rd.
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce({ ok: false, status: 503 })  // 1: Pixabay attempt 1
+      .mockResolvedValueOnce({ ok: true, status: 200 })   // 2: Pexels
+      .mockResolvedValueOnce({ ok: true, status: 200 })   // 3: WP-WS
+      .mockResolvedValueOnce({ ok: true, status: 200 })   // 4: WP-TS
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ access_token: 'tok' }) }) // 5: Blogger token
+      .mockResolvedValueOnce({ ok: true, status: 200 })   // 6: Blogger blogs GET
+      .mockResolvedValueOnce({ ok: false, status: 503 })  // 7: Pixabay attempt 2 (backoff 후)
+      .mockResolvedValueOnce({ ok: false, status: 503 }) as any; // 8: Pixabay attempt 3
+
+    const { callClaude } = await import('../llm');
+    vi.mocked(callClaude).mockResolvedValue('OK');
+
+    const { runAll } = await import('../healthcheck');
+    const report = await runAll();
+
+    expect(report.allPassed).toBe(false);
+    const pixabay = report.results.find(r => r.service === 'Pixabay');
+    expect(pixabay!.ok).toBe(false);
+    expect(pixabay!.reason).toContain('503');
+    expect(pixabay!.reason).toContain('after 3 attempts');
+  }, 10_000);
+
+  it('retry: 4xx (permanent) → 재시도 안 함, fetch 호출 1회만', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: false, status: 401 })  // Pixabay 401 (permanent — no retry)
+      .mockResolvedValueOnce({ ok: true, status: 200 })   // Pexels
+      .mockResolvedValueOnce({ ok: true, status: 200 })   // WP-WS
+      .mockResolvedValueOnce({ ok: true, status: 200 })   // WP-TS
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ access_token: 'tok' }) }) // Blogger token
+      .mockResolvedValueOnce({ ok: true, status: 200 }); // Blogger blogs GET
+    global.fetch = fetchMock as any;
+
+    const { callClaude } = await import('../llm');
+    vi.mocked(callClaude).mockResolvedValue('OK');
+
+    const { runAll } = await import('../healthcheck');
+    const report = await runAll();
+
+    // Pixabay 1 + Pexels 1 + WP-WS 1 + WP-TS 1 + Blogger 2 = 6회
+    expect(fetchMock).toHaveBeenCalledTimes(6);
+    const pixabay = report.results.find(r => r.service === 'Pixabay');
+    expect(pixabay!.ok).toBe(false);
+    expect(pixabay!.reason).toContain('401');
+    expect(pixabay!.reason).not.toContain('after');  // retry 안 했으니 "after N attempts" 안 붙음
+  });
+
+  it('retry: env missing (permanent) → fetch 호출 안 함', async () => {
+    vi.stubEnv('PIXABAY_API_KEY', '');
+
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: true, status: 200 })   // Pexels
+      .mockResolvedValueOnce({ ok: true, status: 200 })   // WP-WS
+      .mockResolvedValueOnce({ ok: true, status: 200 })   // WP-TS
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ access_token: 'tok' }) }) // Blogger token
+      .mockResolvedValueOnce({ ok: true, status: 200 }); // Blogger blogs GET
+    global.fetch = fetchMock as any;
+
+    const { callClaude } = await import('../llm');
+    vi.mocked(callClaude).mockResolvedValue('OK');
+
+    const { runAll } = await import('../healthcheck');
+    await runAll();
+
+    // Pixabay 0 (env missing) + Pexels 1 + WP-WS 1 + WP-TS 1 + Blogger 2 = 5회
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+  });
+});
+
+describe('isTransient (retry classification)', () => {
+  it.each([
+    [undefined, false],
+    ['', false],
+    ['PIXABAY_API_KEY missing', false],
+    ['HTTP 401', false],
+    ['HTTP 403', false],
+    ['HTTP 400', false],
+    ['token refresh HTTP 400', false],
+    ['Error: OAuth expired', false],
+    ['unauthorized', false],
+    ['HTTP 500', true],
+    ['HTTP 503', true],
+    ['Error: claude-cli timeout after 10000ms', true],
+    ['DOMException: The operation was aborted', true],
+    ['TypeError: fetch failed', true],
+  ])('"%s" → transient=%s', async (reason, expected) => {
+    const { isTransient } = await import('../healthcheck');
+    expect(isTransient(reason)).toBe(expected);
   });
 });
