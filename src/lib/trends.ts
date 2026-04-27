@@ -165,13 +165,13 @@ export async function getNaverSuggest(keyword: string): Promise<string[]> {
 
 // ── Utils ──
 
-function extractTag(xml: string, tag: string): string {
+export function extractTag(xml: string, tag: string): string {
   const regex = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`);
   const match = regex.exec(xml);
   return match ? match[1].trim() : "";
 }
 
-function decodeHtmlEntities(str: string): string {
+export function decodeHtmlEntities(str: string): string {
   return str
     .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
@@ -184,6 +184,7 @@ function decodeHtmlEntities(str: string): string {
 // ── LLM 기반 키워드 큐 (pickQueue) ──
 
 import { callClaude } from './llm';
+import { aggregateAsSignals, type RealEstateSignal } from './realestate-news';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -208,10 +209,12 @@ export interface KeywordCandidate {
 export interface PickQueueOptions {
   niche: 'WS' | 'TS' | 'AS';
   count?: number;
-  /** Optional pre-fetched signals to feed LLM. If omitted, fetches Google daily trends. */
+  /** Optional pre-fetched signals to feed LLM. If omitted, fetches Google daily trends + (AS) realestate news. */
   signals?: {
     daily_trends?: TrendingKeyword[];
     related?: RelatedKeywordResult[];
+    /** AS niche only — 4-source aggregated real estate signals. Auto-fetched if omitted. */
+    realestate?: RealEstateSignal[];
   };
 }
 
@@ -241,18 +244,43 @@ export async function pickQueue(opts: PickQueueOptions): Promise<KeywordCandidat
     try { dailyTrends = await getGoogleDailyTrends(); } catch { dailyTrends = []; }
   }
 
+  // AS niche: 부동산 전용 4-source signals (매경/한경/정책브리핑/Google News).
+  // 9 카테고리 균형 분포 + LH/SH/GH/HUG·청약 일정 fresh 신호 공급.
+  let realestate: RealEstateSignal[] = opts.signals?.realestate ?? [];
+  if (opts.niche === 'AS' && !opts.signals?.realestate) {
+    try {
+      realestate = await aggregateAsSignals({ windowHours: 72, maxItems: 60 });
+    } catch (err) {
+      console.warn(`[trends] aggregateAsSignals failed (continuing): ${(err as Error).message}`);
+      realestate = [];
+    }
+  }
+
   const userMessage = JSON.stringify({
     niche: opts.niche,
     count,
     niche_definition_yaml: loadNicheYaml(opts.niche),
     daily_trends_kr: dailyTrends.slice(0, 20).map(t => ({ keyword: t.keyword, traffic: t.trafficVolume })),
+    ...(opts.niche === 'AS' && realestate.length > 0
+      ? {
+          realestate_news: realestate.map((s) => ({
+            title: s.title,
+            source: s.source,
+            pubDate: s.pubDate,
+          })),
+        }
+      : {}),
     instruction:
       'CRITICAL: niche_definition_yaml에 정의된 categories 중 하나에 속하는 키워드만 선택하라. ' +
       '예: WS=건강/의료(질환·증상·영양·운동·의약품·정신건강·예방·가족건강·라이프스타일), ' +
       'TS=여행/레저(국내·해외·숙소·항공·액티비티·여행팁·맛집·여행정보), ' +
       'AS=부동산/청약(청약·매매전세월세·정책·세금·인테리어·생활). ' +
       'daily_trends_kr 항목 중 niche 카테고리에 안 맞는 키워드(예: 스포츠·연예인·정치·해외주식)는 절대 포함하지 마라. ' +
-      '맞는 항목이 부족하면 daily_trends를 무시하고 niche categories 안에서 시즌성·검색량 높은 evergreen 키워드를 직접 제안하라. ' +
+      (opts.niche === 'AS' && realestate.length > 0
+        ? 'AS niche: realestate_news 가 제공되었으면 그 안의 fresh title 들에서 키워드 후보를 우선 추출하라. ' +
+          '각도(지역·정책·청약일정·세금·신혼부부·청년임대·재건축·신도시 등) 다양화 — 한 카테고리에 3개 이상 몰림 금지. ' +
+          'evergreen 키워드 머릿속 generate 는 realestate_news 가 비어있을 때만 fallback. '
+        : '맞는 항목이 부족하면 daily_trends를 무시하고 niche categories 안에서 시즌성·검색량 높은 evergreen 키워드를 직접 제안하라. ') +
       '각 키워드의 category 필드는 niche yaml의 categories[].name 중 하나와 정확히 일치해야 한다.',
   });
 
