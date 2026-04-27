@@ -1,0 +1,122 @@
+name: "Compose & dispatch to playbook hub"
+description: >-
+  워커 이벤트 (CI 실패 / Cron 실패 / 기타) 를 playbook 허브 auto-ingest.yml
+  형식으로 변환해서 repository_dispatch 호출. lib/hub-dispatch.ts 의
+  makeFingerprint / mapEventType 알고리즘을 bash 로 재현 — 동일 입력 동일
+  fingerprint 보장.
+
+inputs:
+  event_type:
+    description: "worker-error | worker-incident | worker-lesson"
+    required: true
+  title:
+    description: "Issue / lesson 제목"
+    required: true
+  body:
+    description: "Issue / raw body (multi-line OK)"
+    required: true
+  type:
+    description: "error-log | incident | lesson"
+    required: true
+  severity:
+    description: "(incident only) warning | error | critical"
+    required: false
+    default: ""
+  fingerprint_keys:
+    description: "공백 구분 여러 key → 안정 slug 로 join (예: 'ci failed sha 1234abc')"
+    required: true
+  environment:
+    description: "production / staging / preview"
+    required: false
+    default: "production"
+  run_url:
+    description: "로그 / Actions run URL"
+    required: false
+    default: ""
+  intent:
+    description: "test → 허브 raw 저장만 (가드 테스트)"
+    required: false
+    default: ""
+  dry_run:
+    description: "true → payload 출력만, dispatch 스킵"
+    required: false
+    default: "false"
+  playbook_pat:
+    description: "GitHub PAT (PLAYBOOK_PAT secret)"
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Compose & dispatch
+      shell: bash
+      env:
+        EVENT_TYPE: ${{ inputs.event_type }}
+        TITLE: ${{ inputs.title }}
+        BODY: ${{ inputs.body }}
+        TYPE: ${{ inputs.type }}
+        SEVERITY: ${{ inputs.severity }}
+        FP_KEYS: ${{ inputs.fingerprint_keys }}
+        ENVIRONMENT: ${{ inputs.environment }}
+        RUN_URL: ${{ inputs.run_url }}
+        INTENT: ${{ inputs.intent }}
+        DRY_RUN: ${{ inputs.dry_run }}
+        PLAYBOOK_PAT: ${{ inputs.playbook_pat }}
+        GH_TOKEN: ${{ inputs.playbook_pat }}
+      run: |
+        set -euo pipefail
+
+        # 1. fingerprint slug — lib/hub-dispatch.ts makeFingerprint 동일 알고리즘
+        #    - 소문자 + 영숫자/하이픈 외 치환 + 연속 축약 + 양끝 trim + 60자 cap
+        FP=$(printf '%s' "$FP_KEYS" \
+          | tr '[:upper:]' '[:lower:]' \
+          | LC_ALL=C tr -c 'a-z0-9-' '-' \
+          | sed 's/--*/-/g; s/^-//; s/-$//' \
+          | cut -c1-60)
+        [ -z "$FP" ] && FP="unknown"
+
+        echo "fingerprint: $FP"
+        echo "event_type: $EVENT_TYPE"
+        echo "type: $TYPE"
+        echo "severity: ${SEVERITY:-(none)}"
+
+        # 2. dry-run → payload echo + exit
+        if [ "$DRY_RUN" = "true" ]; then
+          echo "::notice::DRY RUN — dispatch skipped"
+          echo "--- payload ---"
+          echo "source_repo: $GITHUB_REPOSITORY"
+          echo "title: $TITLE"
+          echo "fingerprint: $FP"
+          echo "body (first 200):"
+          printf '%s\n' "$BODY" | head -c 200
+          exit 0
+        fi
+
+        # 3. GitHub repository_dispatch
+        #    gh api 는 -F 로 JSON 필드 추가 가능. client_payload 는 중첩 객체라
+        #    JSON 문자열 빌드 후 --input.
+        JSON=$(jq -n \
+          --arg et "$EVENT_TYPE" \
+          --arg src "$GITHUB_REPOSITORY" \
+          --arg title "$TITLE" \
+          --arg body "$BODY" \
+          --arg type "$TYPE" \
+          --arg severity "$SEVERITY" \
+          --arg fp "$FP" \
+          --arg env "$ENVIRONMENT" \
+          --arg run "$RUN_URL" \
+          --arg intent "$INTENT" \
+          '{
+            event_type: $et,
+            client_payload: (
+              {source_repo: $src, title: $title, body: $body, type: $type, fingerprint: $fp, environment: $env, run_url: $run}
+              + (if $severity != "" then {severity: $severity} else {} end)
+              + (if $intent != "" then {intent: $intent} else {} end)
+            )
+          }')
+
+        echo "$JSON" | gh api repos/kkyu92/playbook/dispatches \
+          --method POST \
+          --input -
+
+        echo "::notice::✓ dispatched to playbook ($EVENT_TYPE, fp=$FP)"
