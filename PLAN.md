@@ -59,7 +59,7 @@ AI 콘텐츠가 실제로 검색 트래픽을 만드는지 검증하는 것이 1
 ## 프로젝트 구조
 
 ```
-content-autopilot/
+blog-autopilot/
 ├── src/
 │   ├── app/                    # Next.js App Router
 │   │   ├── page.tsx            # 대시보드 (파이프라인 상태)

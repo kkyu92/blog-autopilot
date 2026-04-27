@@ -1,4 +1,4 @@
-# Content Autopilot - Claude Code 설정
+# Blog Autopilot - Claude Code 설정
 
 ## 프로젝트 개요
 키워드 트렌드 기반 블로그 콘텐츠 자동 생성 도구 (단일 사용자 전용)

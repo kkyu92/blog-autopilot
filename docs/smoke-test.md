@@ -5,7 +5,7 @@
 ## 사전 조건
 
 - [ ] `docs/runner-setup.md` 모든 단계 완료 (runner 등록, LaunchAgent, pmset wake, claude OAuth, .env.local)
-- [ ] runner online: `gh api repos/kkyu92/content-autopilot/actions/runners | jq '.runners[].status'` → `"online"`
+- [ ] runner online: `gh api repos/kkyu92/blog-autopilot/actions/runners | jq '.runners[].status'` → `"online"`
 - [ ] 20개 secrets 모두 등록: repo Settings → Secrets → Actions
   - `PIXABAY_API_KEY`, `PEXELS_API_KEY`
   - `WORDPRESS_WS_ACCESS_TOKEN`, `WORDPRESS_WS_SITE_ID`
@@ -68,7 +68,7 @@ gh run view <run-id> --log | tail -20
 - WordPress WS 사이트 (worldsignal.kr 등) → 다음 발행 시각 (예: 09:00 KST)에 글 1개 예약 발행됨
 - DB row 1개 추가:
   ```bash
-  sqlite3 ~/projects/content-autopilot/data/blog.db "SELECT * FROM published_posts ORDER BY id DESC LIMIT 1"
+  sqlite3 ~/projects/blog-autopilot/data/blog.db "SELECT * FROM published_posts ORDER BY id DESC LIMIT 1"
   # → status='published', niche='WS'
   ```
 - GitHub Issue 생성 0건 (정상 케이스)
@@ -77,7 +77,7 @@ gh run view <run-id> --log | tail -20
 - log에서 fail 단계 확인 (writer / editor / images / publisher 중 어디서)
 - DB의 `failure_reason` + `draft_json` 확인:
   ```bash
-  sqlite3 ~/projects/content-autopilot/data/blog.db "SELECT id, status, failure_reason FROM published_posts ORDER BY id DESC LIMIT 1"
+  sqlite3 ~/projects/blog-autopilot/data/blog.db "SELECT id, status, failure_reason FROM published_posts ORDER BY id DESC LIMIT 1"
   ```
 - 폐기 Issue 자동 생성됐는지 확인 (`gh issue list --label auto-publish-fail`) → 권장 조치 따름
 
@@ -119,7 +119,7 @@ gh run view <run-id> --log | tail -40
 - [ ] **사이트 게재 확인**: WordPress WS / WordPress TS / Blogger AS 각 3건씩 (총 9건/일)
 - [ ] **DB row 확인**:
   ```bash
-  sqlite3 ~/projects/content-autopilot/data/blog.db \
+  sqlite3 ~/projects/blog-autopilot/data/blog.db \
     "SELECT DATE(published_at) as day, COUNT(*) FROM published_posts \
      WHERE published_at > datetime('now', '-7 days') \
      GROUP BY day ORDER BY day DESC"

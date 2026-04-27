@@ -1,4 +1,4 @@
-# Content Autopilot
+# Blog Autopilot
 
 키워드 트렌드 기반 블로그 콘텐츠 자동 생성 도구. 키워드 입력 → Claude AI 초안 생성 → Markdown 편집 → 원클릭 Blogger/네이버 발행.
 

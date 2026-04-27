@@ -11,7 +11,7 @@ PR6 auto-publish workflow는 self-hosted runner에서 실행됩니다. 두 대 (
 
 각 컴퓨터 (집 MacBook, 회사 MacBook)에 다음을 1회씩 적용:
 
-1. `~/projects/content-autopilot` 클론 (또는 paperclip 컴퓨터의 경우 이미 존재)
+1. `~/projects/blog-autopilot` 클론 (또는 paperclip 컴퓨터의 경우 이미 존재)
 2. `pnpm install`
 3. `.env.local`에 20개 키 (§5 명단) — paperclip 시절 `.env.local`이 이미 있다면 그대로 사용
 4. `claude login` (§4)
@@ -33,7 +33,7 @@ curl -o actions-runner-osx-x64-2.x.x.tar.gz -L https://github.com/actions/runner
 tar xzf ./actions-runner-osx-x64-2.x.x.tar.gz
 
 ./config.sh \
-  --url https://github.com/kkyu92/content-autopilot \
+  --url https://github.com/kkyu92/blog-autopilot \
   --token <runner-token-from-github-settings> \
   --name home-mbp \
   --labels home \
@@ -47,7 +47,7 @@ tar xzf ./actions-runner-osx-x64-2.x.x.tar.gz
 
 ```bash
 ./config.sh \
-  --url https://github.com/kkyu92/content-autopilot \
+  --url https://github.com/kkyu92/blog-autopilot \
   --token <fresh-token-from-github-settings> \
   --name office-mbp \
   --labels office \
@@ -62,7 +62,7 @@ tar xzf ./actions-runner-osx-x64-2.x.x.tar.gz
 GitHub 또는 어느 컴퓨터에서나:
 
 ```bash
-gh api repos/kkyu92/content-autopilot/actions/runners | jq '.runners[] | {name, labels: [.labels[].name], status}'
+gh api repos/kkyu92/blog-autopilot/actions/runners | jq '.runners[] | {name, labels: [.labels[].name], status}'
 # → home-mbp: ["self-hosted","home","macOS","X64"]  online
 # → office-mbp: ["self-hosted","office","macOS","X64"]  online
 ```
@@ -183,7 +183,7 @@ GOOGLE_REFRESH_TOKEN=...
 GOOGLE_BLOG_ID=...
 
 # DB / GitHub
-DATABASE_PATH=/Users/kyusikkim/projects/content-autopilot/data/blog.db
+DATABASE_PATH=/Users/kyusikkim/projects/blog-autopilot/data/blog.db
 GH_TOKEN=...  # gh CLI auth (Issue dispatch + workflow invocation)
 ```
 
@@ -230,7 +230,7 @@ gh secret list
 
 각 컴퓨터에서 적용:
 
-- [ ] `gh api repos/kkyu92/content-autopilot/actions/runners` → home-mbp + office-mbp 둘 다 `"online"`
+- [ ] `gh api repos/kkyu92/blog-autopilot/actions/runners` → home-mbp + office-mbp 둘 다 `"online"`
 - [ ] `launchctl list | grep actions.runner` → 살아 있음 (각 컴퓨터)
 - [ ] (집만) `pmset -g sched` → 매일 01:10 wake 등록됨
 - [ ] `claude --version` + 1-shot 테스트 응답 정상 (각 컴퓨터)
