@@ -30,7 +30,7 @@ jobs:
     # cron 발동 시 inputs.runner는 빈 문자열 → 'home' fallback (paperclip 환경 재사용)
     # workflow_dispatch 시 사용자 선택 (home / office)
     runs-on: [self-hosted, "${{ inputs.runner || 'home' }}"]
-    timeout-minutes: 90  # 9 slots × ~10-15min/slot (claude long output) — 45min은 부족
+    timeout-minutes: 180  # 9 slots × ~18min/slot (4/27 자연 cron 측정 기준 — 90min은 부족, SIGKILL 유발). 향후 병렬화로 단축 검토
     steps:
       - uses: actions/checkout@v4
 
@@ -45,7 +45,14 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm tsx scripts/auto-publish.ts --niche=${{ inputs.niche || 'all' }} --slot-count=${{ inputs.slot_count || '3' }} --mode=${{ inputs.mode || 'normal' }}
+      # E: 세션 시작 마커 — cancel cleanup이 expected vs actual 비교 가능
+      - id: session
+        run: |
+          echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+          echo "expected_slots=$(( ${{ inputs.slot_count || '3' }} * 3 ))" >> "$GITHUB_OUTPUT"
+
+      - id: publish
+        run: pnpm tsx scripts/auto-publish.ts --niche=${{ inputs.niche || 'all' }} --slot-count=${{ inputs.slot_count || '3' }} --mode=${{ inputs.mode || 'normal' }}
         env:
           # 외부 이미지 API
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
@@ -79,3 +86,36 @@ jobs:
           # GITHUB_REPOSITORY는 Actions 가 자동 주입하지만 명확성 위해 유지
           GITHUB_REPOSITORY: ${{ github.repository }}
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
+
+      # E: silent fail 방지 — 워크플로우 cancel(=timeout) 시 운영자에게 알림 issue 생성.
+      # 4/27 자연 cron이 90min timeout으로 cancel되면서 4 슬롯이 silent fail이 된 사례 방지.
+      # always() if cancelled() 로 publish step의 cancel 후에도 실행됨.
+      - name: Notify on cancellation (silent fail prevention)
+        if: cancelled()
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          STARTED_AT="${{ steps.session.outputs.started_at }}"
+          EXPECTED="${{ steps.session.outputs.expected_slots }}"
+          RUN_URL="https://github.com/${GH_REPO}/actions/runs/${{ github.run_id }}"
+          BODY=$(cat <<EOF
+          **Silent fail risk detected** — auto-publish workflow was cancelled before completion.
+
+          - Run: ${RUN_URL}
+          - Started at (UTC): ${STARTED_AT}
+          - Expected slots: ${EXPECTED}
+          - Likely cause: \`timeout-minutes\` 도달 (현재 180min) 또는 수동 cancel
+
+          **다음 작업:**
+          1. \`gh run view ${{ github.run_id }} --log\` — 어느 슬롯에서 끊겼는지 확인
+          2. \`sqlite3 \$DATABASE_PATH "SELECT id, niche, keyword, status, published_at FROM published_posts WHERE published_at >= '${STARTED_AT}' ORDER BY id DESC"\` — 실제 발행/실패 row 확인
+          3. expected(${EXPECTED}) vs actual count 차이만큼이 silent fail
+          4. 미처리 niche/slot은 manual workflow_dispatch로 회수
+          EOF
+          )
+          gh issue create \
+            --title "[blog-autopilot] 🚨 cron cancelled — silent fail risk (run #${{ github.run_id }})" \
+            --label "blog-autopilot,silent-fail" \
+            --body "$BODY"

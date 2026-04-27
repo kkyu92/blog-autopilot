@@ -22,6 +22,11 @@ import { fetchForSlots, type ImageResult } from '../src/lib/images';
 import { publishScheduled as wpPublish } from '../src/lib/wordpress';
 import { publishScheduled as bloggerPublish } from '../src/lib/blogger';
 import { publishedPosts } from '../src/lib/schema';
+import {
+  batchSemanticDedup,
+  loadRecentByNiche,
+  type SemanticDedupCandidate,
+} from '../src/lib/semantic-dedup';
 
 const PROMPTS_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'prompts', 'agents');
 const WRITER_PROMPT = readFileSync(join(PROMPTS_DIR, 'content-writer.md'), 'utf8');
@@ -141,12 +146,20 @@ async function pickViableCandidate(
   state: NicheState,
   slotIdx: number,
   db: ReturnType<typeof getDb>,
+  semanticBlocked: Set<string>,
 ): Promise<{ candidate: KeywordCandidate; dedupResult: DedupResult } | null> {
   const niche = state.niche;
 
   while (state.queueIdx < state.queue.length) {
     const candidate = state.queue[state.queueIdx];
     state.queueIdx++;
+
+    if (semanticBlocked.has(`${niche}|${candidate.keyword}`)) {
+      console.log(
+        `[${niche} slot${slotIdx}] semantic dedup skip: ${candidate.keyword}`,
+      );
+      continue;
+    }
 
     const dedupResult = await checkAndResolve(db, {
       niche,
@@ -189,12 +202,21 @@ interface WriterDraft {
 // paperclip 흐름: Writer → Image Curator → Editor → Publisher.
 // editor가 image placeholder를 미삽입으로 reject하는 것을 막기 위해 image inject를
 // editor 호출 *전*에 수행. chart는 우리 파이프라인 미지원 → writer userMessage에 비활성 명시.
+// Editor가 score>=SOFT_PASS_THRESHOLD인데 revision_needed로 반환한 경우 (마이크로 스타일 일관성 등)
+// attempt 2에서도 같은 결과가 나오면 콘텐츠 품질은 합격선이라 판단해 그대로 발행. paperclip 시절
+// editor가 H3 font-size 17→18px 같은 microconsistency로 reject하면서 4/27 cron의 어린이날 슬롯이
+// SIGKILL까지 간 사례 방지.
+const SOFT_PASS_THRESHOLD = 70;
+
 async function writeAndReview(
   niche: Niche,
   keyword: string,
   contentType: string | undefined,
 ): Promise<{ draft: WriterDraft; images: ImageResult[]; review: EditorReviewResult }> {
   let lastFeedback = '';
+  let lastDraft: WriterDraft | null = null;
+  let lastImages: ImageResult[] = [];
+  let lastReview: EditorReviewResult | null = null;
 
   for (let attempt = 1; attempt <= 2; attempt++) {
     const userMessage = JSON.stringify({
@@ -252,9 +274,20 @@ async function writeAndReview(
       `[${niche}] writer attempt ${attempt} revision_needed (score=${result.score}): ${feedback}`,
     );
     lastFeedback = feedback;
+    lastDraft = draftWithImages;
+    lastImages = images;
+    lastReview = result;
   }
 
-  throw new Error('editor_reject_x2');
+  // attempt 2 모두 revision_needed지만 콘텐츠 품질 점수가 합격선 이상이면 soft-pass로 발행
+  if (lastReview && lastDraft && lastReview.score >= SOFT_PASS_THRESHOLD) {
+    console.log(
+      `[${niche}] writer attempt 2 soft-pass (score=${lastReview.score} >= ${SOFT_PASS_THRESHOLD}) — accepting microconsistency issues, publishing as-is`,
+    );
+    return { draft: lastDraft, images: lastImages, review: lastReview };
+  }
+
+  throw new Error(`editor_reject_x2 (last score=${lastReview?.score ?? '?'})`);
 }
 
 // HTML attribute escaper. image_url은 third-party JSON (Pexels/Pixabay), alt_text는 LLM 출력 —
@@ -372,9 +405,10 @@ async function processSlot(
   state: NicheState,
   slotIdx: number,
   db: ReturnType<typeof getDb>,
+  semanticBlocked: Set<string>,
 ): Promise<SlotResult> {
   const niche = state.niche;
-  const picked = await pickViableCandidate(state, slotIdx, db);
+  const picked = await pickViableCandidate(state, slotIdx, db, semanticBlocked);
   if (picked === null) {
     console.warn(`[${niche} slot${slotIdx}] queue exhausted`);
     return { niche, slotIdx, status: 'skipped', failureReason: 'queue_exhausted' };
@@ -784,8 +818,42 @@ export async function runMain(argv: string[] = process.argv): Promise<number> {
     return 1;
   }
 
-  // Step 3: 9-slot sequential loop (각 niche × slotCount)
+  // Step 2.5: LLM-based semantic dedup (claude CLI, Max 구독). 키워드 string-match dedup이
+  // 못 잡는 의미 동일 토픽 (예: "춘곤증 극복법" vs "춘곤증 극복 방법 5가지", "황금연휴" vs
+  // "골든위크")을 writer 호출 전 차단. 실패 시 graceful degradation — 기존 string dedup만 사용.
   const db = getDb();
+  const semanticBlocked = new Set<string>();
+  try {
+    const flatCandidates: SemanticDedupCandidate[] = [];
+    const flatMap: Array<{ niche: Niche; keyword: string }> = [];
+    for (const q of queues) {
+      for (const k of q.keywords) {
+        flatCandidates.push({ niche: q.niche, keyword: k.keyword });
+        flatMap.push({ niche: q.niche, keyword: k.keyword });
+      }
+    }
+    if (flatCandidates.length > 0) {
+      const recentByNiche = loadRecentByNiche(db, args.niches, 30);
+      const sem = await batchSemanticDedup(flatCandidates, recentByNiche);
+      for (const dup of sem.duplicates) {
+        const m = flatMap[dup.candidate_idx];
+        if (!m) continue;
+        semanticBlocked.add(`${m.niche}|${m.keyword}`);
+        console.log(
+          `[semantic dedup] block ${m.niche}/${m.keyword} → duplicate of #${dup.duplicate_of_id} "${dup.duplicate_of_keyword}" (${dup.reason})`,
+        );
+      }
+      console.log(
+        `[auto-publish] semantic dedup: ${sem.duplicates.length}/${flatCandidates.length} candidates blocked`,
+      );
+    }
+  } catch (err) {
+    console.warn(
+      `[auto-publish] semantic dedup failed (continuing without it): ${errMessage(err)}`,
+    );
+  }
+
+  // Step 3: 9-slot sequential loop (각 niche × slotCount)
 
   // 운영 안정성: 같은 niche에서 향후 24h 내 이미 예약된 scheduled_slot을 미리 usedSlotTimes에 채워
   // 동일 시간 슬롯 중복 방지. paperclip 시절 누락된 동시성 보호.
@@ -826,7 +894,7 @@ export async function runMain(argv: string[] = process.argv): Promise<number> {
     for (let slotIdx = 1; slotIdx <= args.slotCount; slotIdx++) {
       let result: SlotResult;
       try {
-        result = await processSlot(state, slotIdx, db);
+        result = await processSlot(state, slotIdx, db, semanticBlocked);
       } catch (err) {
         console.error(`[${state.niche} slot${slotIdx}] uncaught:`, err);
         result = {
