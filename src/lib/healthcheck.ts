@@ -118,14 +118,50 @@ async function pingClaudeCli(): Promise<HealthResult> {
   }
 }
 
+// Retry 정책 — 5xx / network 일시 장애만 재시도. env missing / 4xx / oauth 는 영구 실패.
+// 시간 budget: 6 services 병렬 × 최악 (10s × 3 + backoff 1.5s) = ~32s.
+const MAX_ATTEMPTS = 3;
+const RETRY_BASE_DELAY_MS = 500;
+
+export function isTransient(reason?: string): boolean {
+  if (!reason) return false;
+  if (reason.includes('missing')) return false;        // env 누락 — 즉시 fail
+  if (/HTTP 4\d\d/i.test(reason)) return false;        // 401/403/400 등 영구
+  if (/oauth|unauthorized/i.test(reason)) return false; // 토큰 만료/거부
+  return true;                                          // 5xx / timeout / network 등
+}
+
+async function pingWithRetry(
+  name: string,
+  fn: () => Promise<HealthResult>,
+): Promise<HealthResult> {
+  let last: HealthResult | undefined;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    last = await fn();
+    if (last.ok) return last;
+    if (!isTransient(last.reason)) return last;
+    if (attempt < MAX_ATTEMPTS) {
+      const backoff = RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
+      console.warn(
+        `[healthcheck] ${name} attempt ${attempt}/${MAX_ATTEMPTS} failed: ${last.reason} — retry in ${backoff}ms`,
+      );
+      await new Promise((r) => setTimeout(r, backoff));
+    }
+  }
+  return {
+    ...last!,
+    reason: `${last!.reason} (after ${MAX_ATTEMPTS} attempts)`,
+  };
+}
+
 export async function runAll(): Promise<HealthReport> {
   const results = await Promise.all([
-    pingPixabay(),
-    pingPexels(),
-    pingWordPress('WS'),
-    pingWordPress('TS'),
-    pingBlogger(),
-    pingClaudeCli(),
+    pingWithRetry('Pixabay', pingPixabay),
+    pingWithRetry('Pexels', pingPexels),
+    pingWithRetry('WP-WS', () => pingWordPress('WS')),
+    pingWithRetry('WP-TS', () => pingWordPress('TS')),
+    pingWithRetry('Blogger-AS', () => pingBlogger()),
+    pingWithRetry('claude-cli', pingClaudeCli),
   ]);
   return { allPassed: results.every(r => r.ok), results };
 }
