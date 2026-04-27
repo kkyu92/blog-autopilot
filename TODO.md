@@ -1,7 +1,7 @@
 # Content Autopilot — TODO
 
-> 마지막 점검: 2026-04-26 22:18 KST
-> 빌드: **FAIL** (Next.js app/ 제거 후 의존성 정리 필요) | 테스트: 228/228 PASS (+9) | Lint: 20 errors, 2 warnings
+> 마지막 점검: 2026-04-27 22:23 KST
+> 빌드: **FAIL** (Next.js app/ 제거 후 의존성 정리 필요) | 테스트: 304/304 PASS (+76) | Lint: 21 errors, 1 warning
 
 ---
 
@@ -25,31 +25,38 @@
 - [x] Writer SDK 호출 제거 (직접 글 작성, Max 구독)
 - [x] 삭제 시 외부 플랫폼 연동 삭제 + 확인 모달
 - [x] 콘텐츠 목록에 플랫폼 뱃지 + 외부 링크 표시
+- [x] `src/lib/llm.ts` require() → ES import 교체 완료 (3 errors 제거)
+- [x] `src/lib/llm.ts:25` 미사용 변수 `close` 제거 완료 (1 warning 제거)
+
+### 신규 기능 (2026-04-27)
+- [x] feat(healthcheck): pingWithRetry — transient 실패 자동 재시도 (3회, exponential backoff) (#29)
+- [x] feat(as): REAL_ESTATE_KEYWORDS 13개 보강 (정책브리핑 매칭 확대) (#28)
+- [x] feat(as): 5번째 source — google-news-market (시장/세금/정비사업 보완) (#30)
+- [x] docs: 발전 로드맵 ROADMAP.md 추가
 
 ---
 
-## 신규 발견 이슈 (2026-04-26)
+## 신규 발견 이슈 (2026-04-27)
 
-### 빌드 오류
-- [ ] **`pnpm build` FAIL** — Next.js가 `pages`/`app` 디렉토리를 찾지 못함. GUI 제거 후 Next.js 의존성 전체 정리 필요 (next, react, react-dom, shadcn 등 제거 또는 `package.json` build 스크립트 교체). PR1 커밋 메시지에서 "후속 PR"로 예고됨.
+### 빌드 오류 (미해결)
+- [ ] **`pnpm build` FAIL** — Next.js가 `pages`/`app` 디렉토리를 찾지 못함. GUI 제거 후 Next.js 의존성 전체 정리 필요 (next, react, react-dom, shadcn 등 제거 또는 `package.json` build 스크립트 교체).
 
-### Lint 에러 (20 errors, 2 warnings)
-- [ ] `src/lib/llm.ts:76-78` — `require()` 스타일 import 3개 → `import` 문으로 교체 (`@typescript-eslint/no-require-imports`)
-- [ ] `src/lib/__tests__/healthcheck.test.ts` — `any` 타입 12개 → 구체 타입 명시 (`@typescript-eslint/no-explicit-any`)
+### Lint 에러 (21 errors, 1 warning)
+- [ ] `src/lib/__tests__/healthcheck.test.ts` — `any` 타입 **16개** → 구체 타입 명시 (`@typescript-eslint/no-explicit-any`) — pingWithRetry 테스트 추가로 4개 신규 증가
 - [ ] `src/lib/__tests__/llm.test.ts` — `any` 타입 3개 → 구체 타입 명시
 - [ ] `src/lib/__tests__/trends.test.ts` — `any` 타입 2개 → 구체 타입 명시
 - [ ] `src/lib/blogger.ts:295` — 미사용 변수 `niche` (warning)
-- [ ] `src/lib/llm.ts:25` — 미사용 변수 `close` (warning)
+- [ ] `eslint-config-next` — "Pages directory cannot be found" 경고 발생 (CLI 전환 후 next 전용 lint 규칙 잔존, eslint-config-next → 범용 TS lint config 교체 필요)
 
 ---
 
 ## 다음 단계 (우선순위순)
 
 ### 즉시 (빌드/린트 복구)
-- [ ] Next.js 의존성 제거 — `next build` → CLI 전용 `package.json`으로 전환 (build 스크립트 삭제 또는 교체)
-- [ ] `src/lib/llm.ts` require() → ES import 교체 (lint 3 errors)
-- [ ] 테스트 파일 `any` 타입 명시화 (lint 17 errors)
-- [ ] `blogger.ts` `niche`, `llm.ts` `close` 미사용 변수 제거 (lint 2 warnings)
+- [ ] Next.js 의존성 제거 — `next build` → CLI 전용 `package.json`으로 전환 (build 스크립트 삭제 또는 `tsc --noEmit`으로 교체)
+- [ ] `eslint-config-next` → `@typescript-eslint/eslint-plugin` 등 범용 TS lint config으로 교체 (next 전용 규칙 제거)
+- [ ] 테스트 파일 `any` 타입 명시화 (lint 21 errors) — `as any` → `as ReturnType<typeof vi.fn>` 등 vitest 타입 활용
+- [ ] `blogger.ts` `niche` 미사용 변수 제거 (lint 1 warning)
 
 ### 즉시 (AdSense 승인 준비)
 - [ ] Blogger에 소개(About) 페이지 생성
