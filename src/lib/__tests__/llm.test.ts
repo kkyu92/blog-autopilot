@@ -173,4 +173,78 @@ describe('callClaude', () => {
     });
     await expect(callClaude({ systemPrompt: 'sys', userMessage: 'hi' })).rejects.toThrow('signal SIGTERM');
   });
+
+  it('expectJson + first attempt fails, second attempt succeeds → return valid JSON', async () => {
+    const { spawn } = await import('node:child_process');
+    const { callClaude } = await import('../llm');
+    let callIdx = 0;
+    (spawn as ReturnType<typeof vi.fn>).mockImplementation(() => {
+      callIdx++;
+      const stdout = callIdx === 1 ? 'not json' : '{"ok":true}';
+      return {
+        stdout: { on: (e: string, cb: (data: Buffer) => void) => { if (e === 'data') cb(Buffer.from(stdout)); } },
+        stderr: { on: vi.fn() },
+        on: (e: string, cb: (code: number) => void) => { if (e === 'close') cb(0); },
+      };
+    });
+    const result = await callClaude({ systemPrompt: 'sys', userMessage: 'hi', expectJson: true });
+    expect(result).toBe('{"ok":true}');
+    expect(callIdx).toBe(2);
+  });
+
+  it('expectJson + jsonRetries=0 → no retry, throw on first failure', async () => {
+    const { spawn } = await import('node:child_process');
+    const { callClaude } = await import('../llm');
+    let callIdx = 0;
+    (spawn as ReturnType<typeof vi.fn>).mockImplementation(() => {
+      callIdx++;
+      return {
+        stdout: { on: (e: string, cb: (data: Buffer) => void) => { if (e === 'data') cb(Buffer.from('not json')); } },
+        stderr: { on: vi.fn() },
+        on: (e: string, cb: (code: number) => void) => { if (e === 'close') cb(0); },
+      };
+    });
+    await expect(callClaude({ systemPrompt: 'sys', userMessage: 'hi', expectJson: true, jsonRetries: 0 })).rejects.toThrow('invalid JSON');
+    expect(callIdx).toBe(1);
+  });
+
+  it('expectJson + both attempts fail → throw with attempt count', async () => {
+    const { spawn } = await import('node:child_process');
+    const { callClaude } = await import('../llm');
+    let callIdx = 0;
+    (spawn as ReturnType<typeof vi.fn>).mockImplementation(() => {
+      callIdx++;
+      return {
+        stdout: { on: (e: string, cb: (data: Buffer) => void) => { if (e === 'data') cb(Buffer.from('not json')); } },
+        stderr: { on: vi.fn() },
+        on: (e: string, cb: (code: number) => void) => { if (e === 'close') cb(0); },
+      };
+    });
+    await expect(callClaude({ systemPrompt: 'sys', userMessage: 'hi', expectJson: true })).rejects.toThrow('attempt 2/2');
+    expect(callIdx).toBe(2);
+  });
+});
+
+describe('extractJson', () => {
+  it('strips code fence', async () => {
+    const { extractJson } = await import('../llm');
+    expect(extractJson('```json\n{"a":1}\n```')).toBe('{"a":1}');
+  });
+
+  it('throws when no JSON delimiter (LLM drift — content_html-only output)', async () => {
+    const { extractJson } = await import('../llm');
+    // 황사 케이스 시뮬레이션: { 또는 [ 가 전혀 없는 본문 단편
+    expect(() => extractJson('니다.\\" — 대한예방의학회 권고</blockquote>...')).toThrow('no JSON delimiter');
+  });
+
+  it('handles content_html with } inside escaped string (bracket-balanced walk)', async () => {
+    const { extractJson } = await import('../llm');
+    const input = '{"content_html":"<div style=\\"color:red\\">a}b</div>","ok":true}';
+    expect(extractJson(input)).toBe(input);
+  });
+
+  it('strips leading text before {', async () => {
+    const { extractJson } = await import('../llm');
+    expect(extractJson('Sure, here is the JSON: {"a":1}')).toBe('{"a":1}');
+  });
 });
