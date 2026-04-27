@@ -1,0 +1,50 @@
+name: CI Failure Dispatch
+
+# Test / 배포 워크플로 실패를 감지하여 허브로 dispatch.
+# `on.workflow_run` 이라 대상 워크플로 자체는 변경 없음 (DRY — 기존 CI workflow
+# 수정 금지).
+#
+# 감시 대상 (workflow `name:` 기준):
+# - "Test"        → .github/workflows/test.yml (단위 테스트)
+# - "CI — Test"   → .github/workflows/deploy.yml (배포/빌드 검증)
+# Auto-publish (cron) 실패는 별도 운영 신호이므로 여기서 감시하지 않음.
+
+on:
+  workflow_run:
+    workflows: ["Test", "CI — Test"]
+    types: [completed]
+
+jobs:
+  dispatch:
+    # 실패한 경우만. success/cancelled 는 조용히 무시.
+    if: github.event.workflow_run.conclusion == 'failure'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compose dispatch payload
+        uses: ./.github/actions/compose-dispatch-payload
+        with:
+          event_type: worker-incident
+          title: >-
+            CI 실패: ${{ github.event.workflow_run.head_branch }}
+            (${{ github.event.workflow_run.head_sha }})
+          body: |
+            **Workflow**: ${{ github.event.workflow_run.name }}
+            **Branch**: ${{ github.event.workflow_run.head_branch }}
+            **Commit**: ${{ github.event.workflow_run.head_sha }}
+            **Triggered by**: ${{ github.event.workflow_run.triggering_actor.login }}
+            **Attempt**: ${{ github.event.workflow_run.run_attempt }}
+            **Run URL**: ${{ github.event.workflow_run.html_url }}
+            **Conclusion**: ${{ github.event.workflow_run.conclusion }}
+
+            ---
+
+            _push/PR 에 CI 가 실패. 해당 run 로그에서 실패 step 확인 후 fix._
+          type: incident
+          severity: error
+          fingerprint_keys: >-
+            ci ${{ github.event.workflow_run.head_branch }} ${{ github.event.workflow_run.head_sha }}
+          environment: ci
+          run_url: ${{ github.event.workflow_run.html_url }}
+          playbook_pat: ${{ secrets.PLAYBOOK_PAT }}

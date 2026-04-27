@@ -1,0 +1,37 @@
+name: "📚 Submit Lesson to Playbook"
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  submit:
+    if: startsWith(github.event.head_commit.message, 'lesson:')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Extract lesson title & body
+        id: extract
+        env:
+          MSG: ${{ github.event.head_commit.message }}
+        run: |
+          TITLE=$(printf '%s' "$MSG" | head -1 | sed 's/^lesson:[[:space:]]*//')
+          echo "title=$TITLE" >> $GITHUB_OUTPUT
+          {
+            echo "body<<EOF_LESSON"
+            printf '%s' "$MSG" | tail -n +2
+            echo
+            echo "EOF_LESSON"
+          } >> $GITHUB_OUTPUT
+
+      - name: Dispatch lesson to playbook
+        env:
+          GH_TOKEN: ${{ secrets.PLAYBOOK_PAT }}
+          TITLE: ${{ steps.extract.outputs.title }}
+          BODY: ${{ steps.extract.outputs.body }}
+        run: |
+          gh api repos/kkyu92/playbook/dispatches \
+            -f event_type=worker-lesson \
+            -f "client_payload[source_repo]=${GITHUB_REPOSITORY}" \
+            -f "client_payload[title]=${TITLE}" \
+            -f "client_payload[body]=${BODY}" \
+            -f "client_payload[type]=lesson"
