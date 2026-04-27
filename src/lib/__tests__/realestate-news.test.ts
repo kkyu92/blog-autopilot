@@ -98,18 +98,19 @@ describe('aggregateAsSignals', () => {
     return { title, link: `https://example.com/${title}`, pubDate: t, source };
   }
 
-  it('aggregates all 4 sources in parallel', async () => {
+  it('aggregates all 5 sources in parallel', async () => {
     const result = await aggregateAsSignals({
       fetchers: {
         mk: async () => [makeSignal('mk-item-1', 1, 'mk')],
         hankyung: async () => [makeSignal('hankyung-item-1', 2, 'hankyung')],
         koreaPolicy: async () => [makeSignal('policy-item-1', 3, 'korea-policy')],
         googleNews: async () => [makeSignal('gnews-item-1', 4, 'google-news')],
+        googleNewsMarket: async () => [makeSignal('gnews-market-item-1', 5, 'google-news-market')],
       },
     });
-    expect(result).toHaveLength(4);
+    expect(result).toHaveLength(5);
     const sources = new Set(result.map((s) => s.source));
-    expect(sources).toEqual(new Set(['mk', 'hankyung', 'korea-policy', 'google-news']));
+    expect(sources).toEqual(new Set(['mk', 'hankyung', 'korea-policy', 'google-news', 'google-news-market']));
   });
 
   it('source 실패 시 graceful — 나머지 source 결과는 유지', async () => {
@@ -119,10 +120,11 @@ describe('aggregateAsSignals', () => {
         hankyung: async () => { throw new Error('hankyung down'); },
         koreaPolicy: async () => [makeSignal('policy-1', 2, 'korea-policy')],
         googleNews: async () => { throw new Error('gnews down'); },
+        googleNewsMarket: async () => [makeSignal('market-1', 3, 'google-news-market')],
       },
     });
-    expect(result).toHaveLength(2);
-    expect(result.map((s) => s.source).sort()).toEqual(['korea-policy', 'mk']);
+    expect(result).toHaveLength(3);
+    expect(result.map((s) => s.source).sort()).toEqual(['google-news-market', 'korea-policy', 'mk']);
   });
 
   it('windowHours 밖 항목은 제외', async () => {
@@ -137,6 +139,7 @@ describe('aggregateAsSignals', () => {
         hankyung: async () => [],
         koreaPolicy: async () => [],
         googleNews: async () => [],
+        googleNewsMarket: async () => [],
       },
     });
     expect(result).toHaveLength(1);
@@ -150,6 +153,7 @@ describe('aggregateAsSignals', () => {
         hankyung: async () => [makeSignal('LH  매입임대 공모', 2, 'hankyung')], // 공백 차이
         koreaPolicy: async () => [makeSignal('lh 매입임대 공모', 3, 'korea-policy')], // 대소문자 차이
         googleNews: async () => [makeSignal('전혀 다른 토픽', 4, 'google-news')],
+        googleNewsMarket: async () => [],
       },
     });
     expect(result).toHaveLength(2); // dedup 후 unique 2개
@@ -162,6 +166,7 @@ describe('aggregateAsSignals', () => {
         hankyung: async () => [makeSignal('newer', 1, 'hankyung')],
         koreaPolicy: async () => [makeSignal('middle', 5, 'korea-policy')],
         googleNews: async () => [],
+        googleNewsMarket: async () => [],
       },
     });
     expect(result.map((s) => s.title)).toEqual(['newer', 'middle', 'older']);
@@ -178,6 +183,7 @@ describe('aggregateAsSignals', () => {
         hankyung: async () => [],
         koreaPolicy: async () => [],
         googleNews: async () => [],
+        googleNewsMarket: async () => [],
       },
     });
     expect(result).toHaveLength(10);
@@ -190,6 +196,7 @@ describe('aggregateAsSignals', () => {
         hankyung: async () => { throw new Error('2'); },
         koreaPolicy: async () => { throw new Error('3'); },
         googleNews: async () => { throw new Error('4'); },
+        googleNewsMarket: async () => { throw new Error('5'); },
       },
     });
     expect(result).toEqual([]);
@@ -203,8 +210,27 @@ describe('aggregateAsSignals', () => {
         hankyung: async () => [],
         koreaPolicy: async () => [],
         googleNews: async () => [],
+        googleNewsMarket: async () => [],
       },
     });
     expect(result).toHaveLength(1);
+  });
+
+  it('google-news-market 단독 source 통합 — 시장 신호만 산출', async () => {
+    const result = await aggregateAsSignals({
+      fetchers: {
+        mk: async () => [],
+        hankyung: async () => [],
+        koreaPolicy: async () => [],
+        googleNews: async () => [],
+        googleNewsMarket: async () => [
+          makeSignal('실거래가 5월 평균 5% 상승', 1, 'google-news-market'),
+          makeSignal('재건축 안전진단 통과 단지', 2, 'google-news-market'),
+          makeSignal('양도세 세율 변경 임박', 3, 'google-news-market'),
+        ],
+      },
+    });
+    expect(result).toHaveLength(3);
+    expect(result.every((s) => s.source === 'google-news-market')).toBe(true);
   });
 });

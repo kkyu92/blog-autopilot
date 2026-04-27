@@ -1,7 +1,13 @@
-// AS (부동산·청약) niche 전용 트렌드 source 4종 통합.
+// AS (부동산·청약) niche 전용 트렌드 source 5종 통합.
 // LLM trend-hunter 가 evergreen 머릿속 generate에 의존하지 않고 fresh raw signal에서
 // 직접 키워드 추출하도록 데이터를 공급. 9개 AS 카테고리 (청약·매매·정책·세금·재건축·
 // 신도시·임대차·투자·인테리어) 균형 분포 가능하도록 source 다양성 확보.
+//
+// Source 별 신호 특성:
+// - mk / hankyung: 부동산 면 기사 (commentary + 시장 동향)
+// - korea-policy: 정부 정책 발표 (정책브리핑 RSS, 부동산 키워드 필터)
+// - google-news (institutional): LH/SH/GH/HUG + 청약·분양 (공기업 발표 + 청약 일정)
+// - google-news-market: 실거래가·시세·재건축·세금 (시장/세금/정비사업 — institutional 미커버 보완)
 
 import { extractTag, decodeHtmlEntities } from './trends';
 
@@ -9,7 +15,7 @@ export interface RealEstateSignal {
   title: string;
   link: string;
   pubDate: string; // ISO or RFC822
-  source: 'mk' | 'hankyung' | 'korea-policy' | 'google-news';
+  source: 'mk' | 'hankyung' | 'korea-policy' | 'google-news' | 'google-news-market';
 }
 
 const FETCH_TIMEOUT_MS = 8000;
@@ -18,8 +24,10 @@ const FEEDS = {
   mk: 'https://www.mk.co.kr/rss/50300009/',
   hankyung: 'https://www.hankyung.com/feed/realestate',
   koreaPolicy: 'https://www.korea.kr/rss/policy.xml',
-  // LH/SH/GH/HUG 발표 + 청약·분양 일정 종합 (broad query)
+  // LH/SH/GH/HUG 발표 + 청약·분양 일정 종합 (broad query — institutional)
   googleNews: `https://news.google.com/rss/search?q=${encodeURIComponent('LH OR SH OR GH OR HUG OR 청약 OR 분양')}&hl=ko&gl=KR&ceid=KR:ko`,
+  // 시장/세금/정비사업 (institutional 미커버 영역 — 매매·실거래·재건축·세금)
+  googleNewsMarket: `https://news.google.com/rss/search?q=${encodeURIComponent('실거래가 OR 시세 OR 재건축 OR 재개발 OR 양도세 OR 종부세')}&hl=ko&gl=KR&ceid=KR:ko`,
 };
 
 // 정책브리핑 RSS 는 전부처 정책 모두 포함 → 부동산 관련 항목만 필터.
@@ -105,6 +113,11 @@ export async function fetchInstitutionalNews(): Promise<RealEstateSignal[]> {
   return parseSimpleRss(xml).map((it) => ({ ...it, source: 'google-news' as const }));
 }
 
+export async function fetchMarketNews(): Promise<RealEstateSignal[]> {
+  const xml = await fetchRss(FEEDS.googleNewsMarket);
+  return parseSimpleRss(xml).map((it) => ({ ...it, source: 'google-news-market' as const }));
+}
+
 export interface AggregateAsOptions {
   windowHours?: number;
   maxItems?: number;
@@ -114,6 +127,7 @@ export interface AggregateAsOptions {
     hankyung?: () => Promise<RealEstateSignal[]>;
     koreaPolicy?: () => Promise<RealEstateSignal[]>;
     googleNews?: () => Promise<RealEstateSignal[]>;
+    googleNewsMarket?: () => Promise<RealEstateSignal[]>;
   };
 }
 
@@ -126,6 +140,7 @@ export async function aggregateAsSignals(
     hankyung: opts.fetchers?.hankyung ?? fetchHankyungRealEstate,
     koreaPolicy: opts.fetchers?.koreaPolicy ?? fetchKoreaPolicy,
     googleNews: opts.fetchers?.googleNews ?? fetchInstitutionalNews,
+    googleNewsMarket: opts.fetchers?.googleNewsMarket ?? fetchMarketNews,
   };
 
   // Parallel fetch — single source 실패해도 나머지는 산출
@@ -134,6 +149,7 @@ export async function aggregateAsSignals(
     fetchers.hankyung(),
     fetchers.koreaPolicy(),
     fetchers.googleNews(),
+    fetchers.googleNewsMarket(),
   ]);
 
   const all: RealEstateSignal[] = [];
