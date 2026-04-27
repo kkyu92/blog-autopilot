@@ -16,3 +16,4 @@ data/
 *.db-wal
 *.db-shm
 .gstack/
+HANDOFF_SNAPSHOT.md
