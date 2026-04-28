@@ -55,10 +55,21 @@ export async function review(input: EditorReviewInput): Promise<EditorReviewResu
   let modifiedHtml: string | undefined;
 
   if (niche === 'WS' || niche === 'AS') {
-    const fc = await factcheck({ niche, draft });
     // factcheck를 hard reject로 사용하지 않음. 운영 데이터 누적 전엔 학술 수준 출처(DOI/저널/URL) 강제는
     // 비현실적 (LLM이 매번 fail). 일단 console.warn 으로 logging + disclaimer만 적용. score deduction은
     // LLM editor의 quality_score에 위임. 운영 1주 후 정책 재검토.
+    //
+    // 4/28 cron 25010381167 사고: factcheck 내부 callClaude (claude CLI) 가 응답 없이 무한 hang →
+    // editor.review() 도 await 무한 대기 → 슬롯 단위 격리 안 됨, 전체 cron 점유.
+    // soft-warn 정책의 자연스러운 연장: factcheck timeout/error도 soft-degrade (skip + 진행).
+    let fc: Awaited<ReturnType<typeof factcheck>>;
+    try {
+      fc = await factcheck({ niche, draft });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(`[editor] factcheck threw (soft-degrade for ${niche}): ${msg}`);
+      fc = { verdict: 'skipped' };
+    }
     if (fc.verdict === 'needs_revision') {
       const fcDescriptions = fc.issues?.map((i) => i.description).join('; ') ?? 'factcheck 실패';
       console.warn(`[editor] factcheck soft-warn for ${niche} (no hard reject): ${fcDescriptions}`);

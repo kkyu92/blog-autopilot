@@ -14,7 +14,17 @@ export interface CallClaudeOptions {
    * 비결정적 drift이므로 1회 retry가 효과적.
    */
   jsonRetries?: number;
+  /**
+   * spawn된 claude CLI 응답 timeout (ms). default 600_000 (10분).
+   * 4/28 cron 25010381167 fact-checker 무한 hang 사고: claude CLI 응답이 안 와도 child가
+   * close 이벤트를 영영 안 보내서 await 무한 대기 → runner 점유. 다음 cron 차단.
+   * timeout 시 SIGTERM, 5초 후 안 죽으면 SIGKILL.
+   */
+  timeoutMs?: number;
 }
+
+const DEFAULT_TIMEOUT_MS = 600_000;
+const FORCE_KILL_GRACE_MS = 5_000;
 
 const JSON_GUARD = '\n\n---\n\nCRITICAL: Your response MUST be valid JSON only — no markdown headers, no preamble, no closing remarks, no code fences. Reply with the raw JSON object or array as the entire response. Start your response with `{` or `[` immediately.';
 
@@ -65,6 +75,7 @@ function dumpBadOutput(stdout: string): string | null {
 function spawnClaudeOnce(opts: CallClaudeOptions): Promise<{ stdout: string; stderr: string; code: number | null; signal: NodeJS.Signals | null }> {
   const model = opts.model ?? 'sonnet';
   const systemPrompt = opts.expectJson ? opts.systemPrompt + JSON_GUARD : opts.systemPrompt;
+  const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   return new Promise((resolve, reject) => {
     const child = spawn(
       'claude',
@@ -79,14 +90,37 @@ function spawnClaudeOnce(opts: CallClaudeOptions): Promise<{ stdout: string; std
     );
     const stdoutChunks: Buffer[] = [];
     const stderrChunks: Buffer[] = [];
+    let settled = false;
+    let forceKillTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const timeoutTimer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      try { child.kill('SIGTERM'); } catch { /* child already dead */ }
+      forceKillTimer = setTimeout(() => {
+        try { child.kill('SIGKILL'); } catch { /* dead */ }
+      }, FORCE_KILL_GRACE_MS);
+      reject(new Error(`claude CLI timeout after ${timeoutMs}ms (SIGTERM sent)`));
+    }, timeoutMs);
+
     child.stdout.on('data', (chunk: Buffer) => { stdoutChunks.push(chunk); });
     child.stderr.on('data', (chunk: Buffer) => { stderrChunks.push(chunk); });
     child.on('close', (code, signal) => {
+      clearTimeout(timeoutTimer);
+      if (forceKillTimer) clearTimeout(forceKillTimer);
+      if (settled) return;
+      settled = true;
       const stdout = Buffer.concat(stdoutChunks).toString('utf8').trim();
       const stderr = Buffer.concat(stderrChunks).toString('utf8');
       resolve({ stdout, stderr, code, signal });
     });
-    child.on('error', reject);
+    child.on('error', (err) => {
+      clearTimeout(timeoutTimer);
+      if (forceKillTimer) clearTimeout(forceKillTimer);
+      if (settled) return;
+      settled = true;
+      reject(err);
+    });
   });
 }
 

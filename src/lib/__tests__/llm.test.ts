@@ -223,6 +223,72 @@ describe('callClaude', () => {
     await expect(callClaude({ systemPrompt: 'sys', userMessage: 'hi', expectJson: true })).rejects.toThrow('attempt 2/2');
     expect(callIdx).toBe(2);
   });
+
+  // 4/28 cron 25010381167 regression: claude CLI 응답 없이 무한 hang → spawn timeout 추가
+  it('child가 close 이벤트 안 보내면 timeoutMs 후 SIGTERM kill + reject', async () => {
+    vi.useFakeTimers();
+    const { spawn } = await import('node:child_process');
+    const { callClaude } = await import('../llm');
+    const killSpy = vi.fn();
+    // close 이벤트를 절대 emit 안 하는 stuck child
+    (spawn as ReturnType<typeof vi.fn>).mockReturnValue({
+      stdout: { on: vi.fn() },
+      stderr: { on: vi.fn() },
+      on: vi.fn(), // close/error 콜백 등록만 받고 emit 안 함
+      kill: killSpy,
+    });
+
+    const promise = callClaude({ systemPrompt: 'sys', userMessage: 'hi', timeoutMs: 1000 });
+    // unhandled rejection 방지: 즉시 catch 핸들러 attach
+    const rejected = expect(promise).rejects.toThrow('timeout after 1000ms');
+    await vi.advanceTimersByTimeAsync(1100);
+    await rejected;
+    expect(killSpy).toHaveBeenCalledWith('SIGTERM');
+    vi.useRealTimers();
+  });
+
+  it('timeout 후 5초 내 child 안 죽으면 SIGKILL escalate', async () => {
+    vi.useFakeTimers();
+    const { spawn } = await import('node:child_process');
+    const { callClaude } = await import('../llm');
+    const killSpy = vi.fn();
+    (spawn as ReturnType<typeof vi.fn>).mockReturnValue({
+      stdout: { on: vi.fn() },
+      stderr: { on: vi.fn() },
+      on: vi.fn(),
+      kill: killSpy,
+    });
+
+    const promise = callClaude({ systemPrompt: 'sys', userMessage: 'hi', timeoutMs: 100 });
+    const rejected = expect(promise).rejects.toThrow();
+    await vi.advanceTimersByTimeAsync(150); // SIGTERM
+    await rejected;
+    expect(killSpy).toHaveBeenNthCalledWith(1, 'SIGTERM');
+    await vi.advanceTimersByTimeAsync(5100); // SIGKILL grace 경과
+    expect(killSpy).toHaveBeenNthCalledWith(2, 'SIGKILL');
+    vi.useRealTimers();
+  });
+
+  it('정상 close 응답 시 timeout 안 발동, kill 호출 X', async () => {
+    vi.useFakeTimers();
+    const { spawn } = await import('node:child_process');
+    const { callClaude } = await import('../llm');
+    const killSpy = vi.fn();
+    (spawn as ReturnType<typeof vi.fn>).mockReturnValue({
+      stdout: { on: (e: string, cb: (data: Buffer) => void) => { if (e === 'data') cb(Buffer.from('ok')); } },
+      stderr: { on: vi.fn() },
+      on: (e: string, cb: (code: number) => void) => { if (e === 'close') cb(0); },
+      kill: killSpy,
+    });
+    const result = await callClaude({ systemPrompt: 'sys', userMessage: 'hi', timeoutMs: 5000 });
+    expect(result).toBe('ok');
+    // timeout 안 지났는데 진행 — kill 호출 X
+    expect(killSpy).not.toHaveBeenCalled();
+    // timer는 cleared 됐어야 — advance 해도 추가 reject 없음
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(killSpy).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
 });
 
 describe('extractJson', () => {

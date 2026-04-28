@@ -336,4 +336,26 @@ describe('editor.review', () => {
     expect(result.final_html).toBe(finalHtml);
     expect(result.final_meta).toEqual(finalMeta);
   });
+
+  // 4/28 cron 25010381167 regression: factcheck 내부 claude CLI 가 무한 hang →
+  // editor.review() 도 무한 hang. soft-degrade 정책 확장: factcheck throw도 review 진행 차단 X.
+  it('factcheck throw (claude CLI timeout 등) → soft-degrade, review 정상 진행', async () => {
+    const { callClaude } = await import('../llm');
+    const { factcheck } = await import('../factcheck');
+    vi.mocked(callClaude).mockResolvedValue(
+      JSON.stringify({
+        status: 'approved',
+        quality_score: 88,
+        final_html: '<p>polished</p>',
+        final_meta: { title: 't', meta_description: 'd', slug: 's', labels: ['l'] },
+      }),
+    );
+    vi.mocked(factcheck).mockRejectedValue(new Error('claude CLI timeout after 600000ms'));
+
+    const { review } = await import('../editor');
+    const result = await review({ draft: validDraft(), niche: 'AS' });
+
+    expect(result.verdict).toBe('pass');
+    expect(result.score).toBe(88);
+  });
 });
