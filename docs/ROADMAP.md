@@ -22,8 +22,8 @@
 | 항목 | 우선순위 | 사유 |
 |---|---|---|
 | 1주 관찰 (4/28~5/4) | P0 | 자동, 별도 작업 없음. fail율/silent fail/pmset wake 데이터 누적 |
-| WP OAuth 자동 갱신 | P0 | 5/10~5/26 만료 임박. 수동 갱신은 cron miss 위험 |
-| claude CLI 토큰 monitoring | P0 | Max 토큰 만료 주기 미상, 만료 시 healthcheck FAIL → cron skip |
+| ~~WP OAuth 자동 갱신~~ | ~~P0~~ | **취소** — "5/10~5/26 만료" 전제 자체가 환상 (이전 세션 추정). WP.com global scope OAuth는 사실상 영구 토큰 (4/28 검증). spec deferred 참조 |
+| Token health monitor (4 토큰) | P2-deferred | 1주 관찰 (5/4) 데이터 보고 silent fail 위험 실재 시 진행. spec: `docs/superpowers/specs/2026-04-28-token-health-monitor-design.md` (DEFERRED) |
 | C6 큐 재보충 (dedup skip 5건 시 추가 fetch) | P1 | 1주 관찰 후 dedup skip 빈도로 결정 |
 | Phase 1.5 검토 회고 | P1 | 5/4 데이터 보고 C6/C7 우선순위 + Phase 2 첫 항목 결정 |
 
@@ -121,8 +121,8 @@
 
 1. (자동) 4/28 01:17 KST cron 모니터 — P3 통합 첫 자연 운영
 2. (능동) 4/28 11:12 KST hub Daily Ingest 모니터 — Push 축 자연 검증
-3. WP OAuth 자동 갱신 PR — 만료 임박 (5/10~), 1~2일 작업
-4. claude CLI 토큰 monitoring — healthcheck retry와 별개로 만료 사전 알림
+3. ~~WP OAuth 자동 갱신 PR~~ — **취소** (4/28 brainstorming 검증: WP.com OAuth 사실상 영구. App Password는 REST v1.1에 부적용. 자동 갱신 자체가 기술적 불가능)
+4. ~~claude CLI 토큰 monitoring~~ — **deferred** (Token health monitor 통합 spec으로 흡수, 5/4 후 진행 결정)
 5. 1주 데이터 수집 스크립트 — fail율 / silent fail / dedup skip 빈도 자동 집계
 
 ---
@@ -135,9 +135,10 @@
 ├── fail율 > 30%               →  C7 trend subsystem 우선 (다양성 보강)
 └── silent fail 발생           →  reconciliation 우선 + 알림 보강
 
-토큰 만료 (5/10~5/26)
-├── 자동 갱신 작동             →  계속 유지
-└── 자동 갱신 실패             →  롤백 + 수동 갱신 절차 정리 + lesson 박제
+토큰 health (5/4 1주 관찰 데이터)
+├── silent fail 0건            →  Token health monitor deferred 유지 (만들지 않음)
+├── silent fail 1~2건          →  Tier 0 monitoring (감지 + 알림 + runbook) 진행
+└── silent fail 3건+           →  Tier 0 + 발행 fail 알림 강화
 
 AdSense 수익 (Phase 3, 7월)
 ├── 수익 > 비용 × 2            →  Phase 4 확장 (새 niche/워커)
@@ -151,7 +152,7 @@ AdSense 수익 (Phase 3, 7월)
 
 ```
 4/28 ─── 5/4    Phase 1.5 안정화 + 1주 관찰
-5/4  ─── 5/11   1주 회고 + 우선순위 재조정 + 토큰 자동 갱신
+5/4  ─── 5/11   1주 회고 + 우선순위 재조정 (Token monitor 진행 여부도 이때 결정)
 5/12 ─── 6/30   Phase 2 운영 자동화
 7/1  ─── 8/31   Phase 3 품질/SEO/수익
 9/1  ─── ...    Phase 4 확장
