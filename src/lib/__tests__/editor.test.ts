@@ -358,4 +358,50 @@ describe('editor.review', () => {
     expect(result.verdict).toBe('pass');
     expect(result.score).toBe(88);
   });
+
+  // 4/28 사고 — post 30 "장기안심주택 ... 2025" 발행 회귀.
+  // title 에 outdated year 박혀있으면 hard reject (writer retry 유도).
+  it('title에 outdated year (current 미만) → verdict revision_needed + feedback에 연도 언급', async () => {
+    const { callClaude } = await import('../llm');
+    const { factcheck } = await import('../factcheck');
+    vi.mocked(callClaude).mockResolvedValue(
+      JSON.stringify({
+        status: 'approved',
+        quality_score: 88,
+        final_html: '<p>polished</p>',
+        final_meta: { title: 't', meta_description: 'd', slug: 's', labels: ['l'] },
+      }),
+    );
+    vi.mocked(factcheck).mockResolvedValue({ verdict: 'pass' });
+
+    const { review } = await import('../editor');
+    // findOutdatedYearInTitle regex 가 (20\d{2}) 매치 — 2024 는 current(2026+) 미만이라 outdated
+    const draft = { ...validDraft(), title: '서울 장기안심주택 보증금 지원 신청 방법 완벽 가이드 2024' };
+    const result = await review({ draft, niche: 'AS' });
+
+    expect(result.verdict).toBe('revision_needed');
+    expect(result.feedback).toContain('2024');
+    expect(result.feedback).toMatch(/outdated/i);
+  });
+
+  it('title에 future year (예약·일정 토픽) → outdated 검증 통과', async () => {
+    const { callClaude } = await import('../llm');
+    const { factcheck } = await import('../factcheck');
+    vi.mocked(callClaude).mockResolvedValue(
+      JSON.stringify({
+        status: 'approved',
+        quality_score: 88,
+        final_html: '<p>polished</p>',
+        final_meta: { title: 't', meta_description: 'd', slug: 's', labels: ['l'] },
+      }),
+    );
+    vi.mocked(factcheck).mockResolvedValue({ verdict: 'pass' });
+
+    const { review } = await import('../editor');
+    // future year (2099) — outdated 아님, 통과
+    const draft = { ...validDraft(), title: '청약 일정 미리보기 2099' };
+    const result = await review({ draft, niche: 'AS' });
+
+    expect(result.verdict).toBe('pass');
+  });
 });

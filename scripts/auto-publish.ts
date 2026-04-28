@@ -17,6 +17,7 @@ import { pickQueue, type KeywordCandidate } from '../src/lib/trends';
 import { checkAndResolve, type DedupResult } from '../src/lib/dedup';
 import { getDb } from '../src/lib/db';
 import { callClaude } from '../src/lib/llm';
+import { buildCurrentDateHeader } from '../src/lib/current-date';
 import { review, type EditorReviewResult } from '../src/lib/editor';
 import { fetchForSlots, type ImageResult } from '../src/lib/images';
 import { publishScheduled as wpPublish } from '../src/lib/wordpress';
@@ -235,7 +236,7 @@ async function writeAndReview(
     });
 
     const writerOutput = await callClaude({
-      systemPrompt: WRITER_PROMPT,
+      systemPrompt: buildCurrentDateHeader() + WRITER_PROMPT,
       userMessage,
       expectJson: true,
     });

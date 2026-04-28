@@ -1,5 +1,6 @@
 import { callClaude } from './llm';
 import { factcheck } from './factcheck';
+import { buildCurrentDateHeader, findOutdatedYearInTitle, getCurrentDate } from './current-date';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -49,6 +50,17 @@ export async function review(input: EditorReviewInput): Promise<EditorReviewResu
   if (!draft.image_slots || draft.image_slots.length < 2) {
     issues.push('image_slots 최소 2개 필요 (현재 부족)');
   }
+  // Step 1b: Outdated year guard (4/28 사고 회귀 — post 30 "장기안심주택 ... 2025" 발행).
+  // title 에 current_year 미만 연도 박혀있으면 hard reject. soft-warn 정책의 예외.
+  // 외부 노출 (Blogger URL slug 까지 영향) + outdated 신뢰성 손실이 disclaimer로 cover 안 됨.
+  const { year: currentYear } = getCurrentDate();
+  const outdatedYear = findOutdatedYearInTitle(draft.title, currentYear);
+  if (outdatedYear !== null) {
+    issues.push(
+      `title outdated year: ${outdatedYear} (현재 연도: ${currentYear}). evergreen이면 연도 빼고, ` +
+        `시의성 강한 토픽이면 ${currentYear}로 변경.`,
+    );
+  }
 
   // Step 2: YMYL factcheck (WS/AS niche only)
   let disclaimerInserted = false;
@@ -83,7 +95,7 @@ export async function review(input: EditorReviewInput): Promise<EditorReviewResu
 
   // Step 3: LLM qualitative review (tone, structure, CTA)
   const raw = await callClaude({
-    systemPrompt: PROMPT,
+    systemPrompt: buildCurrentDateHeader() + PROMPT,
     userMessage: JSON.stringify(draft),
     expectJson: true,
   });

@@ -1,4 +1,5 @@
 import { callClaude } from './llm';
+import { buildCurrentDateHeader } from './current-date';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -35,7 +36,7 @@ export async function factcheck(input: FactCheckInput): Promise<FactCheckResult>
   });
 
   const raw = await callClaude({
-    systemPrompt: PROMPT,
+    systemPrompt: buildCurrentDateHeader() + PROMPT,
     userMessage,
     expectJson: true,
   });
