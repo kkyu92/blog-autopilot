@@ -25,52 +25,64 @@
 
 ---
 
-## 1. 점검 영역 4개 (CEO 리뷰 — SELECTIVE EXPANSION 반영)
+## 1. 점검 영역 4개 (CEO 리뷰 + Outside Voice 반영)
 
-| 영역 | 차원 | 측정 항목 |
-|---|---|---|
-| **A. 메인 — 발행 안정성** | 시스템 신호 | 9 슬롯 일별 cover율 (최근 14일), 실패 패턴 분류 (silent fail / queue exhausted / auto-discard), outdated 연도 차단율, semantic-dedup 적중률, **WordPress 채널 cover율 (보조 1줄)** |
-| **B. 메인 — 트래픽·수익** | 사용자 입력 + 코드 분석 | GSC 노출/클릭/색인된 페이지 수, Blogger 방문자/페이지뷰, 애드센스 연결 상태 + 수익 + RPM, sitemap 등록 상태, **AdSense 승인 차단 status (About/Privacy/Contact 페이지 존재 + 글 누적 수 + 콘솔 신청 단계)**, **VISION.md 4단계 매핑 (승인/$10/$100/$500+ 중 현재 위치)** |
-| **C. 서브 — 양방향 자동화** | 코드/git/gh 분석 | playbook#58 워커 4차원 측정 재사용 + 14일 윈도우 갱신분, 후속 박제 3건 진입 가능성 평가 (sync receiver / refactor 사이클 / self_report 박제) |
-| **D. 시스템 안정성·블로커** | 코드/gh 분석 | cron success rate (최근 14일), runner SPOF, claude CLI Max 만료 영향, queue depth, blogger 신규 도메인 신뢰도, 옛 부동산 9개 cannibalization, **pnpm build 결과 (TODO.md 빌드 FAIL 검증)**, **pnpm lint 결과 (21 errors 잔존 확인)** |
+| 영역 | 차원 | **자동 측정 가능** | **수동/추정 (구조화 측정 부재)** |
+|---|---|---|---|
+| **A. 메인 — 발행 안정성** | 시스템 신호 | `data/blog.db` published_posts 27건 baseline, 일별 cover율 (publishedAt + platform 분해), platform별 cover율 (`wordpress_ws / wordpress_ts / blogger_as`) | outdated 연도 차단율 / semantic-dedup 적중률 / queue depth / failure pattern 분류 (auto-publish.ts console.log만 — 정량 측정 불가, "관찰 부재" 갭으로 박제) |
+| **B. 메인 — 트래픽·수익** | 사용자 입력 + 코드 분석 | `published_posts` 누적 수 (27 vs VISION 글 15~20 조건), Blogger sitemap 등록 상태 | GSC 노출/클릭/색인 (사용자), Blogger 방문자/페이지뷰 (사용자), 애드센스 연결 상태·수익·RPM (사용자), AdSense 승인 차단 status (About/Privacy/Contact + 콘솔 단계, 사용자), **VISION.md 4단계 매핑 (자동 — 위 데이터로 종합)** |
+| **C. 서브 — 양방향 자동화** | 코드/git/gh 분석 | playbook#58 4차원 self-report 인용 + 4/22~4/28 14일 갱신 (gh PR/Issue/dispatch 카운트), 후속 박제 3건 진입 가능성 | (없음) |
+| **D. 시스템 안정성·블로커** | 코드/gh 분석 | cron success rate (gh run list), `pnpm build` / `pnpm lint` 실행 결과 vs TODO.md, blogger 도메인 신뢰도 (sitemap 색인 비율), 옛 부동산 9개 cannibalization (GSC top queries 분석) | runner SPOF (사용자 PM2 상태), claude CLI Max 만료 (사용자 토큰 상태) |
 
 ---
 
-## 2. 데이터 소스 매핑
+## 2. 데이터 소스 매핑 (Outside Voice 정정 완료)
+
+> **코드 검증 결과 (codex)**: 실제 운영 DB는 `data/blog.db` (publishedPosts 27건, schema는 `src/lib/schema.ts:4`), `data/content.db`(192KB, last 4/18)는 stale. WP/Blogger cover율은 `published_posts.platform` enum (`wordpress_ws / wordpress_ts / blogger_as`)으로 분해. `gh run list`는 단일 `auto-publish.yml`로 WS/TS/AS 모두 돌아 채널 분리 불가.
 
 | 측정 항목 | 소스 | 자동/수동 |
 |---|---|---|
-| 발행 cover율, 실패 패턴 | `gh run list` + GitHub Issues + DB(`data/content.db`, SQLite + Drizzle) | 자동 |
-| outdated/dedup 적중 | `git log` + 프롬프트 코드 inventory + auto-discard 카운트 (gh issues) | 자동 |
+| 발행 누적 / 채널별 cover율 / 일별 분포 | `data/blog.db` `published_posts` (sqlite3 query, `niche` + `platform` + `publishedAt`) | 자동 |
+| 실패 패턴 (failure_reason 분류) | `data/blog.db` `published_posts WHERE status='failed'` + GitHub Issues (auto-discard / queue-exhausted / silent-fail 라벨) | 자동 (DB 측), 일부 갭 (질적 분류는 console.log only) |
+| **outdated / dedup / queue / failure pattern 정량 측정** | ❌ 부재 (auto-publish.ts:142,166,183,420,854 console.log만, DB 저장 안 됨) | **갭으로 박제 — logging instrumentation 별도 spec 후보** |
 | 양방향 채널 (서브) | playbook#58 본문 인용 + 14일 갱신분 (gh PR/Issue/dispatch 카운트) | 자동 |
-| cron success | `gh run list --workflow=...` | 자동 |
+| cron success | `gh run list --workflow=auto-publish.yml` | 자동 |
 | **빌드/Lint 상태** (cherry-pick #3) | `pnpm build` + `pnpm lint` 실행 결과 vs TODO.md 기록 | 자동 |
-| **About/Privacy/Contact 페이지** (cherry-pick #1) | Blogger admin URL inventory 또는 `gh api` (사이트맵 cross-check) | 사용자 1회 확인 |
-| **글 누적 수** (cherry-pick #1) | DB `contents WHERE status='published'` count + Blogger sitemap | 자동 |
-| **AdSense 승인 단계** (cherry-pick #1) | 사용자 콘솔 screenshot 또는 단계명 (미신청/심사중/거절/승인) | 사용자 batch 입력 |
-| **VISION.md 4단계 위치** (cherry-pick #2) | 종합 분석 — 글 수·트래픽·수익으로 매핑 | 자동 (위 데이터 활용) |
+| **About/Privacy/Contact 페이지** (cherry-pick #1) | Blogger admin URL inventory + sitemap cross-check | 사용자 1회 확인 |
+| **글 누적 수** (cherry-pick #1) | `data/blog.db` `published_posts` count (현재 27) + Blogger sitemap (Blogger 채널만) | 자동 |
+| **AdSense 승인 단계** (cherry-pick #1) | 사용자 콘솔 단계명 (미신청/심사중/거절/승인) | 사용자 batch 입력 |
+| **VISION.md 4단계 위치** (cherry-pick #2) | 종합 분석 — 글 누적·트래픽·수익으로 매핑 (자동 데이터 활용) | 자동 |
 | **GSC**: 노출, 클릭, 평균 CTR, 색인된 페이지 수, 검색 쿼리 top 5 | search.google.com/search-console 콘솔 | 사용자 batch 입력 |
 | **Blogger**: 7일/14일 페이지뷰, 인기 게시물 top 5, 트래픽 소스 분포 | Blogger admin → Stats | 사용자 batch 입력 |
 | **애드센스**: 연결 상태, 7일/14일 수익 ($), RPM, 클릭률 | google.com/adsense | 사용자 batch 입력 |
-| **WordPress 채널 cover율** (자동 추가) | `gh run list` WP 발행 workflow 결과 | 자동 |
 
 ---
 
-## 3. 실행 방식
+## 3. 실행 방식 (Outside Voice 단순화 — subagent 3개 → 단일 분석)
+
+> **codex 권고**: "병목은 분석 인력이 아니라 계측 부재와 소스 불일치." subagent 병렬 dispatch는 메트릭이 충분할 때 의미. 지금은 단일 분석 + 정확한 source-of-truth가 우선.
 
 ```
+Step 0. Source-of-truth 정정 (5분, 점검 결과 박제 전 필수)
+  - data/content.db (stale) 처분 결정
+  - smoke-test.md cron 시간 정정 (UTC 16:17 / KST 01:17이 truth)
+  - scripts/backup-db.mjs `content.db` → `blog.db` 정정 여부 결정 (실행은 점검 후)
+
 Step 1. 사용자 콘솔 수치 batch 입력 (1회, ~10분)
-Step 2. 병렬 dispatch — subagent 3개:
-  - subagent A+D: 발행 안정성 + 시스템 안정성 (gh + DB + git)
-  - subagent C: 양방향 자동화 (#58 인용 + 갱신분)
-  - subagent B: 트래픽/수익 (사용자 수치 + 코드 흐름 종합)
-Step 3. 종합 (메인 Claude):
-  - 갭 도출 (최종완료까지 거리)
-  - Risk 분류 (블로커 / 모니터링 / 기각)
-  - 다음 1~2달 우선순위
-```
+  - GSC + Blogger Stats + AdSense 콘솔 + AdSense 승인 단계 + About/Privacy/Contact 존재
 
-**효율 도구**: `superpowers:dispatching-parallel-agents` 스킬 활용.
+Step 2. 단일 분석 (메인 Claude, ~15분):
+  - 영역 A: data/blog.db published_posts query + gh run list (auto-publish.yml)
+  - 영역 B: 사용자 수치 + DB 글 누적 + VISION 4단계 매핑
+  - 영역 C: playbook#58 인용 + 14일 갱신
+  - 영역 D: pnpm build / lint + cron success rate
+
+Step 3. 종합:
+  - 갭 도출 (최종완료까지 거리, 정량 + 정성)
+  - Risk 분류 (블로커 / 모니터링 / 기각)
+  - 다음 1~2달 우선순위 (TODO.md / ROADMAP.md cross-reference)
+  - 측정 부재 항목 → logging instrumentation spec 후보로 박제
+```
 
 ---
 
@@ -88,12 +100,14 @@ Step 3. 종합 (메인 Claude):
 
 ---
 
-## 5. 측정 윈도우 (CEO 리뷰 갱신)
+## 5. 측정 윈도우 (Outside Voice — sequencing 분리)
+
+> **codex 권고**: "forward window를 같은 mid-review에 넣으면 산출물이 5/4까지 미완성." 분리 적용.
 
 - **현재 스냅샷**: 2026-04-28 시점 (모든 수치 현재 콘솔 값)
-- **Backward 활동 윈도우**: 2026-04-14 ~ 2026-04-28 (14일) — playbook#58은 7일이라 14일 윈도우면 새 신호
-- **Forward 관찰 윈도우**: 2026-04-29 ~ 2026-05-04 (1주) — 자연 cron 관찰. 5/4 week1-observation routine과 결합
-- **베이스라인**: 첫 점검이라 비교 X. 다음 점검(5/4 week1-observation 또는 별도 사이클)부터 비교 가능. **이번 점검 결과는 mid-review v0 baseline — 다음 사이클 자동 비교 대상**
+- **Backward 활동 윈도우**: 2026-04-14 ~ 2026-04-28 (14일) — playbook#58은 7일이라 14일이면 새 신호
+- **Forward 관찰 윈도우**: ❌ **이번 mid-review에서 제외** — 4/29~5/4 자연 cron 관찰은 **5/4 week1-observation routine 단독**으로 박제. mid-review는 4/28 스냅샷에 한정해서 즉시 종결
+- **베이스라인**: 첫 점검이라 비교 X. 다음 점검(별도 사이클)부터 비교 가능. **이번 점검 결과는 mid-review v0 baseline — 다음 사이클 자동 비교 대상**
 
 ---
 
@@ -187,9 +201,24 @@ Step 3. 종합 (메인 Claude):
 - GSC API + Blogger Stats API + AdSense API 연동 시 사용자 수동 입력 영역 → 자동
 - v0 (이번 manual baseline) → v1 (반자동) → v2 (full auto) 진화 경로
 
-### 9.5 결론
+### 9.5 Outside Voice (codex) 발견 + 적용
 
-**spec 디자인은 SELECTIVE EXPANSION 후 충분.** 점검 실행 시 사용자 콘솔 입력 항목 8개 (GSC + Blogger + 애드센스 + AdSense 승인 status), 자동 측정 항목 12개. 산출물 `docs/retro/2026-04-28-mid-review.md`로 영구 박제. CEO plan은 `~/.gstack/projects/kkyu92-blog-autopilot/ceo-plans/2026-04-28-mid-review.md`에 별도 박제.
+codex가 spec과 실제 코드 정합성 검증한 결과 8개 발견. 사용자 결정 = **A (사실 정정 + sequencing 분리 + subagent 단순화)**.
+
+| # | 발견 | 종류 | 적용 |
+|---|---|---|---|
+| 1 | DB 소스 틀림: `content.db` (3) vs 실제 `blog.db` (27) | 코드 사실 | ✅ §2 정정 |
+| 2 | WP cover율 자동 측정 불가 (단일 워크플로) | 코드 사실 | ✅ §2 정정 (`published_posts.platform`로) |
+| 3 | outdated/dedup/queue/failure 구조화 측정 부재 | 코드 사실 | ✅ §1, §2 "갭" 박제 + §10 logging spec 후보 |
+| 4 | source-of-truth 충돌 (cron 시간, backup-db.mjs) | 코드 사실 | ✅ §3 Step 0 정정 단계 + §10 |
+| 5 | forward window sequencing 오류 | 의견 | ✅ §5 분리 (forward는 5/4 routine 단독) |
+| 6 | 전략 우선순위 (hub 양방향 vs 메인 readiness) | 의견 | ❌ 사용자 의도 영역 — 그대로 |
+| 7 | 트래픽/수익 스냅샷 중독 (lag·niche 분해 부재) | 의견 | △ VISION 4단계 매핑으로 부분 보강 |
+| 8 | subagent 3개 과설계 | 의견 | ✅ §3 단일 분석으로 단순화 |
+
+### 9.6 결론
+
+**spec은 SELECTIVE EXPANSION + Outside Voice 정정 후 코드 정합성 100%, 실행 가능성 명확.** 점검 실행 시 사용자 콘솔 입력 8개, 자동 측정 가능 항목 명시, 측정 부재 항목은 갭으로 박제. 산출물 `docs/retro/2026-04-28-mid-review.md`로 영구 박제. CEO plan은 `~/.gstack/projects/kkyu92-blog-autopilot/ceo-plans/2026-04-28-mid-review.md`에 별도 박제.
 
 ---
 
@@ -205,6 +234,12 @@ Step 3. 종합 (메인 Claude):
 - **Search Console API 연동 자동화** — Phase 3 P0 (ROADMAP). 별도 spec 후보. 다음 mid-review routine 자동화의 핵심 의존
 - **mid-review routine 자동화** — 이번 점검이 v0 manual baseline. v1 반자동 / v2 full auto 진화 경로
 
+### Outside Voice 추가 (코드 사실 정정 후속)
+- **`data/content.db` 처분** — 192KB stale, 4/18 last write. 삭제 또는 archive (gitignored). 점검 후 결정
+- **`scripts/backup-db.mjs:26` `content.db` → `blog.db` 정정** — 백업 대상 잘못. 실 운영 DB 백업 안 됨 (silent risk)
+- **`docs/smoke-test.md:86` cron 시간 정정** — UTC 01:17/KST 10:17 (잘못) → UTC 16:17/KST 01:17 (실제 `auto-publish.yml:4`)
+- **logging instrumentation spec** — outdated/dedup/queue/failure pattern을 DB 구조화 저장. console.log → published_posts.metadata 또는 별도 logs 테이블. ROADMAP Phase 1.5/2 후보
+
 ### Paperclip 5명 가동률 측정 (사용자 SKIP, 다음 사이클 후보)
 - PM2 metrics endpoint 노출 또는 ssh script 작성
 - 다음 점검 또는 routine 자동화 시 진입
@@ -215,3 +250,4 @@ Step 3. 종합 (메인 Claude):
 
 - **2026-04-28 (작성)**: brainstorming 1차 합의 (Q1=A 풀 정량, Q2=A 자동 분석)
 - **2026-04-28 (CEO 리뷰)**: SELECTIVE EXPANSION mode 적용. 8개 갭 cherry-pick — 3개 ACCEPT (사용자) + 4개 ACCEPT (자동) + 1개 SKIP (사용자). spec §1, §2, §5, §9, §10 갱신.
+- **2026-04-28 (Outside Voice — codex)**: 코드 정합성 검증 결과 8개 발견. Option A 적용 — 사실 정정 (DB / WP cover율 / 메트릭 부재 / source-of-truth 충돌) + sequencing 분리 (forward window 제외) + subagent 단순화 (3개 → 단일). §1, §2, §3, §5, §9, §10 추가 갱신.
