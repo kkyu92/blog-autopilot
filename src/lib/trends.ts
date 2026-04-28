@@ -185,6 +185,8 @@ export function decodeHtmlEntities(str: string): string {
 
 import { callClaude } from './llm';
 import { aggregateAsSignals, type RealEstateSignal } from './realestate-news';
+import { aggregateWsSignals, type WellnessSignal } from './wellness-news';
+import { aggregateTsSignals, type TravelSignal } from './travel-news';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -209,13 +211,24 @@ export interface KeywordCandidate {
 export interface PickQueueOptions {
   niche: 'WS' | 'TS' | 'AS';
   count?: number;
-  /** Optional pre-fetched signals to feed LLM. If omitted, fetches Google daily trends + (AS) realestate news. */
+  /** Optional pre-fetched signals to feed LLM. If omitted, fetches Google daily trends + niche-specific aggregator. */
   signals?: {
     daily_trends?: TrendingKeyword[];
     related?: RelatedKeywordResult[];
-    /** AS niche only — 4-source aggregated real estate signals. Auto-fetched if omitted. */
+    /** AS niche — 5-source real estate signals. Auto-fetched if omitted. */
     realestate?: RealEstateSignal[];
+    /** WS niche — 5-source wellness/health signals. Auto-fetched if omitted. */
+    wellness?: WellnessSignal[];
+    /** TS niche — 5-source travel signals. Auto-fetched if omitted. */
+    travel?: TravelSignal[];
   };
+  /**
+   * paperclip 시절 trend-hunter agent는 자체 메모리로 이전 발행 키워드를 추적해 cannibalization 사전 차단.
+   * stateless LLM call에서는 호출자가 최근 발행 키워드를 명시 inject 해서 동일 효과 복원.
+   * agent 출력 단계에서 1차 차단 → semantic-dedup layer는 backup. 4/28 사고 (28/29 sub-angle 변형 통과)
+   * 처럼 layer 사이에서 새는 케이스 사전 방지.
+   */
+  recent_published_keywords?: string[];
 }
 
 // Niche definition yaml은 trend-hunter persona에 niche-specific 카테고리 가이드를 inject하기 위해 사용.
@@ -244,8 +257,9 @@ export async function pickQueue(opts: PickQueueOptions): Promise<KeywordCandidat
     try { dailyTrends = await getGoogleDailyTrends(); } catch { dailyTrends = []; }
   }
 
-  // AS niche: 부동산 전용 4-source signals (매경/한경/정책브리핑/Google News).
-  // 9 카테고리 균형 분포 + LH/SH/GH/HUG·청약 일정 fresh 신호 공급.
+  // niche-specific 5-source aggregators (paperclip stateful agent 가 자체 fetch했던 다양 source를
+  // stateless LLM call에 input으로 공급. 4/28 WS×1 dispatch 큐 풀 부족 사고 근본해결).
+  // 9 카테고리 균형 분포 + 시장/정책/시즌 fresh 신호 공급.
   let realestate: RealEstateSignal[] = opts.signals?.realestate ?? [];
   if (opts.niche === 'AS' && !opts.signals?.realestate) {
     try {
@@ -255,6 +269,28 @@ export async function pickQueue(opts: PickQueueOptions): Promise<KeywordCandidat
       realestate = [];
     }
   }
+
+  let wellness: WellnessSignal[] = opts.signals?.wellness ?? [];
+  if (opts.niche === 'WS' && !opts.signals?.wellness) {
+    try {
+      wellness = await aggregateWsSignals({ windowHours: 72, maxItems: 60 });
+    } catch (err) {
+      console.warn(`[trends] aggregateWsSignals failed (continuing): ${(err as Error).message}`);
+      wellness = [];
+    }
+  }
+
+  let travel: TravelSignal[] = opts.signals?.travel ?? [];
+  if (opts.niche === 'TS' && !opts.signals?.travel) {
+    try {
+      travel = await aggregateTsSignals({ windowHours: 72, maxItems: 60 });
+    } catch (err) {
+      console.warn(`[trends] aggregateTsSignals failed (continuing): ${(err as Error).message}`);
+      travel = [];
+    }
+  }
+
+  const recentKeywords = opts.recent_published_keywords ?? [];
 
   const userMessage = JSON.stringify({
     niche: opts.niche,
@@ -270,6 +306,25 @@ export async function pickQueue(opts: PickQueueOptions): Promise<KeywordCandidat
           })),
         }
       : {}),
+    ...(opts.niche === 'WS' && wellness.length > 0
+      ? {
+          wellness_news: wellness.map((s) => ({
+            title: s.title,
+            source: s.source,
+            pubDate: s.pubDate,
+          })),
+        }
+      : {}),
+    ...(opts.niche === 'TS' && travel.length > 0
+      ? {
+          travel_news: travel.map((s) => ({
+            title: s.title,
+            source: s.source,
+            pubDate: s.pubDate,
+          })),
+        }
+      : {}),
+    ...(recentKeywords.length > 0 ? { recent_published_keywords: recentKeywords } : {}),
     instruction:
       'CRITICAL: niche_definition_yaml에 정의된 categories 중 하나에 속하는 키워드만 선택하라. ' +
       '예: WS=건강/의료(질환·증상·영양·운동·의약품·정신건강·예방·가족건강·라이프스타일), ' +
@@ -280,7 +335,20 @@ export async function pickQueue(opts: PickQueueOptions): Promise<KeywordCandidat
         ? 'AS niche: realestate_news 가 제공되었으면 그 안의 fresh title 들에서 키워드 후보를 우선 추출하라. ' +
           '각도(지역·정책·청약일정·세금·신혼부부·청년임대·재건축·신도시 등) 다양화 — 한 카테고리에 3개 이상 몰림 금지. ' +
           'evergreen 키워드 머릿속 generate 는 realestate_news 가 비어있을 때만 fallback. '
+        : opts.niche === 'WS' && wellness.length > 0
+        ? 'WS niche: wellness_news 가 제공되었으면 그 안의 fresh title 들에서 키워드 후보를 우선 추출하라. ' +
+          '각도(질환·영양·운동·정신건강·예방·가족건강 등) 다양화 — 한 카테고리에 3개 이상 몰림 금지. ' +
+          'evergreen 키워드 머릿속 generate 는 wellness_news 가 비어있을 때만 fallback. '
+        : opts.niche === 'TS' && travel.length > 0
+        ? 'TS niche: travel_news 가 제공되었으면 그 안의 fresh title 들에서 키워드 후보를 우선 추출하라. ' +
+          '각도(국내·해외·숙소·항공·시즌·액티비티·맛집 등) 다양화 — 한 카테고리에 3개 이상 몰림 금지. ' +
+          'evergreen 키워드 머릿속 generate 는 travel_news 가 비어있을 때만 fallback. '
         : '맞는 항목이 부족하면 daily_trends를 무시하고 niche categories 안에서 시즌성·검색량 높은 evergreen 키워드를 직접 제안하라. ') +
+      (recentKeywords.length > 0
+        ? 'CRITICAL CANNIBALIZATION 차단: recent_published_keywords 에 있는 키워드들과 핵심 토픽이 같으면 ' +
+          '(지명+토픽 일치, sub-angle 변형 무관) 절대 후보로 추출 금지. 예: 이미 "여의도 재건축 추진 현황" ' +
+          '발행 시 "여의도 재건축 맨해튼 벨트 전망"도 차단. 같은 검색 의도면 중복으로 본다. '
+        : '') +
       '각 키워드의 category 필드는 niche yaml의 categories[].name 중 하나와 정확히 일치해야 한다.',
   });
 

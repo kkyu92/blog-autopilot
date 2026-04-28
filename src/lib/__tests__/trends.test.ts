@@ -221,6 +221,78 @@ describe('pickQueue', () => {
   });
 
   // Test 13: callClaude throws → propagates
+  // 4/28 사고 후 paperclip 안정성 복원: trend-hunter agent에 이전 발행 키워드 inject
+  it('recent_published_keywords inject: userMessage에 keyword list + cannibalization 차단 instruction 포함', async () => {
+    const { callClaude } = await import('../llm');
+    vi.mocked(callClaude).mockResolvedValue(JSON.stringify([VALID_CANDIDATE]));
+    const { pickQueue } = await import('../trends');
+    await pickQueue({
+      niche: 'AS',
+      signals: { daily_trends: [], realestate: [] },
+      recent_published_keywords: ['여의도 재건축 추진 현황 2026', '서울 장기안심주택'],
+    });
+    const userMsg = vi.mocked(callClaude).mock.calls[0][0].userMessage;
+    const parsed = JSON.parse(userMsg);
+    expect(parsed.recent_published_keywords).toEqual([
+      '여의도 재건축 추진 현황 2026',
+      '서울 장기안심주택',
+    ]);
+    expect(parsed.instruction).toContain('CANNIBALIZATION');
+    expect(parsed.instruction).toContain('지명+토픽');
+    expect(parsed.instruction).toContain('여의도 재건축');
+  });
+
+  it('recent_published_keywords 없으면 instruction에 cannibalization 섹션 미포함', async () => {
+    const { callClaude } = await import('../llm');
+    vi.mocked(callClaude).mockResolvedValue(JSON.stringify([VALID_CANDIDATE]));
+    const { pickQueue } = await import('../trends');
+    await pickQueue({ niche: 'AS', signals: { daily_trends: [], realestate: [] } });
+    const userMsg = vi.mocked(callClaude).mock.calls[0][0].userMessage;
+    const parsed = JSON.parse(userMsg);
+    expect(parsed.recent_published_keywords).toBeUndefined();
+    expect(parsed.instruction).not.toContain('CANNIBALIZATION');
+  });
+
+  it('WS niche: signals.wellness inject 시 wellness_news 가 userMessage에 포함', async () => {
+    const { callClaude } = await import('../llm');
+    vi.mocked(callClaude).mockResolvedValue(JSON.stringify([VALID_CANDIDATE]));
+    const { pickQueue } = await import('../trends');
+    await pickQueue({
+      niche: 'WS',
+      signals: {
+        daily_trends: [],
+        wellness: [
+          { title: '건강검진 안내', link: 'x', pubDate: 'p', source: 'health-chosun' },
+        ],
+      },
+    });
+    const userMsg = vi.mocked(callClaude).mock.calls[0][0].userMessage;
+    const parsed = JSON.parse(userMsg);
+    expect(parsed.wellness_news).toHaveLength(1);
+    expect(parsed.wellness_news[0].source).toBe('health-chosun');
+    expect(parsed.instruction).toContain('wellness_news');
+  });
+
+  it('TS niche: signals.travel inject 시 travel_news 가 userMessage에 포함', async () => {
+    const { callClaude } = await import('../llm');
+    vi.mocked(callClaude).mockResolvedValue(JSON.stringify([VALID_CANDIDATE]));
+    const { pickQueue } = await import('../trends');
+    await pickQueue({
+      niche: 'TS',
+      signals: {
+        daily_trends: [],
+        travel: [
+          { title: '황금연휴 여행지', link: 'x', pubDate: 'p', source: 'google-news-season' },
+        ],
+      },
+    });
+    const userMsg = vi.mocked(callClaude).mock.calls[0][0].userMessage;
+    const parsed = JSON.parse(userMsg);
+    expect(parsed.travel_news).toHaveLength(1);
+    expect(parsed.travel_news[0].source).toBe('google-news-season');
+    expect(parsed.instruction).toContain('travel_news');
+  });
+
   it('callClaude throws → pickQueue rejects with same error', async () => {
     const { callClaude } = await import('../llm');
     const err = new Error('API failure');

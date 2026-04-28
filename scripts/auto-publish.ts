@@ -129,10 +129,16 @@ interface NicheState {
 }
 
 async function pickAllQueues(niches: Niche[]): Promise<NicheQueue[]> {
+  // 4/28 사고 후 paperclip 안정성 복원: trend-hunter agent가 출력 단계에서 cannibalization
+  // 사전 차단하도록 최근 30일 발행 키워드 리스트 inject. semantic-dedup layer는 backup으로.
+  const db = getDb();
+  const recentByNiche = loadRecentByNiche(db, niches, 30);
+
   const queues: NicheQueue[] = [];
   for (const niche of niches) {
-    const keywords = await pickQueue({ niche });
-    console.log(`[auto-publish] queue ${niche}: ${keywords.length} keywords`);
+    const recentKeywords = (recentByNiche[niche] ?? []).map((r) => r.keyword);
+    const keywords = await pickQueue({ niche, recent_published_keywords: recentKeywords });
+    console.log(`[auto-publish] queue ${niche}: ${keywords.length} keywords (recent_inject: ${recentKeywords.length})`);
     if (keywords.length === 0) {
       console.warn(`[auto-publish] WARN ${niche} queue empty, skipping niche`);
       continue;
