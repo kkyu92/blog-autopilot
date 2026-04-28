@@ -25,14 +25,14 @@
 
 ---
 
-## 1. 점검 영역 4개
+## 1. 점검 영역 4개 (CEO 리뷰 — SELECTIVE EXPANSION 반영)
 
 | 영역 | 차원 | 측정 항목 |
 |---|---|---|
-| **A. 메인 — 발행 안정성** | 시스템 신호 | 9 슬롯 일별 cover율 (최근 14일), 실패 패턴 분류 (silent fail / queue exhausted / auto-discard), outdated 연도 차단율, semantic-dedup 적중률 |
-| **B. 메인 — 트래픽·수익** | 사용자 입력 + 코드 분석 | GSC 노출/클릭/색인된 페이지 수, Blogger 방문자/페이지뷰, 애드센스 연결 상태 + 수익 + RPM, sitemap 등록 상태 |
+| **A. 메인 — 발행 안정성** | 시스템 신호 | 9 슬롯 일별 cover율 (최근 14일), 실패 패턴 분류 (silent fail / queue exhausted / auto-discard), outdated 연도 차단율, semantic-dedup 적중률, **WordPress 채널 cover율 (보조 1줄)** |
+| **B. 메인 — 트래픽·수익** | 사용자 입력 + 코드 분석 | GSC 노출/클릭/색인된 페이지 수, Blogger 방문자/페이지뷰, 애드센스 연결 상태 + 수익 + RPM, sitemap 등록 상태, **AdSense 승인 차단 status (About/Privacy/Contact 페이지 존재 + 글 누적 수 + 콘솔 신청 단계)**, **VISION.md 4단계 매핑 (승인/$10/$100/$500+ 중 현재 위치)** |
 | **C. 서브 — 양방향 자동화** | 코드/git/gh 분석 | playbook#58 워커 4차원 측정 재사용 + 14일 윈도우 갱신분, 후속 박제 3건 진입 가능성 평가 (sync receiver / refactor 사이클 / self_report 박제) |
-| **D. 시스템 안정성·블로커** | 코드/gh 분석 | cron success rate (최근 14일), runner SPOF, claude CLI Max 만료 영향, queue depth, blogger 신규 도메인 신뢰도, 옛 부동산 9개 cannibalization |
+| **D. 시스템 안정성·블로커** | 코드/gh 분석 | cron success rate (최근 14일), runner SPOF, claude CLI Max 만료 영향, queue depth, blogger 신규 도메인 신뢰도, 옛 부동산 9개 cannibalization, **pnpm build 결과 (TODO.md 빌드 FAIL 검증)**, **pnpm lint 결과 (21 errors 잔존 확인)** |
 
 ---
 
@@ -44,9 +44,15 @@
 | outdated/dedup 적중 | `git log` + 프롬프트 코드 inventory + auto-discard 카운트 (gh issues) | 자동 |
 | 양방향 채널 (서브) | playbook#58 본문 인용 + 14일 갱신분 (gh PR/Issue/dispatch 카운트) | 자동 |
 | cron success | `gh run list --workflow=...` | 자동 |
+| **빌드/Lint 상태** (cherry-pick #3) | `pnpm build` + `pnpm lint` 실행 결과 vs TODO.md 기록 | 자동 |
+| **About/Privacy/Contact 페이지** (cherry-pick #1) | Blogger admin URL inventory 또는 `gh api` (사이트맵 cross-check) | 사용자 1회 확인 |
+| **글 누적 수** (cherry-pick #1) | DB `contents WHERE status='published'` count + Blogger sitemap | 자동 |
+| **AdSense 승인 단계** (cherry-pick #1) | 사용자 콘솔 screenshot 또는 단계명 (미신청/심사중/거절/승인) | 사용자 batch 입력 |
+| **VISION.md 4단계 위치** (cherry-pick #2) | 종합 분석 — 글 수·트래픽·수익으로 매핑 | 자동 (위 데이터 활용) |
 | **GSC**: 노출, 클릭, 평균 CTR, 색인된 페이지 수, 검색 쿼리 top 5 | search.google.com/search-console 콘솔 | 사용자 batch 입력 |
 | **Blogger**: 7일/14일 페이지뷰, 인기 게시물 top 5, 트래픽 소스 분포 | Blogger admin → Stats | 사용자 batch 입력 |
 | **애드센스**: 연결 상태, 7일/14일 수익 ($), RPM, 클릭률 | google.com/adsense | 사용자 batch 입력 |
+| **WordPress 채널 cover율** (자동 추가) | `gh run list` WP 발행 workflow 결과 | 자동 |
 
 ---
 
@@ -82,11 +88,12 @@ Step 3. 종합 (메인 Claude):
 
 ---
 
-## 5. 측정 윈도우
+## 5. 측정 윈도우 (CEO 리뷰 갱신)
 
 - **현재 스냅샷**: 2026-04-28 시점 (모든 수치 현재 콘솔 값)
-- **활동 윈도우**: 2026-04-14 ~ 2026-04-28 (14일) — playbook#58은 7일이라 14일 윈도우면 새 신호
-- **베이스라인**: 첫 점검이라 비교 X. 다음 점검(5/4 week1-observation 또는 별도 사이클)부터 비교 가능
+- **Backward 활동 윈도우**: 2026-04-14 ~ 2026-04-28 (14일) — playbook#58은 7일이라 14일 윈도우면 새 신호
+- **Forward 관찰 윈도우**: 2026-04-29 ~ 2026-05-04 (1주) — 자연 cron 관찰. 5/4 week1-observation routine과 결합
+- **베이스라인**: 첫 점검이라 비교 X. 다음 점검(5/4 week1-observation 또는 별도 사이클)부터 비교 가능. **이번 점검 결과는 mid-review v0 baseline — 다음 사이클 자동 비교 대상**
 
 ---
 
@@ -135,18 +142,76 @@ Step 3. 종합 (메인 Claude):
 
 ## 9. CEO 리뷰 결과
 
-(이 섹션은 plan-ceo-review 스킬 진행 후 채워짐)
+**Mode**: SELECTIVE EXPANSION
+**검토 시각**: 2026-04-28 16:00 KST
+**진행자**: plan-ceo-review 스킬
+
+### 9.1 Premise Challenge
+
+- ✅ 메인1 (일별 발행): VISION.md "주 5+ 글" + 9 슬롯 cover율 매핑 — premise 유효
+- ⚠️ 메인2 (트래픽·수익): "수익 발생 여부" 측정만으론 부족 — VISION 4단계 ($10/$100/$500+) 거리 매핑 필수 → cherry-pick #2로 보강
+- ⚠️ 서브 (워커-허브): VISION.md/ROADMAP.md에 의하면 메인 목표가 아니라 **"모든 Phase 지속"되는 보조 학습 루프**. 점검에서는 메인 보조 인프라로 분리 — playbook#58 인용으로 충분
+
+### 9.2 SYSTEM AUDIT 발견 (8개 갭)
+
+| # | 갭 | 결정 |
+|---|---|---|
+| 1 | AdSense 승인 차단 (About/Privacy/Contact + 글 누적) | ACCEPT — 영역 B 보강 |
+| 2 | VISION 4단계 매핑 | ACCEPT — 영역 B 보강 |
+| 3 | 빌드 + Lint 상태 (TODO.md "빌드 FAIL") | ACCEPT — 영역 D 보강 |
+| 4 | Paperclip 5명 가동률 | SKIP — 사용자 unselect |
+| 5 | stale 문서 정정 (STATUS/PLAN) | ACCEPT — §10 미해결 의제 |
+| 6 | WordPress 채널 측정 보조 | ACCEPT (자동) — 영역 A 보조 |
+| 7 | Search Console API 연동 갭 박제 | ACCEPT (자동) — §10 미해결 의제 |
+| 8 | 측정 윈도우 (14d backward + 1w forward) | ACCEPT (자동) — §5 갱신 |
+
+### 9.3 Sections 1-11 평가 (spec scope에 맞게 압축)
+
+| Section | 결과 |
+|---|---|
+| 1 Architecture | spec은 메타 디자인 — N/A |
+| 2 Error & Rescue | 점검 실행 시 사용자 입력 실패·subagent dispatch 실패 가능. 종합 단계 graceful fallback 필요 (점검 결과에 "측정 불가" 명시) |
+| 3 Security | 사용자 콘솔 수치 입력 시 PII 없음 (방문자 수·수익 수치). Issue 발행 시 GSC 검색 쿼리에 민감 정보 포함 가능 — **결과 박제 시 redact 룰 명시 필요** |
+| 4 Data Flow | 데이터 흐름 단순 (사용자 입력 + gh/git → 종합 → docs/retro). 갭 없음 |
+| 5 Code Quality | spec 자체는 문서, 코드 변경 X |
+| 6 Test | 점검 결과의 검증 — 사용자 spec 검토로 대체 |
+| 7 Performance | subagent 3개 병렬 dispatch. 점검 1회 ~30분. 무리 없음 |
+| 8 Observability | 점검 결과 박제 자체가 observability — 다음 사이클 비교 가능. v0이라 baseline 부재 (예상됨) |
+| 9 Deployment | 점검 실행은 git commit 1회 (docs/retro/...). 롤백 = git revert |
+| 10 Long-Term | 이번 점검 = mid-review routine v0 manual baseline. 자동화는 별도 spec 후보 |
+| 11 Design/UX | UI 스코프 없음 — N/A |
+
+### 9.4 다음 점검 routine 자동화 후보 (NOT in scope, 박제만)
+
+- 매월 1회 또는 페이즈 전환 시 mid-review routine 자동 실행
+- GSC API + Blogger Stats API + AdSense API 연동 시 사용자 수동 입력 영역 → 자동
+- v0 (이번 manual baseline) → v1 (반자동) → v2 (full auto) 진화 경로
+
+### 9.5 결론
+
+**spec 디자인은 SELECTIVE EXPANSION 후 충분.** 점검 실행 시 사용자 콘솔 입력 항목 8개 (GSC + Blogger + 애드센스 + AdSense 승인 status), 자동 측정 항목 12개. 산출물 `docs/retro/2026-04-28-mid-review.md`로 영구 박제. CEO plan은 `~/.gstack/projects/kkyu92-blog-autopilot/ceo-plans/2026-04-28-mid-review.md`에 별도 박제.
 
 ---
 
-## 10. 미해결 의제 (점검 실행 단계로 이월)
+## 10. 미해결 의제 (점검 실행 단계로 이월 + CEO 리뷰 추가분)
 
+### 점검 실행 단계로 이월
 - 트래픽/수익 데이터의 **API 연결 자동화** (현재 사용자 수동 입력) — 점검 끝에 별도 spec 후보
 - playbook#58에 hub Phase 2b 8차원 mapping 응답 — hub 처리 시점 모름
 - moneyballscore self-report와의 비교 mapping (playbook#57)
+
+### CEO 리뷰 추가 (자동 결정)
+- **stale 문서 정정** — STATUS.md (~2026-04-01) / PLAN.md (~2026-04-01 자동승인) 둘 다 stale. VISION.md (2026-04-03) 약간 stale. 점검 산출물 §"정정 액션"에 우선순위 도출
+- **Search Console API 연동 자동화** — Phase 3 P0 (ROADMAP). 별도 spec 후보. 다음 mid-review routine 자동화의 핵심 의존
+- **mid-review routine 자동화** — 이번 점검이 v0 manual baseline. v1 반자동 / v2 full auto 진화 경로
+
+### Paperclip 5명 가동률 측정 (사용자 SKIP, 다음 사이클 후보)
+- PM2 metrics endpoint 노출 또는 ssh script 작성
+- 다음 점검 또는 routine 자동화 시 진입
 
 ---
 
 ## 변경 이력
 
 - **2026-04-28 (작성)**: brainstorming 1차 합의 (Q1=A 풀 정량, Q2=A 자동 분석)
+- **2026-04-28 (CEO 리뷰)**: SELECTIVE EXPANSION mode 적용. 8개 갭 cherry-pick — 3개 ACCEPT (사용자) + 4개 ACCEPT (자동) + 1개 SKIP (사용자). spec §1, §2, §5, §9, §10 갱신.
