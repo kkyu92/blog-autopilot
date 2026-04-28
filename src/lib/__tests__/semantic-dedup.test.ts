@@ -61,6 +61,24 @@ describe('batchSemanticDedup', () => {
     expect(result.duplicates[1].duplicate_of_id).toBe(4);
   });
 
+  // 4/28 cron AS 28/29 ("여의도 재건축") 중복 통과 사고 회귀 — system prompt 강화 룰
+  it('system prompt에 지명+토픽 sub-angle 변형 무관 차단 룰 + 여의도 예시 포함', async () => {
+    const candidates: SemanticDedupCandidate[] = [{ niche: 'AS', keyword: 'k1' }];
+    const recent: Record<string, RecentPublished[]> = {
+      AS: [{ id: 28, niche: 'AS', keyword: '여의도 재건축 추진 현황 2026', category: null }],
+    };
+    const callMock = vi.fn().mockResolvedValue(JSON.stringify({ duplicates: [] }));
+
+    await batchSemanticDedup(candidates, recent, callMock);
+
+    const sys = callMock.mock.calls[0][0].systemPrompt;
+    expect(sys).toContain('지명');
+    expect(sys).toContain('sub-angle');
+    expect(sys).toContain('여의도');
+    // false negative 정책 변경: 지명+토픽 케이스는 확신 없어도 중복 판정
+    expect(sys).toMatch(/확신 없어도 중복/);
+  });
+
   it('passes candidates and recent posts in user message', async () => {
     const candidates: SemanticDedupCandidate[] = [
       { niche: 'WS', keyword: 'k1' },
