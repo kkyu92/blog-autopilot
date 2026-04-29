@@ -25,6 +25,20 @@ export interface CallClaudeOptions {
 
 const DEFAULT_TIMEOUT_MS = 600_000;
 const FORCE_KILL_GRACE_MS = 5_000;
+// F1'-c: spawn-level transient OS error retry. 4/29 cron 25085433470 fail evidence:
+// "spawn claude ENOENT", "spawn Unknown system error -8". 호출 누적 후 OS-level transient.
+const SPAWN_RETRY_DELAY_MS = 5_000;
+const SPAWN_TRANSIENT_PATTERN = /\b(ENOENT|EFAULT|EIO|EAGAIN|EBADF|EMFILE|ENFILE)\b|Unknown system error|spawn [a-z]+ failed/i;
+// F1'-a: instrumentation. callClaude 누적 호출 카운트 + 시각 추적.
+let _claudeCallCount = 0;
+let _claudeFirstCallAt: number | null = null;
+export function getClaudeCallStats(): { count: number; firstCallAt: number | null; uptimeMs: number | null } {
+  return {
+    count: _claudeCallCount,
+    firstCallAt: _claudeFirstCallAt,
+    uptimeMs: _claudeFirstCallAt ? Date.now() - _claudeFirstCallAt : null,
+  };
+}
 
 const JSON_GUARD = '\n\n---\n\nCRITICAL: Your response MUST be valid JSON only — no markdown headers, no preamble, no closing remarks, no code fences. Reply with the raw JSON object or array as the entire response. Start your response with `{` or `[` immediately.';
 
@@ -124,12 +138,44 @@ function spawnClaudeOnce(opts: CallClaudeOptions): Promise<{ stdout: string; std
   });
 }
 
+// F1'-c: spawn-level transient error wrapper. spawnClaudeOnce가 throw하는 ENOENT/EFAULT/-8 같은
+// OS-level transient를 5초 sleep 후 1회 retry. timeout은 transient 아니므로 retry 안 함 (10분 hang은
+// 진짜 문제 → escalate). JSON parse retry와 별개 layer (callClaude 안 jsonRetries는 그대로).
+async function spawnClaudeWithRetry(opts: CallClaudeOptions): Promise<{ stdout: string; stderr: string; code: number | null; signal: NodeJS.Signals | null }> {
+  const maxAttempts = 2;
+  let lastErr: Error | null = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await spawnClaudeOnce(opts);
+    } catch (err) {
+      lastErr = err as Error;
+      const msg = lastErr.message ?? '';
+      const isTransient = SPAWN_TRANSIENT_PATTERN.test(msg);
+      const isTimeout = /timeout after/.test(msg);
+      if (isTransient && !isTimeout && attempt < maxAttempts) {
+        console.warn(`[llm] spawn-level transient (attempt ${attempt}/${maxAttempts}): ${msg.slice(0, 160)} — retry in ${SPAWN_RETRY_DELAY_MS}ms`);
+        await new Promise((r) => setTimeout(r, SPAWN_RETRY_DELAY_MS));
+        continue;
+      }
+      throw lastErr;
+    }
+  }
+  throw lastErr ?? new Error('spawnClaudeWithRetry: unknown failure');
+}
+
 export async function callClaude(opts: CallClaudeOptions): Promise<string> {
+  // F1'-a instrumentation: 누적 호출 카운트 + 첫 호출 시각 (5/6 검증 시 H3·H4 root cause 판정용).
+  _claudeCallCount += 1;
+  if (_claudeFirstCallAt === null) _claudeFirstCallAt = Date.now();
+  const callIdx = _claudeCallCount;
+  const uptimeMin = _claudeFirstCallAt ? ((Date.now() - _claudeFirstCallAt) / 60_000).toFixed(1) : '0.0';
+  console.log(`[llm] call #${callIdx} (uptime ${uptimeMin}min) model=${opts.model ?? 'sonnet'} expectJson=${!!opts.expectJson}`);
+
   const maxJsonAttempts = opts.expectJson ? 1 + (opts.jsonRetries ?? 1) : 1;
   let lastErr: Error | null = null;
 
   for (let attempt = 1; attempt <= maxJsonAttempts; attempt++) {
-    const { stdout, stderr, code, signal } = await spawnClaudeOnce(opts);
+    const { stdout, stderr, code, signal } = await spawnClaudeWithRetry(opts);
     if (code !== 0) {
       throw new Error(`claude CLI exit ${code ?? `signal ${signal}`}: ${stderr}`);
     }

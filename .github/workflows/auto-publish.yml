@@ -52,7 +52,12 @@ jobs:
           echo "expected_slots=$(( ${{ inputs.slot_count || '3' }} * 3 ))" >> "$GITHUB_OUTPUT"
 
       - id: publish
-        run: pnpm tsx scripts/auto-publish.ts --niche=${{ inputs.niche || 'all' }} --slot-count=${{ inputs.slot_count || '3' }} --mode=${{ inputs.mode || 'normal' }}
+        # F1'-e: file descriptor 한도 256 → 10240. 9 slots × niche간 병렬 시 누적 spawn fd 256 도달 위험
+        # (ulimit -n 256은 macOS 기본). 4/28·4/29 fail의 H1 root cause 직접 mitigation.
+        run: |
+          ulimit -n 10240
+          echo "[ulimit] file descriptors: $(ulimit -n)"
+          pnpm tsx scripts/auto-publish.ts --niche=${{ inputs.niche || 'all' }} --slot-count=${{ inputs.slot_count || '3' }} --mode=${{ inputs.mode || 'normal' }}
         env:
           # 외부 이미지 API
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}

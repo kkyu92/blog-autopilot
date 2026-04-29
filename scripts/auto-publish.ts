@@ -11,12 +11,12 @@ import {
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, execSync } from 'node:child_process';
 import { runAll } from '../src/lib/healthcheck';
 import { pickQueue, type KeywordCandidate } from '../src/lib/trends';
 import { checkAndResolve, type DedupResult } from '../src/lib/dedup';
 import { getDb } from '../src/lib/db';
-import { callClaude } from '../src/lib/llm';
+import { callClaude, getClaudeCallStats } from '../src/lib/llm';
 import { buildCurrentDateHeader } from '../src/lib/current-date';
 import { review, type EditorReviewResult } from '../src/lib/editor';
 import { fetchForSlots, type ImageResult } from '../src/lib/images';
@@ -799,9 +799,25 @@ function parseCliArgs(argv: string[]): CliArgs {
   return { niches, slotCount, mode };
 }
 
+// F1'-b: orphan claude process pre-cron sweep. 4/28 post-cleanup evidence — orphan claude.exe
+// 3개가 SIGTERM/SIGKILL 후에도 잔존 → fd/memory 점유 → 다음 cron의 spawn fail (ENOENT, -8) 유발.
+// "claude -p" 패턴 매칭으로 사용자의 Claude Code 인터랙티브 session (다른 인자 사용)은 영향 안 줌.
+// cron 시작 직전 1회만 호출 (healthcheck/slot 처리 중엔 호출 X — 자기 spawn 죽일 위험).
+function killOrphanClaude(): void {
+  try {
+    execSync('pkill -9 -f "claude -p" 2>/dev/null || true', { stdio: 'ignore' });
+    console.log('[orphan-kill] pre-cron sweep complete (claude -p 패턴)');
+  } catch (err) {
+    console.warn('[orphan-kill] failed (non-fatal):', errMessage(err));
+  }
+}
+
 export async function runMain(argv: string[] = process.argv): Promise<number> {
   const args = parseCliArgs(argv);
   console.log(`[auto-publish] start mode=${args.mode} niches=${args.niches.join(',')} slotCount=${args.slotCount}`);
+
+  // F1'-b: 이전 cron의 orphan claude.exe 정리 (4/28 evidence)
+  killOrphanClaude();
 
   // Step 1: healthcheck
   // claude-cli는 healthcheck 10s timeout에서 자주 fail하지만 slot-level (~18min)에서는 정상.
@@ -908,41 +924,49 @@ export async function runMain(argv: string[] = process.argv): Promise<number> {
   );
   const results: SlotResult[] = [];
 
-  for (const state of states) {
-    for (let slotIdx = 1; slotIdx <= args.slotCount; slotIdx++) {
-      let result: SlotResult;
-      try {
-        result = await processSlot(state, slotIdx, db, semanticBlocked);
-      } catch (err) {
-        console.error(`[${state.niche} slot${slotIdx}] uncaught:`, err);
-        result = {
-          niche: state.niche,
-          slotIdx,
-          status: 'failed',
-          failureReason: `uncaught: ${errMessage(err)}`,
-        };
-      }
-      results.push(result);
+  // F1'-d: niche간 병렬 처리 (WS·TS·AS 동시 시작). niche 안에서는 slot 1→2→3 직렬 유지.
+  // 동시 claude.exe spawn 최대 3개. 4/29 evidence: 직렬 115min → 병렬 ~50~60min 추정.
+  // 시간 의존 root cause (H4 token expiration, 5h cycle 한도) 회피.
+  // results.push는 single-threaded JS라 race-free. 순서는 niche/slotIdx 필드로 식별.
+  console.log(`[auto-publish] niche간 병렬 시작: ${states.map((s) => s.niche).join(',')} (각 ${args.slotCount} slot)`);
+  await Promise.all(
+    states.map(async (state) => {
+      for (let slotIdx = 1; slotIdx <= args.slotCount; slotIdx++) {
+        let result: SlotResult;
+        try {
+          result = await processSlot(state, slotIdx, db, semanticBlocked);
+        } catch (err) {
+          console.error(`[${state.niche} slot${slotIdx}] uncaught:`, err);
+          result = {
+            niche: state.niche,
+            slotIdx,
+            status: 'failed',
+            failureReason: `uncaught: ${errMessage(err)}`,
+          };
+        }
+        results.push(result);
 
-      // H8: error-path side effects (DB INSERT failed-row + GitHub Issue dispatch).
-      // draftJson=null for now; H10 may revise after integration test scenarios.
-      if (result.status === 'failed') {
-        try {
-          await recordFailure(db, result, null);
-        } catch (err) {
-          console.error(`[${state.niche} slot${slotIdx}] recordFailure threw:`, errMessage(err));
-        }
-      } else if (result.status === 'skipped' && result.failureReason === 'queue_exhausted') {
-        // Queue exhaustion is a content-pipeline health signal — dispatch a
-        // separate-labeled Issue so it doesn't get treated as content failure.
-        try {
-          dispatchQueueExhaustedIssue(result.niche, result.slotIdx);
-        } catch (err) {
-          console.error(`[dispatch queue_exhausted] failed:`, errMessage(err));
+        // H8: error-path side effects (DB INSERT failed-row + GitHub Issue dispatch).
+        if (result.status === 'failed') {
+          try {
+            await recordFailure(db, result, null);
+          } catch (err) {
+            console.error(`[${state.niche} slot${slotIdx}] recordFailure threw:`, errMessage(err));
+          }
+        } else if (result.status === 'skipped' && result.failureReason === 'queue_exhausted') {
+          try {
+            dispatchQueueExhaustedIssue(result.niche, result.slotIdx);
+          } catch (err) {
+            console.error(`[dispatch queue_exhausted] failed:`, errMessage(err));
+          }
         }
       }
-    }
-  }
+    }),
+  );
+
+  // F1'-a instrumentation: 5/6 검증용. claude CLI 누적 호출 + cron 운영 시간.
+  const stats = getClaudeCallStats();
+  console.log(`[llm-stats] claude calls=${stats.count}, uptime=${stats.uptimeMs ? (stats.uptimeMs / 60_000).toFixed(1) + 'min' : 'n/a'}`);
 
   const summary = writeSummary(results);
   backupDb();
