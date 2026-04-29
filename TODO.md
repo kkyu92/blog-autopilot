@@ -1,7 +1,7 @@
 # Content Autopilot — TODO
 
-> 마지막 점검: 2026-04-27 22:23 KST
-> 빌드: **FAIL** (Next.js app/ 제거 후 의존성 정리 필요) | 테스트: 304/304 PASS (+76) | Lint: 21 errors, 1 warning
+> 마지막 점검: 2026-04-29 (자동 점검)
+> 빌드: **FAIL** (Next.js app/ 미존재) | 테스트: **6 FAIL / 343 PASS** (신규 회귀!) | Lint: 21 errors, 2 warnings (+경고 1개 신규)
 
 ---
 
@@ -34,6 +34,12 @@
 - [x] feat(as): 5번째 source — google-news-market (시장/세금/정비사업 보완) (#30)
 - [x] docs: 발전 로드맵 ROADMAP.md 추가
 
+### 안정성 패치 + AdSense 준비 (2026-04-29)
+- [x] fix(reliability): F1' 5종 sub-fix — spawn retry(F1'-c), timeout, orphan-kill, inferStatus fallback(F1'-d)
+- [x] feat: Phase 4a D4 — policy/feedback/memory prefix dispatch to playbook (#41)
+- [x] docs(adsense): Blogger Pages 3종 HTML 템플릿 완성 (docs/blogger/about.html, privacy.html, contact.html)
+- [x] docs(adsense): PUBLISH_CHECKLIST.md — Blogger 게시 절차 + AdSense 신청 기준 가이드 작성
+
 ---
 
 ## 신규 발견 이슈 (2026-04-27)
@@ -50,19 +56,35 @@
 
 ---
 
+## 신규 발견 이슈 (2026-04-29)
+
+### 테스트 회귀 (즉시 수정 필요)
+- [ ] **`auto-publish.test.ts` Scenario 1~4, 6, 7 총 6개 FAIL** — `getClaudeCallStats`가 `src/lib/llm.ts`에 추가(F1'-a)됐으나 `vi.mock('../../src/lib/llm', ...)` 에 누락. 수정: `getClaudeCallStats: vi.fn(() => ({ count: 0, firstCallAt: null, uptimeMs: null }))` 추가
+
+### Lint 신규 경고 (1개 추가, 총 2 warnings)
+- [ ] `scripts/mid-review/fetch.mjs:80` — `toIsoDate` 함수 정의 후 미사용 (`@typescript-eslint/no-unused-vars` warning) — 함수 제거 또는 실제 사용 코드 추가
+
+---
+
 ## 다음 단계 (우선순위순)
+
+### 즉시 (테스트 회귀 수정)
+- [ ] `auto-publish.test.ts` vi.mock llm에 `getClaudeCallStats` 추가 — 6개 FAIL 복구
 
 ### 즉시 (빌드/린트 복구)
 - [ ] Next.js 의존성 제거 — `next build` → CLI 전용 `package.json`으로 전환 (build 스크립트 삭제 또는 `tsc --noEmit`으로 교체)
 - [ ] `eslint-config-next` → `@typescript-eslint/eslint-plugin` 등 범용 TS lint config으로 교체 (next 전용 규칙 제거)
 - [ ] 테스트 파일 `any` 타입 명시화 (lint 21 errors) — `as any` → `as ReturnType<typeof vi.fn>` 등 vitest 타입 활용
-- [ ] `blogger.ts` `niche` 미사용 변수 제거 (lint 1 warning)
+- [ ] `blogger.ts` `niche` 미사용 변수 제거 (lint warning)
+- [ ] `scripts/mid-review/fetch.mjs:80` `toIsoDate` 미사용 함수 제거 (lint warning 신규)
 
-### 즉시 (AdSense 승인 준비)
-- [ ] Blogger에 소개(About) 페이지 생성
-- [ ] Blogger에 개인정보처리방침(Privacy Policy) 페이지 생성
-- [ ] Blogger에 문의(Contact) 페이지 생성
-- [ ] 글 15~20개 축적 (Paperclip 에이전트 자율 운영)
+### 즉시 (AdSense 승인 준비 — 사용자 수동 액션)
+- [x] Blogger Pages HTML 템플릿 준비 완료 (docs/blogger/about.html, privacy.html, contact.html)
+- [ ] Blogger에 소개(About) 페이지 게시 (docs/blogger/PUBLISH_CHECKLIST.md 절차 참고)
+- [ ] Blogger에 개인정보처리방침(Privacy Policy) 페이지 게시
+- [ ] Blogger에 문의(Contact) 페이지 게시
+- [ ] 페이지 3종 메뉴 노출 (레이아웃 → 페이지 가젯)
+- [ ] 글 25개 이상 축적 (AdSense 신청 기준)
 
 ### 단기 (파이프라인 완성)
 - [ ] Paperclip 에이전트 전체 E2E 테스트 (Researcher → Writer → QA → Publisher)
