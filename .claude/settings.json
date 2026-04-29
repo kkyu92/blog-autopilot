@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "HUB=/Users/kyusikkim/projects/playbook; SYNC=~/.claude/.blog-autopilot-hub-sync; CUR=$(cd $HUB 2>/dev/null && git rev-parse HEAD 2>/dev/null); LAST=$(cat $SYNC 2>/dev/null); if [ -n \"$CUR\" ] && [ \"$CUR\" != \"$LAST\" ]; then if [ -n \"$LAST\" ]; then N=$(cd $HUB && git log --oneline $LAST..HEAD 2>/dev/null | wc -l | tr -d ' '); echo \"🔔 허브 갱신 ${N}건 (${LAST:0:7} → ${CUR:0:7}) — 새 정책/메모리 적용됨\"; else echo \"🔔 허브 sync init (${CUR:0:7})\"; fi; echo $CUR > $SYNC; fi",
+            "timeout": 5000
+          }
+        ]
+      }
+    ]
+  }
+}
