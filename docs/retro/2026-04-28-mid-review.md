@@ -308,13 +308,36 @@ curl 재현:
 
 ### 7.6 다음 행동 (Critical 누적, AdSense 의제 제외)
 
-1. **사용자 직접 (Blogger 콘솔)**:
-   - Blogger 관리 → 설정 → 검색 환경설정 → "다른 국가용 리디렉션 사용 안 함" 활성화
-   - sitemap 재제출 + 1주일 후 URL Inspection 재확인
-2. **응급 검증**:
-   - 4/29 manual `gh workflow run auto-publish.yml -f niche=all -f slot_count=3 -f mode=normal -f runner=home` (사용자 PC 켜져있을 때)
-   - A1 fix 후 claude-cli WARN으로 처리되는지 다음 schedule cron (4/29 16:17 UTC = 4/30 01:17 KST) 자연 검증
-3. **Cloudflare brainstorming → spec** (별도 의제): 위 7.5 매트릭스 기반
+#### 7.6.1 사용자 Blogger 콘솔 fix 가이드 (REDIRECT_ERROR 색인 차단 해제)
+
+**진단 근거**:
+- URL Inspection 3건 모두 `pageFetchState: REDIRECT_ERROR`, `coverageState: "리디렉션 오류"`
+- curl 재현: Googlebot Mobile UA → `/` → 302 → `/?m=1` → 200 (단일 redirect, 일반적으로 OK)
+- robots.txt: 빈 파일 (0 bytes), meta robots 없음, X-Robots-Tag 없음 (homepage)
+- sitemap.xml: `x-robots-tag: noindex` (정상 — sitemap은 검색결과 노출 X)
+- → **가장 가능성 높은 root cause: Blogger country redirect (디폴트 ON)** — Googlebot이 위치별로 다른 응답 받아 redirect chain ERROR로 판단
+
+**Step-by-step 가이드**:
+1. https://www.blogger.com 로그인
+2. 블로그 선택: **부동산시그널** (`apt-signal`)
+3. 좌측 메뉴 → **설정**
+4. 아래로 스크롤 → **"국가별 리디렉션"** 섹션
+5. **"국가별 리디렉션 사용 안 함" 토글 ON** 활성화 ← 핵심 fix
+6. 같은 화면 → "비공개" 섹션 → "검색엔진에 노출되도록 허용" 확인 (이미 ON일 가능성 높음)
+7. (병행) **GSC** (https://search.google.com/search-console) → 부동산시그널 속성 → 좌측 "URL 검사" → URL 입력 → "라이브 URL 테스트" → "색인 요청" (일일 quota 10~12개)
+8. 24~72시간 후 GSC URL Inspection 재확인 (`scripts/mid-review/inspect.mjs` 재실행)
+
+**추가 옵션 (효과 없을 시 7일 후)**:
+- 테마 → 모바일 → 데스크톱 표시 (모바일 separate URL `?m=1` 비활성화 — 모바일 UX 영향 검토 필요)
+- 맞춤 robots.txt 활성화 (디폴트 빈 파일 → 명시적 sitemap + 모든 봇 허용)
+
+#### 7.6.2 응급 검증
+- 4/29 manual dispatch run `25085433470` 결과 (background watch) — A1 fix가 claude-cli WARN으로 처리되는지 자연 검증
+- 4/30 01:17 KST schedule cron (다음 자연 발화) — A1 fix가 schedule에서 작동 confirm
+
+#### 7.6.3 Cloudflare brainstorming → spec (별도 의제 D 트랙)
+- 위 7.5 매트릭스 기반
+- A1 fix 효과 (manual dispatch + schedule cron) 확인 후 진입이 정확 (Cloudflare 우선순위가 fix 효과에 따라 달라짐)
 
 ---
 
