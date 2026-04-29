@@ -804,11 +804,22 @@ export async function runMain(argv: string[] = process.argv): Promise<number> {
   console.log(`[auto-publish] start mode=${args.mode} niches=${args.niches.join(',')} slotCount=${args.slotCount}`);
 
   // Step 1: healthcheck
+  // claude-cli는 healthcheck 10s timeout에서 자주 fail하지만 slot-level (~18min)에서는 정상.
+  // 발행 자체를 막지 않고 WARN만 — lesson bb81938 회귀 4/28-17:56 UTC schedule 차단 root cause.
   const hc = await runAll();
-  console.log(`[auto-publish] healthcheck: ${hc.allPassed ? 'PASS' : 'FAIL'}`);
-  if (!hc.allPassed) {
-    for (const failed of hc.results.filter(r => !r.ok)) {
-      console.error(`  FAIL ${failed.service}: ${failed.reason ?? 'unknown reason'}`);
+  const failed = hc.results.filter(r => !r.ok);
+  const claudeCliFailed = failed.filter(r => r.service === 'claude-cli');
+  const blockingFailed = failed.filter(r => r.service !== 'claude-cli');
+  console.log(
+    `[auto-publish] healthcheck: ${blockingFailed.length === 0 ? 'PASS' : 'FAIL'}` +
+      (claudeCliFailed.length > 0 ? ' (claude-cli: WARN — proceeding)' : ''),
+  );
+  for (const w of claudeCliFailed) {
+    console.warn(`  WARN ${w.service}: ${w.reason ?? 'unknown reason'} — slot-level retry will handle`);
+  }
+  if (blockingFailed.length > 0) {
+    for (const f of blockingFailed) {
+      console.error(`  FAIL ${f.service}: ${f.reason ?? 'unknown reason'}`);
     }
     return 2;  // workflow ❌, 9 슬롯 진입 안 함
   }
