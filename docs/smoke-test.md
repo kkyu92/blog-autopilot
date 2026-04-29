@@ -83,11 +83,11 @@ gh run view <run-id> --log | tail -20
 
 ---
 
-## Step 3: cron 자연 발화 대기 (다음날 10:17 KST = UTC 01:17)
+## Step 3: cron 자연 발화 대기 (다음날 01:17 KST = UTC 16:17)
 
-cron schedule: `17 1 * * *` (UTC) → KST 기준 매일 **10:17**.
+cron schedule: `17 16 * * *` (UTC) → KST 기준 매일 **01:17** (`auto-publish.yml:4` 기준).
 
-⚠️ Mac mini sleep 상태일 경우 `pmset repeat wake` 가 10:10 KST에 미리 깨워야 함 (runner-setup.md §3 참조).
+⚠️ Mac mini sleep 상태일 경우 `pmset repeat wake` 가 01:10 KST에 미리 깨워야 함 (runner-setup.md §3 참조).
 
 다음 날 아침 확인:
 

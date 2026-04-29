@@ -23,7 +23,7 @@ function getArg(name, defaultValue) {
   return idx !== -1 && args[idx + 1] ? args[idx + 1] : defaultValue;
 }
 
-const DB_PATH = process.env.DATABASE_PATH || path.join(process.cwd(), "data", "content.db");
+const DB_PATH = process.env.DATABASE_PATH || path.join(process.cwd(), "data", "blog.db");
 const BACKUP_DIR = getArg("output", path.join(process.cwd(), "data", "backups"));
 const MAX_BACKUPS = parseInt(getArg("max-backups", "7"), 10);
 
