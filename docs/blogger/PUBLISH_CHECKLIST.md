@@ -10,30 +10,34 @@
 
 각 파일을 Blogger 콘솔의 페이지로 게시한다.
 
-> ⚠️ **Blogger Pages는 맞춤 퍼머링크 옵션이 없다**. URL은 최초 게시 시점의 제목에서 자동 생성되며 이후 변경 불가. 한국어 제목으로 바로 게시하면 흉한 인코딩 URL이 박힌다. 아래 "영어 제목 트릭" 절차를 따른다.
+> ⚠️ **Blogger 2024+ Pages는 제목 무관 `/p/blog-page*.html` slug 자동 생성**. 영어 제목 트릭, 한국어 제목 모두 무효. URL은 페이지 생성 순서·내부 ID에 따라 결정되며 사후 변경 불가. 4/29 본 프로젝트 실측 결과:
+>
+> - 1번째 게시: `/p/blog-page.html`
+> - 2번째 게시: `/p/blog-page_29.html` (또는 다른 숫자)
+> - 3번째 게시: `/p/blog-page_86.html` (또는 다른 숫자)
+>
+> → 본문 내부 링크는 게시 후 실제 URL을 확인한 뒤 정정해야 한다.
 
-### 절차 (각 파일 공통, 영어 제목 트릭)
+### 절차 (각 파일 공통)
 1. https://www.blogger.com 로그인 → 부동산시그널 선택
 2. 좌측 메뉴 → **페이지** → **새 페이지** 클릭
-3. 제목 입력 — **영어로 먼저** (아래 표의 "최초 영어 제목" 컬럼)
+3. 제목 입력 (한국어 가능): "부동산시그널 소개" / "개인정보 처리방침" / "문의 (Contact)"
 4. 우상단 편집 모드 토글에서 **"HTML 보기"** 선택 (작성 모드 아님)
-5. 본문 영역에 보이는 placeholder `<p>&nbsp;</p>`를 **Cmd+A (또는 Ctrl+A) 전체 선택 → Delete**로 비운 뒤, HTML 파일 내용을 통째로 붙여넣기 (Cmd+V)
-6. 우상단 **게시** 클릭 → URL 자동 생성 (`/p/about.html` 등)
-7. **"보기"** 버튼으로 실제 URL 확인 → 깔끔한 영어 slug 확보 ✅
-8. 다시 **편집**으로 돌아와 **제목을 한국어로 변경** (아래 표 "최종 한국어 제목") → 업데이트
-9. URL은 그대로 `/p/about.html` 유지됨
+5. 본문 영역에 보이는 placeholder `<p>&nbsp;</p>`를 **Cmd+A → Delete**로 비운 뒤, HTML 파일 내용을 통째로 붙여넣기 (Cmd+V)
+6. 우상단 **게시** 클릭
+7. **"보기"** 버튼으로 실제 URL 확인 → 메모해 둘 것 (예: `/p/blog-page.html`)
 
-> ⚠️ 주의: 게시 후에는 **HTML 보기와 작성 모드를 토글하지 말 것**. Blogger가 HTML을 망가뜨리는 경우가 있다. 미리보기 버튼은 안전.
+> ⚠️ 주의: 게시 후 **HTML 보기와 작성 모드를 토글하지 말 것**. Blogger가 HTML을 망가뜨리는 경우가 있다. 미리보기 버튼은 안전.
 
 ### 게시 대상
 
-| # | 파일 | 최초 영어 제목 (URL 결정용) | 최종 한국어 제목 (게시 후 변경) | 결과 URL | placeholder 채움 |
-|---|---|---|---|---|---|
-| 1 | `docs/blogger/about.html` | `About` | `부동산시그널 소개` | `/p/about.html` | 없음 |
-| 2 | `docs/blogger/privacy.html` | `Privacy` | `개인정보 처리방침` | `/p/privacy.html` | 없음 |
-| 3 | `docs/blogger/contact.html` | `Contact` | `문의 (Contact)` | `/p/contact.html` | `{{CONTACT_EMAIL}}`, `{{GOOGLE_FORM_URL}}`, `{{X_HANDLE}}` |
+| # | 파일 | 페이지 제목 | 실제 URL (4/29 측정) | placeholder 채움 |
+|---|---|---|---|---|
+| 1 | `docs/blogger/about.html` | 부동산시그널 소개 | `/p/blog-page.html` | 없음 |
+| 2 | `docs/blogger/privacy.html` | 개인정보 처리방침 | `/p/blog-page_29.html` | 없음 |
+| 3 | `docs/blogger/contact.html` | 문의 (Contact) | `/p/blog-page_86.html` | `{{CONTACT_EMAIL}}`, `{{GOOGLE_FORM_URL}}`, `{{X_HANDLE}}` |
 
-> 이 영어 slug 대로 URL이 만들어져야 about.html / privacy.html에 박혀 있는 내부 링크 (`<a href="/p/privacy.html">` 등)가 끊어지지 않는다. 만약 Blogger가 다른 URL을 생성하면 (드물지만 동일 slug 충돌 시 `-1` 같은 suffix 추가됨) 해당 URL로 about/privacy/contact 본문의 링크를 수정해야 한다.
+> 본 repo의 about.html / privacy.html은 위 실제 URL에 맞춰 내부 링크가 박혀 있다. 신규 게시 시 URL이 다르게 나오면 (일반적으로 그러함) 본문의 `<a href="/p/blog-page_29.html">` 등을 실제 URL로 수정한 뒤 게시한다.
 
 ### Contact 페이지 placeholder 처리
 
@@ -54,10 +58,28 @@
 ### 절차
 1. 좌측 메뉴 → **레이아웃**
 2. 헤더 바로 아래 영역(또는 사이드바)에서 **가젯 추가** → **페이지** 가젯
-3. About / Privacy / Contact 3개 페이지 체크
-4. 저장
+3. 자동 감지 영역에 페이지 3종이 안 뜨면 → **외부 링크 직접 입력** (Blogger 페이지 가젯 자동 감지가 늦거나 안 되는 경우 흔함)
+4. 외부 링크 3개 등록 (4/29 측정 URL 기준):
+   - 소개 → `https://apt-signal.blogspot.com/p/blog-page.html`
+   - 개인정보처리방침 → `https://apt-signal.blogspot.com/p/blog-page_29.html`
+   - 문의 → `https://apt-signal.blogspot.com/p/blog-page_86.html`
+5. 저장
 
-확인: 사이트 홈페이지 새로고침 → 헤더 아래 메뉴에 3개 링크 노출 여부.
+> ⚠️ 메뉴에 `/p/about.html` 같은 가짜 깔끔한 slug를 넣으면 클릭 시 홈페이지 fallback (soft 404). 반드시 위 실제 `/p/blog-page*.html` URL로 등록한다.
+
+확인: 사이트 홈페이지 새로고침 → 헤더 아래 메뉴 클릭 → 각 페이지로 정상 이동 여부.
+
+### 대안: HTML/JavaScript 가젯
+
+페이지 가젯이 잘 작동 안 하면 HTML 가젯으로 직접 메뉴를 그릴 수도 있다.
+
+```html
+<ul style="display:flex;gap:20px;list-style:none;padding:10px;margin:0;justify-content:center;">
+  <li><a href="/p/blog-page.html">소개</a></li>
+  <li><a href="/p/blog-page_29.html">개인정보처리방침</a></li>
+  <li><a href="/p/blog-page_86.html">문의</a></li>
+</ul>
+```
 
 ---
 
