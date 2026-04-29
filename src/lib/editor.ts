@@ -115,6 +115,10 @@ export async function review(input: EditorReviewInput): Promise<EditorReviewResu
           ? p.score
           : null;
     if (score !== null) return score >= 80 ? 'approved' : 'revision_needed';
+    // 4/29 dispatch 25091647631 evidence: LLM이 status/verdict 누락한 채 final_meta만 반환하는
+    // drift 발생 (WS/5월 가정의 달 fail). final_meta는 persona schema상 approve 시에만 생성되는
+    // 필드 (line 34 주석). final_meta 존재 = LLM이 통과시킨 결과물 → approved로 처리.
+    if (typeof p.final_meta === 'object' && p.final_meta !== null) return 'approved';
     throw new Error(
       `editor: missing status/verdict (raw keys: ${Object.keys(p).join(',')})`,
     );

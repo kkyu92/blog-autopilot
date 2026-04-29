@@ -247,6 +247,26 @@ describe('editor.review', () => {
     );
   });
 
+  // Test 10b: 4/29 dispatch 25091647631 evidence — LLM이 status 누락한 채 final_meta만 반환.
+  // final_meta는 persona schema상 approve 시에만 생성되는 필드 → approved fallback 처리.
+  it('LLM이 status 누락한 채 final_meta만 반환 → approved fallback', async () => {
+    const { callClaude } = await import('../llm');
+    const { factcheck } = await import('../factcheck');
+    vi.mocked(callClaude).mockResolvedValue(
+      JSON.stringify({
+        final_meta: { title: 't', meta_description: 'd', slug: 's', labels: ['l'] },
+        final_html: '<p>polished</p>',
+      }),
+    );
+    vi.mocked(factcheck).mockResolvedValue({ verdict: 'pass' });
+
+    const { review } = await import('../editor');
+    const result = await review({ draft: validDraft(), niche: 'TS' });
+    expect(result.verdict).toBe('pass');
+    expect(result.final_meta).toEqual({ title: 't', meta_description: 'd', slug: 's', labels: ['l'] });
+    expect(result.score).toBe(85); // default for approved without explicit quality_score
+  });
+
   // Test 11: 정량 issues (word_count + image_slots) — factcheck는 soft-warn이므로 hard reject 안 함
   it('정량 실패: word_count 부족 + image_slots 부족 → 2개 이슈 feedback에 포함 (factcheck는 soft-warn)', async () => {
     const { callClaude } = await import('../llm');
