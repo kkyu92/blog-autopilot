@@ -35,11 +35,32 @@ GitHub Actions schedule cron 회귀 패턴 (4/26 ~ 4/28 3일 연속, 14일 통�
 
 ### 1.3 진입 trigger 조건 (이 spec의 게이트)
 
-> **A1 fix 후 7일간 (2026-04-29 ~ 2026-05-05)** auto-publish.yml workflow의 `success rate < 80%` 시 Phase 1 진입.
->
-> 측정 정의: `success / (success + failure + cancelled)` × 100. cron + manual dispatch 합산.
+#### Baseline (A1 fix 적용 직전 7일)
+
+| 윈도우 | success | failure | cancelled | total | success rate |
+|---|---|---|---|---|---|
+| 4/22 ~ 4/28 (UTC) | 16 | 10 | 5 | 31 | **51.6%** |
+
+**A1 fix 회복 목표**: 51.6% → ≥ 80% (+28.4%p)
+
+#### 윈도우 정의 (시점 명확화)
+
+- cron `17 16 * * *` UTC = KST 01:17 매일 새벽 발화 (사용자 시간대 기준 "그날 새벽")
+- A1 fix 적용: 2026-04-29 09:51 KST (commit `724ca90`)
+- **첫 자연 schedule 검증**: 4/29 16:17 UTC = **2026-04-30 01:17 KST**
+- 7회 연속 schedule = 4/30 ~ 5/6 새벽 (KST 기준)
+- **평가 시점**: 2026-05-06 새벽 schedule 후 (= 5/6 KST 03:00 이후)
+- 측정 정의: `success / (success + failure + cancelled)` × 100. cron + manual dispatch 합산.
+
+#### 진입 조건
+
+> 평가 시점 7일 윈도우 success rate **< 80%** 시 Phase 1 진입.
 
 도달 못하면 spec 보류. **Phase 2 (full migration)는 영원히 안 갈 수 있음 (정상)**. VISION.md $0/month 조건 우선.
+
+#### Cancelled 분류 caveat (별도 의제 — §10)
+
+baseline의 cancelled 5건 중 **일부는 9 slots 발행 정상 완료 후 cleanup 단계 cancel** (예: 4/26 17:02 schedule = 89분 진행 후 cancel, DB에 9건 정상 박힘) → **실질 success 가능성**. 정확한 success rate 측정은 cancelled 재분류 후 가능. 본 spec은 GitHub conclusion 기준 (cancelled = fail) 적용.
 
 ---
 
@@ -240,7 +261,22 @@ Phase 1 진입 후 7일 운영해도 **여전히 success rate < 80%**:
 
 ### 6.1 재진단 단계 (Phase 2 진입 전 mandatory)
 
-1. **self-hosted runner sleep/wake 확인**: 사용자 PC 가동 시간 확인 (`pmset -g log | grep -E "Wake|Sleep"`), cron 시각 (UTC 16:17 = KST 01:17)에 PC 켜져있었는지
+#### 6.1.0 이미 확인된 가설 (폐기)
+
+- ❌ **PC sleep/wake**: `pmset repeat wake at 1:10AM every day` + caffeinate 6 process 활성. 이미 우회 적용 (`runner-setup.md` §3). root cause 아님.
+
+#### 6.1.1 검증된 cancelled root cause (mid-review 4/29 분석)
+
+| 일자 | conclusion | 진단 |
+|---|---|---|
+| 4/26 17:02 | cancelled | 89분 진행 후 cancel — 9 slots 발행 정상 완료 후 cleanup cancel **실질 success 의심** |
+| 4/27 17:41 | cancelled | 사용자 09:18 KST manual dispatch가 self-hosted runner 점유 → schedule run **concurrency 충돌 cancel** |
+
+→ 4/27 패턴 = 사용자 행동 변경 (cron 시각 직후 manual dispatch 자제) 또는 GitHub Actions `concurrency` keyword 도입으로 fix 가능. Cloudflare Worker 도입과 무관.
+
+#### 6.1.2 추가 재진단 (Phase 1 운영 후)
+
+1. **GitHub Actions schedule fire 지연 패턴**: 4/26 45분 → 4/27 84분 → 4/28 99분 지연 증가. moneyball 인용 "high-load skip" 시나리오와 일치 — Worker 도입 정당성. Phase 1 운영 후 fire 지연 측정 (Worker → 즉시 dispatch 검증)
 2. **Worker invocation 검증**: Cloudflare 대시보드에서 cron fired 확인 (Worker는 fire했는데 receiver fail이면 receiver 문제, Worker 안 fired면 Worker config 문제)
 3. **새 root cause 확인**: A1·Worker 외 어떤 원인 (예: Pixabay/Pexels API down, claude-cli 진짜 hang)
 
@@ -310,6 +346,15 @@ VISION.md `$0/month` 조건 **유지**.
 
 ---
 
+## 11. 별도 의제 (이 spec 미포함, 발견 박제만)
+
+- **Cancelled 분류 재검토**: GitHub conclusion=cancelled 중 발행 정상 완료 후 cleanup cancel 케이스 분리 측정. `scripts/mid-review/cron-health.mjs` (§5.1)에 DB published_posts cross-reference 로직 추가 필요
+- **GitHub Actions concurrency keyword**: 4/27 사용자 manual dispatch가 schedule cancel한 패턴. `concurrency: { group: auto-publish, cancel-in-progress: false }` 추가 또는 사용자 행동 변경 (manual dispatch 시각 분리). Cloudflare 도입과 별개
+- **사용자 manual dispatch 정책**: schedule cron 진행 중 (KST 02:00 ~ 04:00) manual dispatch 자제 가이드
+
+---
+
 ## 변경 이력
 
 - **2026-04-29 (작성)**: brainstorming 결과 박제. Q1 timing (A1 검증 후 결정 + spec 박제), Q2 scope (단계적 Phase 1 trigger only), Q3 trigger 메커니즘 (workflow_dispatch API), Q4 진입 조건 (7일 < 80% + GHActions 비활성화) 4개 결정 반영.
+- **2026-04-29 (보강)**: §1.3 baseline 51.6% + 윈도우 시점 명확화 (KST/UTC), §6.1 cancelled root cause 검증 (PC sleep 가설 폐기 + concurrency 충돌 + cleanup cancel 의심), §11 별도 의제 3건 박제.
