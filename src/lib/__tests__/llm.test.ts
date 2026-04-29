@@ -90,7 +90,7 @@ describe('callClaude', () => {
     expect(spawnArgs[1][idx + 1]).toBe('opus');
   });
 
-  it('child error event → reject', async () => {
+  it('child error event → reject after retry (F1\'-c)', async () => {
     const { spawn } = await import('node:child_process');
     const { callClaude } = await import('../llm');
     (spawn as ReturnType<typeof vi.fn>).mockReturnValue({
@@ -101,7 +101,9 @@ describe('callClaude', () => {
       },
     });
     await expect(callClaude({ systemPrompt: 'sys', userMessage: 'hi' })).rejects.toThrow('spawn ENOENT');
-  });
+    // F1'-c: ENOENT는 transient → 5초 후 1회 retry → 두 번째도 fail → 최종 reject
+    expect((spawn as ReturnType<typeof vi.fn>).mock.calls.length).toBe(2);
+  }, 15_000);
 
   it('UTF-8 multi-byte chars across chunk boundaries', async () => {
     const { spawn } = await import('node:child_process');
