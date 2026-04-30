@@ -15,15 +15,20 @@ export interface CallClaudeOptions {
    */
   jsonRetries?: number;
   /**
-   * spawn된 claude CLI 응답 timeout (ms). default 600_000 (10분).
+   * spawn된 claude CLI 응답 timeout (ms). default 900_000 (15분).
    * 4/28 cron 25010381167 fact-checker 무한 hang 사고: claude CLI 응답이 안 와도 child가
    * close 이벤트를 영영 안 보내서 await 무한 대기 → runner 점유. 다음 cron 차단.
    * timeout 시 SIGTERM, 5초 후 안 죽으면 SIGKILL.
+   *
+   * 4/30 cron 25124826827 evidence: niche 병렬 동시 3 호출 환경에서 600s timeout 2건 발생
+   * (uptime 34.2min, 42.9min). 동일 패턴이 manual dispatch (89% success)에선 less severe →
+   * schedule cron 환경 + concurrent 호출 조합에서 LLM 응답이 600s 넘어 도달하는 케이스 추정.
+   * F2-B: 600s → 900s. F1'-b orphan-kill 활성으로 zombie 위험 없음.
    */
   timeoutMs?: number;
 }
 
-const DEFAULT_TIMEOUT_MS = 600_000;
+const DEFAULT_TIMEOUT_MS = 900_000;
 const FORCE_KILL_GRACE_MS = 5_000;
 // F1'-c: spawn-level transient OS error retry. 4/29 cron 25085433470 fail evidence:
 // "spawn claude ENOENT", "spawn Unknown system error -8". 호출 누적 후 OS-level transient.

@@ -241,10 +241,19 @@ async function writeAndReview(
       expectJson: true,
     });
     const parsed = JSON.parse(writerOutput) as Record<string, unknown>;
-    for (const field of REQUIRED_DRAFT_FIELDS) {
-      if (parsed[field] == null) {
-        throw new Error(`writer: missing field ${field}`);
+    // F2-A (4/30 fix): missing field → 즉시 throw 대신 revision_feedback으로 attempt 2 retry.
+    // 4/30 cron 25124826827 evidence: WS 자가면역 글이 LLM JSON drift로 title 필드 누락 →
+    // 기존 throw가 attempt 1에서 슬롯 영구 실패로 만듦. editor revision_needed와 동일한 retry 메커니즘 적용.
+    const missingFields = REQUIRED_DRAFT_FIELDS.filter((f) => parsed[f] == null);
+    if (missingFields.length > 0) {
+      if (attempt < 2) {
+        const feedback = `Output JSON is missing required fields: ${missingFields.join(', ')}. Re-emit the full JSON object including ALL required fields (title, slug, meta_description, content_html, word_count) — partial output is rejected.`;
+        console.warn(`[${niche}] writer attempt ${attempt} schema fail: missing ${missingFields.join(',')} — retry with revision_feedback`);
+        lastFeedback = feedback;
+        continue;
       }
+      // attempt 2 also missing → permanent fail (existing behavior)
+      throw new Error(`writer: missing field ${missingFields[0]} (attempt 2/2 still missing)`);
     }
     if (parsed.keyword == null) {
       console.warn(`[${niche}] writer omitted keyword field (LLM drift); backfilling from input`);

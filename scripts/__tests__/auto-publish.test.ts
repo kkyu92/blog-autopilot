@@ -17,6 +17,8 @@ vi.mock('../../src/lib/dedup', () => ({
 }));
 vi.mock('../../src/lib/llm', () => ({
   callClaude: vi.fn(),
+  // F1'-a: scripts/auto-publish.ts:968이 cron 종료 시 호출. test 환경에선 zero-stats 반환.
+  getClaudeCallStats: vi.fn(() => ({ count: 0, firstCallAt: null, uptimeMs: null })),
 }));
 vi.mock('../../src/lib/editor', () => ({
   review: vi.fn(),
@@ -378,6 +380,56 @@ describe('auto-publish.ts integration (7 시나리오)', () => {
     expect(post.content).toContain(placeholderUrl);
     // Both markers replaced — no <!-- IMAGE_SLOT_N --> stragglers.
     expect(post.content).not.toMatch(/<!-- IMAGE_SLOT_\d+ -->/);
+
+    const rows = testDb.select().from(publishedPosts).all();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].status).toBe('published');
+  });
+
+  it('Scenario 8 (F2-A regression): writer JSON missing required field → retry with revision feedback → attempt 2 published', async () => {
+    // RC-1 회귀 테스트: 4/30 cron run 25124826827에서 WS 자가면역 글이 LLM JSON drift로 title 필드 누락 →
+    // 기존 코드는 attempt 1에서 즉시 throw (attempt 2 진입 못 함) → 영구 실패.
+    // F2-A fix: missing field를 revision_feedback으로 LLM에 재요청 후 attempt 2 진입.
+    const { pickQueue } = await import('../../src/lib/trends');
+    const { checkAndResolve } = await import('../../src/lib/dedup');
+    const { callClaude } = await import('../../src/lib/llm');
+    const { review } = await import('../../src/lib/editor');
+    const { fetchForSlots } = await import('../../src/lib/images');
+    const { publishScheduled: wpPublish } = await import('../../src/lib/wordpress');
+
+    vi.mocked(pickQueue).mockResolvedValue([mockCandidate()]);
+    vi.mocked(checkAndResolve).mockResolvedValue({ action: 'pass', reason: '신규' });
+
+    // Writer attempt 1: valid JSON but title 필드 누락.
+    // Writer attempt 2: 정상 JSON (LLM이 revision_feedback 반영).
+    const missingTitleJson = (() => {
+      const parsed = JSON.parse(mockDraftJson()) as Record<string, unknown>;
+      delete parsed.title;
+      return JSON.stringify(parsed);
+    })();
+
+    vi.mocked(callClaude)
+      .mockResolvedValueOnce(missingTitleJson)
+      .mockResolvedValueOnce(mockDraftJson());
+    vi.mocked(review).mockResolvedValue({ verdict: 'pass', score: 90 });
+    vi.mocked(fetchForSlots).mockResolvedValue(mockImageResults());
+    vi.mocked(wpPublish).mockResolvedValue({
+      externalId: 'wp-retry',
+      externalUrl: 'https://ws.example.com/test-slug',
+      scheduledAt: '2026-04-27T00:00:00Z',
+    });
+
+    const { runMain } = await import('../auto-publish');
+    const code = await runMain(['node', 'auto-publish.ts', '--niche=WS', '--slot-count=1']);
+
+    expect(code).toBe(0);
+    expect(callClaude).toHaveBeenCalledTimes(2); // writer called twice (schema retry)
+
+    // attempt 2 userMessage에 revision_feedback이 missing field를 언급해야 함
+    const secondCall = vi.mocked(callClaude).mock.calls[1][0];
+    const secondUserMsg = JSON.parse(secondCall.userMessage) as { revision_feedback?: string };
+    expect(secondUserMsg.revision_feedback).toBeTruthy();
+    expect(secondUserMsg.revision_feedback).toMatch(/title/i);
 
     const rows = testDb.select().from(publishedPosts).all();
     expect(rows).toHaveLength(1);
