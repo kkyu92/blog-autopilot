@@ -1,7 +1,7 @@
 # Content Autopilot — TODO
 
-> 마지막 점검: 2026-04-29 (자동 점검)
-> 빌드: **FAIL** (Next.js app/ 미존재) | 테스트: **6 FAIL / 343 PASS** (신규 회귀!) | Lint: 21 errors, 2 warnings (+경고 1개 신규)
+> 마지막 점검: 2026-04-30 (자동 점검)
+> 빌드: **FAIL** (Next.js app/ 미존재) | 테스트: **350 PASS / 0 FAIL** (회귀 전부 수정) | Lint: 21 errors, 2 warnings
 
 ---
 
@@ -40,6 +40,13 @@
 - [x] docs(adsense): Blogger Pages 3종 HTML 템플릿 완성 (docs/blogger/about.html, privacy.html, contact.html)
 - [x] docs(adsense): PUBLISH_CHECKLIST.md — Blogger 게시 절차 + AdSense 신청 기준 가이드 작성
 
+### 안정성 패치 + Blogger 도구 (2026-04-30)
+- [x] fix(reliability): F2-A writer schema retry + F2-B timeout 600s→900s — 4/30 cron 3 fail 분석 대응
+- [x] fix(editor): inferStatus final_meta fallback — 4/29 1 fail 회수
+- [x] feat(blogger-pages): scripts/blogger/update-pages.mjs — Pages API 직접 갱신 도구 추가
+- [x] feat(blogger-posts): scripts/blogger/update-posts.mjs — AS spot-check P0 fix (환각 도메인 제거, 면책 고지 추가)
+- [x] **테스트 회귀 수정**: auto-publish.test.ts vi.mock에 `getClaudeCallStats` 추가 — 6 FAIL → 0 FAIL (350 PASS)
+
 ---
 
 ## 신규 발견 이슈 (2026-04-27)
@@ -59,7 +66,7 @@
 ## 신규 발견 이슈 (2026-04-29)
 
 ### 테스트 회귀 (즉시 수정 필요)
-- [ ] **`auto-publish.test.ts` Scenario 1~4, 6, 7 총 6개 FAIL** — `getClaudeCallStats`가 `src/lib/llm.ts`에 추가(F1'-a)됐으나 `vi.mock('../../src/lib/llm', ...)` 에 누락. 수정: `getClaudeCallStats: vi.fn(() => ({ count: 0, firstCallAt: null, uptimeMs: null }))` 추가
+- [x] **`auto-publish.test.ts` Scenario 1~4, 6, 7 총 6개 FAIL** — `getClaudeCallStats` vi.mock 추가로 수정 완료 (2026-04-30 확인: 350 PASS)
 
 ### Lint 신규 경고 (1개 추가, 총 2 warnings)
 - [ ] `scripts/mid-review/fetch.mjs:80` — `toIsoDate` 함수 정의 후 미사용 (`@typescript-eslint/no-unused-vars` warning) — 함수 제거 또는 실제 사용 코드 추가
@@ -69,7 +76,7 @@
 ## 다음 단계 (우선순위순)
 
 ### 즉시 (테스트 회귀 수정)
-- [ ] `auto-publish.test.ts` vi.mock llm에 `getClaudeCallStats` 추가 — 6개 FAIL 복구
+- [x] `auto-publish.test.ts` vi.mock llm에 `getClaudeCallStats` 추가 — 6개 FAIL → 0 FAIL 복구 완료
 
 ### 즉시 (빌드/린트 복구)
 - [ ] Next.js 의존성 제거 — `next build` → CLI 전용 `package.json`으로 전환 (build 스크립트 삭제 또는 `tsc --noEmit`으로 교체)
