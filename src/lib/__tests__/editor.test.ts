@@ -267,6 +267,29 @@ describe('editor.review', () => {
     expect(result.score).toBe(85); // default for approved without explicit quality_score
   });
 
+  // Test 10c: 5/2 cron 25224338485 AS 분당 재건축 evidence — LLM이 final_meta wrap을 풀어 그 4 필드
+  // (title, meta_description, slug, labels)를 최상위에 flat하게 emit하는 drift 변형.
+  // 4/29 fix(Test 10b)는 wrap된 final_meta만 잡고 풀린 케이스는 못 잡아 throw → 슬롯 영구 fail.
+  // raw keys: title, meta_description, slug, labels (= final_meta interface 정확 일치).
+  it('LLM이 final_meta 키 4개를 최상위에 flat 풀어 emit (wrap 누락) → approved fallback', async () => {
+    const { callClaude } = await import('../llm');
+    const { factcheck } = await import('../factcheck');
+    vi.mocked(callClaude).mockResolvedValue(
+      JSON.stringify({
+        title: '분당 재건축 결합지정 선도지구 2026',
+        meta_description: '분당 재건축 추진 현황과 조합원 투자 전망',
+        slug: 'bundang-redevelopment-2026',
+        labels: ['재건축', '분당', '투자'],
+      }),
+    );
+    vi.mocked(factcheck).mockResolvedValue({ verdict: 'pass' });
+
+    const { review } = await import('../editor');
+    const result = await review({ draft: validDraft(), niche: 'AS' });
+    expect(result.verdict).toBe('pass');
+    expect(result.score).toBe(85); // approved 추론 + LLM quality_score 없음 → 기본 85
+  });
+
   // Test 11: 정량 issues (word_count + image_slots) — factcheck는 soft-warn이므로 hard reject 안 함
   it('정량 실패: word_count 부족 + image_slots 부족 → 2개 이슈 feedback에 포함 (factcheck는 soft-warn)', async () => {
     const { callClaude } = await import('../llm');

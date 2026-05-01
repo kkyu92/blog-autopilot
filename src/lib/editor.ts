@@ -119,6 +119,11 @@ export async function review(input: EditorReviewInput): Promise<EditorReviewResu
     // drift 발생 (WS/5월 가정의 달 fail). final_meta는 persona schema상 approve 시에만 생성되는
     // 필드 (line 34 주석). final_meta 존재 = LLM이 통과시킨 결과물 → approved로 처리.
     if (typeof p.final_meta === 'object' && p.final_meta !== null) return 'approved';
+    // 5/2 cron 25224338485 AS 분당 재건축 evidence: final_meta wrap이 풀려 그 4 필드(title,
+    // meta_description, slug, labels)가 최상위에 flat된 drift 변형. 위 line 121 fallback은 wrap된
+    // 케이스만 잡아 풀린 케이스 영구 fail. 핵심 4 키 모두 매칭이면 wrap이 풀린 approve 응답으로 추론.
+    const FLAT_FINAL_META_KEYS = ['title', 'meta_description', 'slug', 'labels'] as const;
+    if (FLAT_FINAL_META_KEYS.every((k) => k in p)) return 'approved';
     throw new Error(
       `editor: missing status/verdict (raw keys: ${Object.keys(p).join(',')})`,
     );
