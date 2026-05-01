@@ -194,6 +194,38 @@ describe('callClaude', () => {
     expect(callIdx).toBe(2);
   });
 
+  it("F2-A 강화: attempt 2+ systemPrompt에 JSON_RETRY_GUARD 주입 (5/1 WS HPV evidence)", async () => {
+    const { spawn } = await import('node:child_process');
+    const { callClaude } = await import('../llm');
+    let callIdx = 0;
+    (spawn as ReturnType<typeof vi.fn>).mockImplementation(() => {
+      callIdx++;
+      const stdout = callIdx === 1 ? 'not json' : '{"ok":true}';
+      return {
+        stdout: { on: (e: string, cb: (data: Buffer) => void) => { if (e === 'data') cb(Buffer.from(stdout)); } },
+        stderr: { on: vi.fn() },
+        on: (e: string, cb: (code: number) => void) => { if (e === 'close') cb(0); },
+      };
+    });
+    await callClaude({ systemPrompt: 'BASE_SYS', userMessage: 'hi', expectJson: true });
+
+    const firstSystemPrompt = (spawn as ReturnType<typeof vi.fn>).mock.calls[0][1][
+      (spawn as ReturnType<typeof vi.fn>).mock.calls[0][1].indexOf('--system-prompt') + 1
+    ];
+    const secondSystemPrompt = (spawn as ReturnType<typeof vi.fn>).mock.calls[1][1][
+      (spawn as ReturnType<typeof vi.fn>).mock.calls[1][1].indexOf('--system-prompt') + 1
+    ];
+
+    // attempt 1: BASE_SYS + JSON_GUARD only (no retry guard)
+    expect(firstSystemPrompt).toContain('BASE_SYS');
+    expect(firstSystemPrompt).not.toContain('RETRY (previous response rejected)');
+
+    // attempt 2: BASE_SYS + JSON_GUARD + JSON_RETRY_GUARD (escape/length 가이드)
+    expect(secondSystemPrompt).toContain('BASE_SYS');
+    expect(secondSystemPrompt).toContain('RETRY (previous response rejected)');
+    expect(secondSystemPrompt).toMatch(/escape/i);
+  });
+
   it('expectJson + jsonRetries=0 → no retry, throw on first failure', async () => {
     const { spawn } = await import('node:child_process');
     const { callClaude } = await import('../llm');

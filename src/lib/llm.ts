@@ -47,6 +47,11 @@ export function getClaudeCallStats(): { count: number; firstCallAt: number | nul
 
 const JSON_GUARD = '\n\n---\n\nCRITICAL: Your response MUST be valid JSON only — no markdown headers, no preamble, no closing remarks, no code fences. Reply with the raw JSON object or array as the entire response. Start your response with `{` or `[` immediately.';
 
+// F2-A 강화 (5/1 evidence): callClaude inner retry에서 invalid JSON 두 번 연속 fail 케이스 대응.
+// 5/1 cron 25180460128 WS HPV 슬롯 raw len 15704자, pos 1121에서 parse 실패 → 긴 응답 중 escape 손상.
+// retry 시 system prompt에 escape/length 가이드 추가 주입해 LLM이 JSON 무결성에 더 신경쓰도록.
+const JSON_RETRY_GUARD = '\n\n---\n\nRETRY (previous response rejected): JSON.parse failed on the prior attempt. Common causes — (1) unescaped " inside string values: use \\" for every internal double-quote, (2) trailing comma before } or ], (3) markdown code fences wrapping the output, (4) explanatory text after the closing brace. Re-emit the COMPLETE JSON object with ALL internal quotes properly escaped. Begin response with `{` immediately. If the JSON is long, double-check that every string value is properly terminated and escaped.';
+
 // stdout이 markdown 등으로 둘러싸여 있을 때 JSON만 추출 (LLM drift 방어).
 // content_html 안의 } 또는 ] 가 lastIndexOf로 잘못 잡히지 않도록
 // bracket-balanced walk 사용 (string 안 escape 인식).
@@ -180,7 +185,12 @@ export async function callClaude(opts: CallClaudeOptions): Promise<string> {
   let lastErr: Error | null = null;
 
   for (let attempt = 1; attempt <= maxJsonAttempts; attempt++) {
-    const { stdout, stderr, code, signal } = await spawnClaudeWithRetry(opts);
+    // F2-A 강화: attempt 2+에서는 system prompt에 JSON_RETRY_GUARD 추가 주입.
+    // expectJson=false인 경우 maxJsonAttempts==1이라 이 분기 도달 안 함.
+    const attemptOpts = attempt === 1
+      ? opts
+      : { ...opts, systemPrompt: opts.systemPrompt + JSON_RETRY_GUARD };
+    const { stdout, stderr, code, signal } = await spawnClaudeWithRetry(attemptOpts);
     if (code !== 0) {
       throw new Error(`claude CLI exit ${code ?? `signal ${signal}`}: ${stderr}`);
     }

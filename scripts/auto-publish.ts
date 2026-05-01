@@ -244,16 +244,18 @@ async function writeAndReview(
     // F2-A (4/30 fix): missing field → 즉시 throw 대신 revision_feedback으로 attempt 2 retry.
     // 4/30 cron 25124826827 evidence: WS 자가면역 글이 LLM JSON drift로 title 필드 누락 →
     // 기존 throw가 attempt 1에서 슬롯 영구 실패로 만듦. editor revision_needed와 동일한 retry 메커니즘 적용.
+    // F2-A 강화 (5/1 evidence): 5/1 cron 25180460128 AS 양도세 슬롯이 attempt 2에서도 title 누락 →
+    // revision_feedback wording을 [CRITICAL FINAL] prefix + "begin response with..." 강제 형태로 강화.
     const missingFields = REQUIRED_DRAFT_FIELDS.filter((f) => parsed[f] == null);
     if (missingFields.length > 0) {
       if (attempt < 2) {
-        const feedback = `Output JSON is missing required fields: ${missingFields.join(', ')}. Re-emit the full JSON object including ALL required fields (title, slug, meta_description, content_html, word_count) — partial output is rejected.`;
+        const feedback = `[CRITICAL SCHEMA FAILURE — final retry] Previous response was rejected because it omitted required field(s): ${missingFields.join(', ')}. Your next JSON MUST include ALL of: title, slug, meta_description, content_html, word_count, image_slots, chart_slots, faq_schema, keyword. Begin response with {"title": "..." and emit the COMPLETE WriterDraft object. If any required field is missing or empty, the entire slot is permanently discarded.`;
         console.warn(`[${niche}] writer attempt ${attempt} schema fail: missing ${missingFields.join(',')} — retry with revision_feedback`);
         lastFeedback = feedback;
         continue;
       }
       // attempt 2 also missing → permanent fail (existing behavior)
-      throw new Error(`writer: missing field ${missingFields[0]} (attempt 2/2 still missing)`);
+      throw new Error(`writer: missing fields [${missingFields.join(',')}] (attempt 2/2 still missing)`);
     }
     if (parsed.keyword == null) {
       console.warn(`[${niche}] writer omitted keyword field (LLM drift); backfilling from input`);

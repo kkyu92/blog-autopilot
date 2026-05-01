@@ -430,6 +430,9 @@ describe('auto-publish.ts integration (7 시나리오)', () => {
     const secondUserMsg = JSON.parse(secondCall.userMessage) as { revision_feedback?: string };
     expect(secondUserMsg.revision_feedback).toBeTruthy();
     expect(secondUserMsg.revision_feedback).toMatch(/title/i);
+    // F2-A 강화 (5/1 evidence): wording에 [CRITICAL FINAL] prefix + "Begin response with" 강제 포함
+    expect(secondUserMsg.revision_feedback).toMatch(/CRITICAL SCHEMA FAILURE/);
+    expect(secondUserMsg.revision_feedback).toMatch(/Begin response with/);
 
     const rows = testDb.select().from(publishedPosts).all();
     expect(rows).toHaveLength(1);
