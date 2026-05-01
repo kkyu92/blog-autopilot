@@ -5,6 +5,10 @@
 //   - [52] 환각 도메인 (www.appear.go.kr) 제거 → law.go.kr (국가법령정보센터)
 //   - [7] [8] [52] YMYL disclaimer 추가 (면책 고지)
 //
+// 5/1 9건 spot-check (자연 cron 7건 + 보충 dispatch 2건) P0 fix:
+//   - [58] [63] YMYL disclaimer 추가 (wangsuk2 청약, 양도세 보충)
+//   (4/30 TARGETS는 idempotent — already has disclaimer로 SKIP 됨)
+//
 // 사용:
 //   node --env-file=.env.local scripts/blogger/update-posts.mjs           # dry-run
 //   node --env-file=.env.local scripts/blogger/update-posts.mjs --apply   # 실제 PUT
@@ -70,6 +74,21 @@ const TARGETS = [
     transforms: [
       fixAppearDomain,
       (c) => appendDisclaimer(c, "세제 적용 및 세무 신고 시"),
+    ],
+  },
+  // 5/1 spot-check 추가
+  {
+    id: "5733257609327216635",
+    label: "[58] 왕숙2 공공분양 청약 2026년 5월",
+    transforms: [
+      (c) => appendDisclaimer(c, "청약 신청 및 분양 결정 시"),
+    ],
+  },
+  {
+    id: "6868336670304012905",
+    label: "[63] 다주택자 양도세 중과 재시행 2026 5월 9일 (보충 dispatch)",
+    transforms: [
+      (c) => appendDisclaimer(c, "세제 적용 및 매매·보유 결정 시"),
     ],
   },
 ];
