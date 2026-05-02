@@ -439,6 +439,47 @@ describe('auto-publish.ts integration (7 시나리오)', () => {
     expect(rows[0].status).toBe('published');
   });
 
+  it('Scenario 9 (disclaimer auto-apply 5/2): editor disclaimer_inserted=true → publish가 modified_html 반영', async () => {
+    // 5/2 8건 spot-check evidence: WS·AS 매번 일부 슬롯 disclaimer 누락 (5/1 3건, 5/2 2건).
+    // factcheck → editor.modified_html 메커니즘은 동작하지만 caller(writeAndReview)가 무시 →
+    // publish는 원본 content_html 사용 → disclaimer 누락 publish.
+    // Fix: writeAndReview가 review.modified_html을 draftWithImages.content_html에 반영.
+    const { pickQueue } = await import('../../src/lib/trends');
+    const { checkAndResolve } = await import('../../src/lib/dedup');
+    const { callClaude } = await import('../../src/lib/llm');
+    const { review } = await import('../../src/lib/editor');
+    const { fetchForSlots } = await import('../../src/lib/images');
+    const { publishScheduled: wpPublish } = await import('../../src/lib/wordpress');
+
+    vi.mocked(pickQueue).mockResolvedValue([mockCandidate()]);
+    vi.mocked(checkAndResolve).mockResolvedValue({ action: 'pass', reason: '신규' });
+    vi.mocked(callClaude).mockResolvedValue(mockDraftJson());
+
+    const modifiedHtml = '<p>intro</p><img src="img1"/><p>body</p><p>⚠️ 면책: 정보 제공 목적</p>';
+    vi.mocked(review).mockResolvedValue({
+      verdict: 'pass',
+      score: 90,
+      disclaimer_inserted: true,
+      modified_html: modifiedHtml,
+    });
+    vi.mocked(fetchForSlots).mockResolvedValue(mockImageResults());
+    vi.mocked(wpPublish).mockResolvedValue({
+      externalId: 'wp-disc',
+      externalUrl: 'https://ws.example.com/test-slug',
+      scheduledAt: '2026-04-27T00:00:00Z',
+    });
+
+    const { runMain } = await import('../auto-publish');
+    const code = await runMain(['node', 'auto-publish.ts', '--niche=WS', '--slot-count=1']);
+
+    expect(code).toBe(0);
+    // publishScheduled가 modified_html을 받아야 함 (원본 아닌)
+    expect(wpPublish).toHaveBeenCalledTimes(1);
+    const publishedPost = vi.mocked(wpPublish).mock.calls[0][1];
+    expect(publishedPost.content).toBe(modifiedHtml);
+    expect(publishedPost.content).toContain('⚠️ 면책');
+  });
+
   it('Scenario 7: batch slug 충돌 → -2 suffix, 두 글 모두 published', async () => {
     const { pickQueue } = await import('../../src/lib/trends');
     const { checkAndResolve } = await import('../../src/lib/dedup');
