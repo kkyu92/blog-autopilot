@@ -9,6 +9,9 @@
 //   - [58] [63] YMYL disclaimer 추가 (wangsuk2 청약, 양도세 보충)
 //   (4/30 TARGETS는 idempotent — already has disclaimer로 SKIP 됨)
 //
+// 5/2 8건 spot-check P0 fix:
+//   - [68] YMYL disclaimer 추가 (5월 부동산 세금 납부 기한)
+//
 // 사용:
 //   node --env-file=.env.local scripts/blogger/update-posts.mjs           # dry-run
 //   node --env-file=.env.local scripts/blogger/update-posts.mjs --apply   # 실제 PUT
@@ -89,6 +92,14 @@ const TARGETS = [
     label: "[63] 다주택자 양도세 중과 재시행 2026 5월 9일 (보충 dispatch)",
     transforms: [
       (c) => appendDisclaimer(c, "세제 적용 및 매매·보유 결정 시"),
+    ],
+  },
+  // 5/2 spot-check 추가
+  {
+    id: "5298712751757772280",
+    label: "[68] 2026년 5월 부동산 세금 납부 기한 총정리",
+    transforms: [
+      (c) => appendDisclaimer(c, "세제 적용 및 세무 신고 시"),
     ],
   },
 ];

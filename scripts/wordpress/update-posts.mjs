@@ -4,6 +4,9 @@
 // 5/1 spot-check 결과 P0 fix:
 //   - YMYL disclaimer 누락 글에 면책 고지 추가
 //
+// 5/2 8건 spot-check P0 fix:
+//   - WS [66] disclaimer 추가 (30대 대장암 조기 발견)
+//
 // scripts/blogger/update-posts.mjs 와 대칭 — site 분기(TS/WS) 추가.
 //
 // 사용:
@@ -51,6 +54,15 @@ const TARGETS = [
     label: "[57] 근력운동 주 2회",
     transforms: [
       (c) => appendDisclaimer(c, "운동 강도·빈도 결정 및 부상·기저질환 우려 시"),
+    ],
+  },
+  // 5/2 spot-check 추가
+  {
+    site: "WS",
+    id: 358,
+    label: "[66] 30대 대장암 조기 발견",
+    transforms: [
+      (c) => appendDisclaimer(c, "증상·검진·치료 결정 시"),
     ],
   },
 ];
