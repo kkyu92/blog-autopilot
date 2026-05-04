@@ -52,7 +52,7 @@ describe('healthcheck.runAll', () => {
     vi.stubEnv('GOOGLE_CLIENT_ID', 'g-client-id');
     vi.stubEnv('GOOGLE_CLIENT_SECRET', 'g-client-secret');
     vi.stubEnv('GOOGLE_BLOG_ID_APT', 'as-blog');
-    vi.stubEnv('GOOGLE_BLOG_ID_TRAVEL', 'ts-blog');
+    vi.stubEnv('GOOGLE_BLOG_ID_TRIP', 'ts-blog');
     vi.stubEnv('GOOGLE_BLOG_ID_HEALTH', 'ws-blog');
     // backward-compat fallback (AS only)
     vi.stubEnv('GOOGLE_BLOG_ID', 'as-blog');
@@ -125,8 +125,8 @@ describe('healthcheck.runAll', () => {
     expect(pixabay!.reason).toBe('PIXABAY_API_KEY missing');
   });
 
-  it('Blogger TS BLOG_ID missing → Blogger-TS ok=false, reason = GOOGLE_BLOG_ID_TRAVEL missing', async () => {
-    vi.stubEnv('GOOGLE_BLOG_ID_TRAVEL', '');
+  it('Blogger TS BLOG_ID missing → Blogger-TS ok=false, reason = GOOGLE_BLOG_ID_TRIP missing', async () => {
+    vi.stubEnv('GOOGLE_BLOG_ID_TRIP', '');
 
     global.fetch = makeFetchMock() as unknown as typeof fetch;
 
@@ -139,7 +139,7 @@ describe('healthcheck.runAll', () => {
     const ts = report.results.find((r) => r.service === 'Blogger-TS');
     expect(ts).toBeDefined();
     expect(ts!.ok).toBe(false);
-    expect(ts!.reason).toBe('GOOGLE_BLOG_ID_TRAVEL missing');
+    expect(ts!.reason).toBe('GOOGLE_BLOG_ID_TRIP missing');
   });
 
   it('Blogger WS BLOG_ID missing → Blogger-WS ok=false, reason = GOOGLE_BLOG_ID_HEALTH missing', async () => {

@@ -12,7 +12,7 @@ describe('getBloggerCredentials', () => {
     vi.stubEnv('GOOGLE_CLIENT_ID', 'cid');
     vi.stubEnv('GOOGLE_CLIENT_SECRET', 'cs');
     vi.stubEnv('GOOGLE_BLOG_ID_APT', 'apt-blog');
-    vi.stubEnv('GOOGLE_BLOG_ID_TRAVEL', 'travel-blog');
+    vi.stubEnv('GOOGLE_BLOG_ID_TRIP', 'trip-blog');
     vi.stubEnv('GOOGLE_BLOG_ID_HEALTH', 'health-blog');
   });
 
@@ -21,9 +21,9 @@ describe('getBloggerCredentials', () => {
     expect(result).toEqual({ refreshToken: 'rt', blogId: 'apt-blog', clientId: 'cid', clientSecret: 'cs' });
   });
 
-  it('niche=TS → GOOGLE_BLOG_ID_TRAVEL 반환', () => {
+  it('niche=TS → GOOGLE_BLOG_ID_TRIP 반환', () => {
     const result = getBloggerCredentials('TS');
-    expect(result.blogId).toBe('travel-blog');
+    expect(result.blogId).toBe('trip-blog');
   });
 
   it('niche=WS → GOOGLE_BLOG_ID_HEALTH 반환', () => {
@@ -49,12 +49,12 @@ describe('getBloggerCredentials', () => {
     expect(() => getBloggerCredentials('AS')).toThrow(/GOOGLE_REFRESH_TOKEN/);
   });
 
-  it('missing GOOGLE_BLOG_ID_TRAVEL (TS niche) → throws with key name', () => {
+  it('missing GOOGLE_BLOG_ID_TRIP (TS niche) → throws with key name', () => {
     vi.unstubAllEnvs();
     vi.stubEnv('GOOGLE_REFRESH_TOKEN', 'rt');
     vi.stubEnv('GOOGLE_CLIENT_ID', 'cid');
     vi.stubEnv('GOOGLE_CLIENT_SECRET', 'cs');
-    expect(() => getBloggerCredentials('TS')).toThrow(/GOOGLE_BLOG_ID_TRAVEL/);
+    expect(() => getBloggerCredentials('TS')).toThrow(/GOOGLE_BLOG_ID_TRIP/);
   });
 
   it('missing GOOGLE_BLOG_ID_HEALTH (WS niche) → throws with key name', () => {

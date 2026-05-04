@@ -16,7 +16,7 @@
  *   WORDPRESS_TS_ACCESS_TOKEN, WORDPRESS_TS_BLOG_ID
  *   WORDPRESS_WS_ACCESS_TOKEN, WORDPRESS_WS_BLOG_ID
  *   GOOGLE_REFRESH_TOKEN, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
- *   GOOGLE_BLOG_ID_TRAVEL  (TS 신규 — travel-signal.blogspot.com)
+ *   GOOGLE_BLOG_ID_TRIP  (TS 신규 — trip-signal.blogspot.com)
  *   GOOGLE_BLOG_ID_HEALTH  (WS 신규 — health-signal.blogspot.com)
  *   DATABASE_PATH          (data/blog.db default)
  */
@@ -32,10 +32,10 @@ const SOURCES = [
   {
     niche: 'TS',
     sourcePlatform: 'wordpress_ts',
-    targetPlatform: 'blogger_travel',
+    targetPlatform: 'blogger_trip',
     wpToken: process.env.WORDPRESS_TS_ACCESS_TOKEN,
     wpBlogId: process.env.WORDPRESS_TS_BLOG_ID,
-    targetBlogId: process.env.GOOGLE_BLOG_ID_TRAVEL,
+    targetBlogId: process.env.GOOGLE_BLOG_ID_TRIP,
   },
   {
     niche: 'WS',

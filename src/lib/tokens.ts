@@ -98,11 +98,11 @@ export interface BloggerCredentials {
 
 // niche → BLOG_ID env suffix 매핑 (도메인 일관 명명)
 // AS → apt-signal.blogspot.com (GOOGLE_BLOG_ID_APT, fallback GOOGLE_BLOG_ID for backward compat)
-// TS → travel-signal.blogspot.com (GOOGLE_BLOG_ID_TRAVEL)
+// TS → trip-signal.blogspot.com (GOOGLE_BLOG_ID_TRIP)
 // WS → health-signal.blogspot.com (GOOGLE_BLOG_ID_HEALTH)
 const BLOG_ID_ENV_SUFFIX: Record<'AS' | 'TS' | 'WS', string> = {
   AS: 'APT',
-  TS: 'TRAVEL',
+  TS: 'TRIP',
   WS: 'HEALTH',
 };
 

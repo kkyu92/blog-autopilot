@@ -15,7 +15,7 @@ export const publishedPosts = sqliteTable(
         "wordpress_ws",
         "wordpress_ts",
         "blogger_as",
-        "blogger_travel",
+        "blogger_trip",
         "blogger_health",
       ],
     }).notNull(),
@@ -51,7 +51,7 @@ export type Platform =
   | "wordpress_ws"
   | "wordpress_ts"
   | "blogger_as"
-  | "blogger_travel"
+  | "blogger_trip"
   | "blogger_health";
 
 export interface PostMetadata {

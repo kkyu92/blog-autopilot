@@ -8,7 +8,7 @@
 |---|---|
 | 마이그레이션 GO/STOP | **GO** |
 | 실행 옵션 | **A — 즉시 통째** (단계적 X, 통합 X) |
-| TS 신규 도메인 | `travel-signal.blogspot.com` |
+| TS 신규 도메인 | `trip-signal.blogspot.com` |
 | WS 신규 도메인 | `health-signal.blogspot.com` (worldsignal → health-signal, niche 명시 강화로 AdSense 광고 매칭 우위) |
 | 기존 콘텐츠 55건 | **(a) Blogger 신규 도메인에 재발행** (TS 28 + WS 27, URL 신규) |
 | 시점 | **5/4 prep 미리 + 5/5 cut-over (1일 압축)** |
@@ -34,11 +34,11 @@
 
 | 단계 | 작업자 | 작업 |
 |---|---|---|
-| **A. Blogger 신규 2개 생성** | 사용자 (UI) | Blogger Console → 신규 blog 2개: `travel-signal.blogspot.com`, `health-signal.blogspot.com` |
+| **A. Blogger 신규 2개 생성** | 사용자 (UI) | Blogger Console → 신규 blog 2개: `trip-signal.blogspot.com`, `health-signal.blogspot.com` |
 | **B. 각 blog 템플릿 적용** | 사용자 (UI) | AS와 동일 — head/body 광고 슬롯, structured data, mobile redirect 동작. AS 테마 export → 신규 blog import |
 | **C. GSC site 등록** | 사용자 (UI) | 각 신규 도메인 URL 등록 + 소유권 인증 (HTML 파일 또는 메타 태그) |
-| **D. sitemap.xml 자동 노출 확인** | 사용자 + Claude | `https://travel-signal.blogspot.com/sitemap.xml` curl로 확인. GSC에 sitemap 제출 |
-| **E. `.env.local` 신규 BLOG_ID 추가** | 사용자 | `GOOGLE_BLOG_ID_TRAVEL=...`, `GOOGLE_BLOG_ID_HEALTH=...` |
+| **D. sitemap.xml 자동 노출 확인** | 사용자 + Claude | `https://trip-signal.blogspot.com/sitemap.xml` curl로 확인. GSC에 sitemap 제출 |
+| **E. `.env.local` 신규 BLOG_ID 추가** | 사용자 | `GOOGLE_BLOG_ID_TRIP=...`, `GOOGLE_BLOG_ID_HEALTH=...` |
 | **F. 마이그레이션 스크립트 작성** | Claude | `scripts/migration/wp-to-blogger.mjs` (dry-run + apply mode) |
 | **G. publish 분기 변경 PR 작성 (머지 X)** | Claude | branch `migration/wp-to-blogger-cutover` — schema/auto-publish/yml 변경. 5/5 morning 머지 대기 |
 | **H. WP 코드 deprecate PR 작성 (머지 X)** | Claude | branch `migration/wp-deprecate` — wordpress.ts 삭제 등. G 머지 후 5/5 afternoon 머지 |
@@ -74,21 +74,21 @@
 ## 5/4 prep 체크리스트 — 사용자 작업 (UI)
 
 - [ ] **A. Blogger 신규 blog 2개 생성**
-  - [ ] `travel-signal.blogspot.com`
+  - [ ] `trip-signal.blogspot.com`
   - [ ] `health-signal.blogspot.com`
 - [ ] **B. 각 blog 템플릿 적용** (AS와 동일)
   - [ ] AS 테마 export (`Theme → Backup → Download`)
   - [ ] 신규 2개 blog에 동일 테마 import
   - [ ] head/body 커스텀 코드 동일하게 (광고 슬롯, 메타, structured data)
 - [ ] **C. GSC site 등록**
-  - [ ] travel-signal 도메인 등록 + HTML 파일 또는 메타 태그 인증
+  - [ ] trip-signal 도메인 등록 + HTML 파일 또는 메타 태그 인증
   - [ ] health-signal 도메인 등록 + 인증
 - [ ] **D. sitemap 제출**
-  - [ ] travel-signal sitemap.xml 자동 노출 확인 (curl로 가능)
+  - [ ] trip-signal sitemap.xml 자동 노출 확인 (curl로 가능)
   - [ ] GSC sitemap 제출 (각 도메인)
   - [ ] health-signal 동일
 - [ ] **E. `.env.local` 신규 BLOG_ID 추가**
-  - [ ] `GOOGLE_BLOG_ID_TRAVEL=<신규>`
+  - [ ] `GOOGLE_BLOG_ID_TRIP=<신규>`
   - [ ] `GOOGLE_BLOG_ID_HEALTH=<신규>`
   - [ ] (기존 `GOOGLE_BLOG_ID`는 `GOOGLE_BLOG_ID_APT`로 명명 통일 권장)
 
@@ -103,7 +103,7 @@
   - DB published_posts 갱신 (platform 변경 + 신규 post_id/url + 옛 행 archived 마커)
   - 결과 log → `docs/migration/2026-05-05-batch.json`
 - [ ] **G. publish 분기 변경 PR** (branch `migration/wp-to-blogger-cutover`)
-  - `src/lib/schema.ts` platform enum 갱신: `wordpress_ts`/`wordpress_ws` 제거 → `blogger_travel`/`blogger_health` 추가
+  - `src/lib/schema.ts` platform enum 갱신: `wordpress_ts`/`wordpress_ws` 제거 → `blogger_trip`/`blogger_health` 추가
   - `scripts/auto-publish.ts` niche → BLOG_ID 매핑 갱신
   - `auto-publish.yml` WP 단계 제거, Blogger 3 분기 단일화
   - test 회귀 X 확인

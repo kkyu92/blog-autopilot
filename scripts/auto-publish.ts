@@ -402,8 +402,9 @@ async function publishToPlatform(
   );
 }
 
-function platformForNiche(niche: Niche): 'blogger_as' | 'blogger_travel' | 'blogger_health' {
-  if (niche === 'TS') return 'blogger_travel';
+function platformForNiche(niche: Niche): 'blogger_as' | 'blogger_trip' | 'blogger_health' {
+  if (niche === 'TS') return 'blogger_trip';
+  // (도메인 trip-signal.blogspot.com — niche 명명은 TS 그대로 유지)
   if (niche === 'WS') return 'blogger_health';
   return 'blogger_as';
 }

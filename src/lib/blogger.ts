@@ -289,7 +289,7 @@ async function getAccessToken(niche: 'AS' | 'TS' | 'WS' = 'AS'): Promise<string>
  * Blogger admin as an orphan. This is acceptable since draft visibility is
  * not user-facing.
  *
- * @param niche - 'AS' (apt-signal), 'TS' (travel-signal), 'WS' (health-signal).
+ * @param niche - 'AS' (apt-signal), 'TS' (trip-signal), 'WS' (health-signal).
  */
 export async function publishScheduled(
   niche: 'AS' | 'TS' | 'WS',

@@ -45,7 +45,7 @@ async function pingPexels(): Promise<HealthResult> {
 // niche → BLOG_ID env suffix (도메인 일관 명명, tokens.ts와 동일)
 const BLOG_ID_ENV_SUFFIX: Record<'AS' | 'TS' | 'WS', string> = {
   AS: 'APT',
-  TS: 'TRAVEL',
+  TS: 'TRIP',
   WS: 'HEALTH',
 };
 
