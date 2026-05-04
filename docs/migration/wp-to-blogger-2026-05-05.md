@@ -51,9 +51,9 @@
 | **07:00~09:00** | cron 결과 확인 + 9건 spot-check (ADMIN view) — F2 회귀 신호면 stop |
 | **09:00~10:00** | 마이그레이션 dry-run 실행 + 결과 검증 |
 | **10:00~12:00** | publish 분기 변경 PR (G) 머지 + auto-publish.yml 분기 변경 |
-| **12:00~13:00** | 55건 batch 이전 (`wp-to-blogger.mjs --apply`) — DB published_posts 갱신 + log 박제 |
-| **13:00~16:00** | WP 코드 deprecate PR (H) 머지 + 회귀 검증 (`pnpm test`, `pnpm build`) |
-| **16:00~** | 모니터링 시작 — 신규 Blogger health, F2 trend |
+| **12:00~21:15** | 55건 batch 이전 (`wp-to-blogger.mjs --apply`, **10분/post rate** = 9.2h) — DB published_posts 갱신 + log 박제. spam 감지 자연 영역(시간당 6글) 보호 |
+| **batch 진행 중 (12:00~21:15)** | WP 코드 deprecate PR (H) 머지 + 회귀 검증 (`pnpm test`, `pnpm build`) — batch와 병렬 가능 |
+| **21:15~** | 모니터링 시작 — 신규 Blogger health, F2 trend |
 
 ### 5/6 — 첫 Blogger cron 검증
 

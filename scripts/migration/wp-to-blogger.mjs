@@ -26,7 +26,9 @@ import { writeFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 
 const DRY_RUN = !process.argv.includes('--apply');
-const RATE_LIMIT_MS = 1000; // Blogger API 1 QPS
+// 10분/post = 시간당 6글 → spam 감지 자연 영역. 55건 × 10분 = 9.2시간.
+// Blogger API quota (10K/day) 압도적 안전. 신규 도메인 reputation 빌드업 보호.
+const RATE_LIMIT_MS = 10 * 60 * 1000;
 
 const SOURCES = [
   {
