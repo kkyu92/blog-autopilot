@@ -87,15 +87,7 @@ export async function deleteTokens(platform: string): Promise<void> {
 }
 
 // ─── Niche-scoped env-based credential resolution (synchronous, no DB) ────────
-
-export interface WordPressCredentials {
-  accessToken: string;
-  blogId: string;
-  clientId?: string;
-  clientSecret?: string;
-  site?: string;
-  categoryId?: string;
-}
+// 5/5 WP→Blogger 마이그레이션 후 Blogger 만 운영. WP credentials 함수 제거.
 
 export interface BloggerCredentials {
   refreshToken: string;
@@ -104,32 +96,27 @@ export interface BloggerCredentials {
   clientSecret: string;
 }
 
-export function getWordPressCredentials(niche: 'WS' | 'TS'): WordPressCredentials {
-  const accessToken = process.env[`WORDPRESS_${niche}_ACCESS_TOKEN`];
-  const blogId = process.env[`WORDPRESS_${niche}_BLOG_ID`];
-  if (!accessToken) {
-    throw new Error(`WordPress ${niche} credentials missing: WORDPRESS_${niche}_ACCESS_TOKEN`);
-  }
-  if (!blogId) {
-    throw new Error(`WordPress ${niche} credentials missing: WORDPRESS_${niche}_BLOG_ID`);
-  }
-  return {
-    accessToken,
-    blogId,
-    clientId: process.env[`WORDPRESS_${niche}_CLIENT_ID`],
-    clientSecret: process.env[`WORDPRESS_${niche}_CLIENT_SECRET`],
-    site: process.env[`WORDPRESS_${niche}_SITE`],
-    categoryId: process.env[`WORDPRESS_${niche}_CATEGORY_ID`],
-  };
-}
+// niche → BLOG_ID env suffix 매핑 (도메인 일관 명명)
+// AS → apt-signal.blogspot.com (GOOGLE_BLOG_ID_APT, fallback GOOGLE_BLOG_ID for backward compat)
+// TS → travel-signal.blogspot.com (GOOGLE_BLOG_ID_TRAVEL)
+// WS → health-signal.blogspot.com (GOOGLE_BLOG_ID_HEALTH)
+const BLOG_ID_ENV_SUFFIX: Record<'AS' | 'TS' | 'WS', string> = {
+  AS: 'APT',
+  TS: 'TRAVEL',
+  WS: 'HEALTH',
+};
 
-export function getBloggerCredentials(): BloggerCredentials {
+export function getBloggerCredentials(niche: 'AS' | 'TS' | 'WS' = 'AS'): BloggerCredentials {
   const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
-  const blogId = process.env.GOOGLE_BLOG_ID;
+  const suffix = BLOG_ID_ENV_SUFFIX[niche];
+  // AS는 backward compat — 기존 GOOGLE_BLOG_ID env도 fallback 인정
+  const blogId =
+    process.env[`GOOGLE_BLOG_ID_${suffix}`] ??
+    (niche === 'AS' ? process.env.GOOGLE_BLOG_ID : undefined);
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
   if (!refreshToken) throw new Error('Blogger credentials missing: GOOGLE_REFRESH_TOKEN');
-  if (!blogId) throw new Error('Blogger credentials missing: GOOGLE_BLOG_ID');
+  if (!blogId) throw new Error(`Blogger credentials missing: GOOGLE_BLOG_ID_${suffix}`);
   if (!clientId) throw new Error('Blogger credentials missing: GOOGLE_CLIENT_ID');
   if (!clientSecret) throw new Error('Blogger credentials missing: GOOGLE_CLIENT_SECRET');
   return { refreshToken, blogId, clientId, clientSecret };
