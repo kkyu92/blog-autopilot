@@ -57,7 +57,7 @@ function validateEnv() {
   for (const src of SOURCES) {
     if (!src.wpToken) missing.push(`WORDPRESS_${src.niche}_ACCESS_TOKEN`);
     if (!src.wpBlogId) missing.push(`WORDPRESS_${src.niche}_BLOG_ID`);
-    if (!DRY_RUN && !src.targetBlogId) missing.push(`GOOGLE_BLOG_ID_${src.niche === 'TS' ? 'TRAVEL' : 'HEALTH'}`);
+    if (!DRY_RUN && !src.targetBlogId) missing.push(`GOOGLE_BLOG_ID_${src.niche === 'TS' ? 'TRIP' : 'HEALTH'}`);
   }
   if (missing.length) {
     console.error('❌ Missing env:', missing.join(', '));
