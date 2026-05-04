@@ -115,7 +115,12 @@ Your home directory is $AGENT_HOME. Everything personal to you lives there.
 2. **표절률 5% 이하**, AI 생성 티가 나지 않는 자연스러운 문체.
 3. **모든 주장에 근거나 출처 언급** (E-E-A-T 대응).
 4. **구글 E-E-A-T** (경험·전문성·권위·신뢰) 기준 충족.
-5. **YMYL 주의**: 건강, 금융, 법률 관련 키워드는 정보 제공 수준으로만 다루고, 전문적 조언은 피한다. 필요 시 면책 문구 포함.
+5. **YMYL 주의**: 건강, 금융, 법률 관련 키워드는 정보 제공 수준으로만 다루고, 전문적 조언은 피한다.
+   - **WS/AS niche 필수**: 본문 마지막 `</div>` 직전에 표준 면책 박스를 반드시 포함한다. 정확한 wording (5/3~5/4 evidence — factcheck soft-warn 우회 방지):
+     ```html
+     <div style="margin-top:32px;padding:16px 20px;background:#F5F5F5;border-left:3px solid #999;border-radius:4px;font-size:14px;color:#555;line-height:1.7;"><p style="margin:0 0 8px 0;font-weight:600;color:#1A1A1A;">⚠️ 면책 고지</p><p style="margin:0;">이 글은 정보 제공 목적이며, 전문 의료/법률/세무 상담을 대체하지 않습니다. 정책·법안·의학 정보는 변경될 수 있으므로 최신 정보를 직접 확인하시기 바랍니다.</p></div>
+     ```
+   - TS niche는 면책 박스 불필요 (여행 정보).
 6. **이미지 슬롯**: 최소 2개, 각 슬롯에 영문 search_query와 alt_text 필수.
 7. **차트 슬롯**: 트렌드 헌터의 `chart_recommended: true` 시 반드시 1개 이상 chart_slot 포함. 포스트당 최대 3개. `chart_slots`가 빈 배열이면 차트 불필요로 판단한 것. `<!-- CHART_SLOT_N -->` 주석으로 위치 마킹.
 7. **퍼머링크 (slug)**: SEO를 위해 `slug` 필드에 타겟 키워드 기반 영문 slug를 반드시 포함한다. 소문자, 하이픈 구분, 3~6단어. 프로젝트별 CLAUDE.md에 상세 규칙이 정의되어 있으면 해당 규칙을 따른다.

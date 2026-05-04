@@ -10,6 +10,23 @@ const __dirname = path.dirname(__filename);
 const PROMPT_PATH = path.resolve(__dirname, '../../prompts/agents/content-editor.md');
 const PROMPT = fs.readFileSync(PROMPT_PATH, 'utf-8');
 
+const STANDARD_DISCLAIMER_HTML =
+  '<div style="margin-top:32px;padding:16px 20px;background:#F5F5F5;border-left:3px solid #999;border-radius:4px;font-size:14px;color:#555;line-height:1.7;">' +
+  '<p style="margin:0 0 8px 0;font-weight:600;color:#1A1A1A;">⚠️ 면책 고지</p>' +
+  '<p style="margin:0;">이 글은 정보 제공 목적이며, 전문 의료/법률/세무 상담을 대체하지 않습니다. 정책·법안·의학 정보는 변경될 수 있으므로 최신 정보를 직접 확인하시기 바랍니다.</p>' +
+  '</div>';
+
+// 5/4 ADMIN view 검증: factcheck "표준 wording 부재" soft-warn은 본문에 의미상 동등한 다른 wording의
+// disclaimer가 있어도 발생. broader idempotent check — '면책 고지' / '면책고지' (이모지 변형 포함) 매칭이면 skip.
+const DISCLAIMER_PATTERNS = ['면책 고지', '면책고지'];
+
+function injectStandardDisclaimer(html: string): string {
+  if (DISCLAIMER_PATTERNS.some((p) => html.includes(p))) return html; // idempotent
+  const lastDivIdx = html.lastIndexOf('</div>');
+  if (lastDivIdx < 0) return html + STANDARD_DISCLAIMER_HTML;
+  return html.slice(0, lastDivIdx) + STANDARD_DISCLAIMER_HTML + html.slice(lastDivIdx);
+}
+
 export interface EditorReviewInput {
   draft: {
     title: string;
@@ -90,6 +107,20 @@ export async function review(input: EditorReviewInput): Promise<EditorReviewResu
     if (fc.disclaimer_added && fc.modified_html) {
       disclaimerInserted = true;
       modifiedHtml = fc.modified_html;
+    } else if (fc.verdict === 'needs_revision') {
+      // 5/3~5/4 evidence (자연실험 9건 발행 중 AS 78/85/88 누락):
+      // factcheck가 disclaimer 누락을 issues.type='disclaimer'로 감지하고 soft-warn 으로만 보고하면서
+      // disclaimer_added=false + modified_html 미반환 → caller fix 메커니즘 (44f6d95) bypass.
+      // L1 fallback: editor가 자체 표준 면책 박스 inject. idempotent (⚠️ 면책 고지 이미 있으면 skip).
+      const hasDisclaimerIssue = fc.issues?.some((i) => i.type === 'disclaimer') ?? false;
+      if (hasDisclaimerIssue) {
+        const injected = injectStandardDisclaimer(draft.content_html);
+        if (injected !== draft.content_html) {
+          disclaimerInserted = true;
+          modifiedHtml = injected;
+          console.warn(`[editor] L1 fallback disclaimer injected for ${niche} (factcheck soft-warn + disclaimer_added missing)`);
+        }
+      }
     }
   }
 

@@ -212,6 +212,94 @@ describe('editor.review', () => {
     expect(draft.content_html).toBe(originalHtml);
   });
 
+  // Test 8b (5/4 L1 fallback): factcheck needs_revision + disclaimer issue + disclaimer_added missing →
+  // editor가 표준 면책 박스 자체 inject. 5/3~5/4 evidence: caller fix (44f6d95) 단독으로는 누락 차단 불가
+  // (factcheck soft-warn 경로로 bypass) → editor 단계에서 fallback inject로 차단.
+  it('factcheck needs_revision + disclaimer issue + disclaimer_added 미설정 → editor가 fallback 면책 inject', async () => {
+    const { callClaude } = await import('../llm');
+    const { factcheck } = await import('../factcheck');
+    vi.mocked(callClaude).mockResolvedValue(
+      JSON.stringify({
+        status: 'approved',
+        quality_score: 85,
+        final_html: '<p>polished</p>',
+        final_meta: { title: 't', meta_description: 'd', slug: 's', labels: ['l'] },
+      }),
+    );
+    vi.mocked(factcheck).mockResolvedValue({
+      verdict: 'needs_revision',
+      issues: [
+        { type: 'disclaimer' as const, description: 'AS niche 필수 면책 문구 누락', suggested_fix: '면책 박스 추가' },
+      ],
+      // disclaimer_added 미설정 — caller fix bypass 케이스
+    });
+
+    const { review } = await import('../editor');
+    const draft = validDraft();
+    const originalHtml = draft.content_html;
+    const result = await review({ draft, niche: 'AS' });
+
+    expect(result.disclaimer_inserted).toBe(true);
+    expect(result.modified_html).toBeDefined();
+    expect(result.modified_html).toContain('⚠️ 면책 고지');
+    expect(draft.content_html).toBe(originalHtml); // input 불변
+  });
+
+  // Test 8c: idempotent — 본문에 면책 고지/면책고지 (이모지 변형 포함) 있으면 fallback skip
+  // 5/4 ADMIN view evidence: factcheck strict matching이 의미상 동등한 다른 wording disclaimer를
+  // 누락으로 분류 → broader idempotent check 필요.
+  it.each([
+    ['⚠️ 면책 고지'],
+    ['⚖️ 면책고지'],
+    ['※ 면책 고지'],
+  ])('factcheck disclaimer issue + 본문에 "%s" 있음 → fallback skip', async (existingDisclaimer) => {
+    const { callClaude } = await import('../llm');
+    const { factcheck } = await import('../factcheck');
+    vi.mocked(callClaude).mockResolvedValue(
+      JSON.stringify({
+        status: 'approved',
+        quality_score: 85,
+        final_html: '<p>polished</p>',
+        final_meta: { title: 't', meta_description: 'd', slug: 's', labels: ['l'] },
+      }),
+    );
+    vi.mocked(factcheck).mockResolvedValue({
+      verdict: 'needs_revision',
+      issues: [{ type: 'disclaimer' as const, description: '면책 누락', suggested_fix: '추가' }],
+    });
+
+    const { review } = await import('../editor');
+    const draft = { ...validDraft(), content_html: `<div><p>본문</p><p>${existingDisclaimer} 이미 있음</p></div>` };
+    const result = await review({ draft, niche: 'AS' });
+
+    expect(result.disclaimer_inserted).toBeUndefined();
+    expect(result.modified_html).toBeUndefined();
+  });
+
+  // Test 8d: source-only issue (disclaimer issue 없음) → fallback inject 안 함
+  it('factcheck needs_revision + source issue만 (disclaimer 없음) → fallback inject 안 함', async () => {
+    const { callClaude } = await import('../llm');
+    const { factcheck } = await import('../factcheck');
+    vi.mocked(callClaude).mockResolvedValue(
+      JSON.stringify({
+        status: 'approved',
+        quality_score: 85,
+        final_html: '<p>polished</p>',
+        final_meta: { title: 't', meta_description: 'd', slug: 's', labels: ['l'] },
+      }),
+    );
+    vi.mocked(factcheck).mockResolvedValue({
+      verdict: 'needs_revision',
+      issues: [{ type: 'source' as const, description: '출처 누락', suggested_fix: '출처 추가' }],
+    });
+
+    const { review } = await import('../editor');
+    const result = await review({ draft: validDraft(), niche: 'WS' });
+
+    expect(result.disclaimer_inserted).toBeUndefined();
+    expect(result.modified_html).toBeUndefined();
+  });
+
   // Test 9: LLM revision_needed → editor revision_needed even if quantitative passes
   it('LLM revision_needed → editor revision_needed (정량 통과해도)', async () => {
     const { callClaude } = await import('../llm');

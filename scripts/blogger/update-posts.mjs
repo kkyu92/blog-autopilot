@@ -12,6 +12,12 @@
 // 5/2 8건 spot-check P0 fix:
 //   - [68] YMYL disclaimer 추가 (5월 부동산 세금 납부 기한)
 //
+// 5/3 + 5/4 spot-check P0 fix:
+//   - [78] 깡통전세 (5/3 LIVE, "면책" 단어 없는 약식 disclaimer만 — 표준 박스 추가)
+//   - [85] [88] (5/4 SCHEDULED): SCHEDULED URL hit 시 placeholder HTML로 false-positive 진단됨.
+//     ADMIN view 재확인 결과 본문에 "※ 면책 고지" / "⚖️ 면책고지" 정상 포함 → patch 불필요.
+//   → L1 fallback (editor.ts) + L2 (content-writer.md) fix와 함께 적용
+//
 // 사용:
 //   node --env-file=.env.local scripts/blogger/update-posts.mjs           # dry-run
 //   node --env-file=.env.local scripts/blogger/update-posts.mjs --apply   # 실제 PUT
@@ -100,6 +106,14 @@ const TARGETS = [
     label: "[68] 2026년 5월 부동산 세금 납부 기한 총정리",
     transforms: [
       (c) => appendDisclaimer(c, "세제 적용 및 세무 신고 시"),
+    ],
+  },
+  // 5/3 spot-check 추가 (78만 — 85/88은 SCHEDULED false-positive로 제외)
+  {
+    id: "6900341062530552701",
+    label: "[78] 깡통전세 위험 사전 체크법 2026",
+    transforms: [
+      (c) => appendDisclaimer(c, "전세 계약 및 매매 결정 시"),
     ],
   },
 ];

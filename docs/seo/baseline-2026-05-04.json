@@ -1,0 +1,74 @@
+{
+  "captured_at": "2026-05-04T09:30:00+09:00",
+  "purpose": "5/3 + 5/4 cron F2 trend + GSC indexing 2-day delta + L1/L2 fix evidence",
+  "f2_trend": {
+    "4_30_natural": "6/9 (67%)",
+    "5_1_natural": "7/9 (78%)",
+    "5_2_natural": "8/9 (89%)",
+    "5_3_natural": "9/9 (100%)",
+    "5_4_natural": "9/9 (100%)",
+    "interpretation": "fix 4건 (5b2bef7 F2-A 강화 + 5c33ef5 editor flat-meta + 44f6d95 caller disclaimer apply + b0798c7 base) 첫 자연 cron 검증 통과. publish reliability 100% 2일 연속.",
+    "natural_experiment": {
+      "5_3_cron_head": "5c33ef5 (caller fix 미적용 — push 시점 차이)",
+      "5_4_cron_head": "44f6d95 (caller fix 적용)",
+      "publish_success_unchanged": "둘 다 9/9. caller fix는 publish 성공률에 영향 없음."
+    }
+  },
+  "as_cumulative": {
+    "before_5_3": 23,
+    "5_4_evening": 29,
+    "adsense_threshold_25": "돌파 (5/3 +3 + 5/4 +3)",
+    "adsense_application_decision": "deferred to user — GSC indexing 0 상태에서 통과해도 단기 수익 ≈ 0"
+  },
+  "gsc_2day_delta": {
+    "captured_at": "2026-05-04 vs 2026-05-02",
+    "TS": {"submitted": [73, 77], "indexed": [0, 0], "impressions_28d": [17, 19]},
+    "WS": {"submitted": [87, 90], "indexed": [0, 0], "impressions_28d": [0, 0]},
+    "AS": {"sitemap_submitted": [31, 31], "indexed": [0, 0], "impressions_28d": [1, 1]},
+    "interpretation": "indexed 변화 없음 (정상 1~3개월 delay 진행). impressions만 TS +2."
+  },
+  "spotcheck_5_3_5_4": {
+    "scope": "18 posts (5/3 9 + 5/4 9)",
+    "method_caveat": "초기 spot-check은 published URL 직접 fetch — SCHEDULED 상태의 5/4 AS 85/88은 placeholder HTML 반환하여 false-positive 진단됨. ADMIN view 재검증으로 정정.",
+    "true_disclaimer_state": {
+      "id_74_WS_손가락운동치매": "OK (면책)",
+      "id_75_AS_시흥하중": "OK (면책 박스)",
+      "id_76_TS_섬캉스": "TS niche 면책 불필요",
+      "id_77_WS_대사증후군암": "OK",
+      "id_78_AS_깡통전세": "PATCH 적용 (LIVE 약식 disclaimer만 — '법률적 조언이 아닙니다' / '면책' 단어 없음). 표준 박스 +403 chars",
+      "id_79_WS_항우울제이명": "OK",
+      "id_80_TS_라벤더": "TS niche 면책 불필요",
+      "id_81_AS_강남테헤란로": "OK (면책)",
+      "id_82_TS_항공권": "TS niche 면책 불필요",
+      "id_83_AS_장기보유특별공제": "OK",
+      "id_84_WS_어린이피부": "OK",
+      "id_85_AS_강북재건축": "OK (SCHEDULED, ADMIN view '※ 면책 고지' 확인) — 초기 false-positive 정정",
+      "id_86_WS_자기무가치감": "OK",
+      "id_87_TS_동서트레일": "TS niche 면책 불필요",
+      "id_88_AS_부천e편한세상": "OK (SCHEDULED, ADMIN view '⚖️ 면책고지' 확인) — 초기 false-positive 정정",
+      "id_89_WS_노인다약제": "OK",
+      "id_90_TS_저비용항공사": "TS niche 면책 불필요",
+      "id_91_TS_타이완": "TS niche 면책 불필요"
+    },
+    "true_failure_count": 1,
+    "patch_applied": [{"id": 78, "platform": "Blogger", "delta": "+403", "verification": "⚠️ 면책 고지 count = 1"}]
+  },
+  "fix_layers_applied": {
+    "L1_editor_fallback": {
+      "file": "src/lib/editor.ts",
+      "change": "factcheck verdict='needs_revision' + issues에 type='disclaimer' + disclaimer_added !== true 시 표준 면책 박스 자체 inject. broader idempotent (면책 고지 / 면책고지 매칭 시 skip).",
+      "purpose": "caller fix (44f6d95) bypass 차단 — factcheck soft-warn 경로",
+      "tests": ["editor.test.ts Test 8b (fallback inject)", "Test 8c (idempotent ⚠️/⚖️/※)", "Test 8d (source-only no inject)"]
+    },
+    "L2_writer_prompt": {
+      "file": "prompts/agents/content-writer.md:118",
+      "change": "WS/AS niche YMYL 필수 면책 박스 + 정확한 wording 박제 (TS niche 제외)",
+      "purpose": "writer 단계 root fix — factcheck soft-warn 자체 감소 + 일관 wording"
+    }
+  },
+  "active_fix_commits": ["b0798c7", "5b2bef7", "5c33ef5", "b2609f3", "44f6d95", "(이번 세션 — L1+L2 fix)"],
+  "next_evaluation": {
+    "5_5_5_6": "L1+L2 fix 첫 자연 cron 효과 — disclaimer 누락 0건 + writer 표준 wording 사용률 측정",
+    "5_6": "fix 6건 회수/유지 결정 (memory project_f2a_strengthening_5_1.md 의제 (a)~(h))"
+  }
+}

@@ -1,0 +1,94 @@
+{
+  "captured_at": "2026-05-02T13:00:00+09:00",
+  "purpose": "AdSense / WP 발행 중단 결정의 evidence baseline. 5/6 평가 + 6/2 1달 후 비교 기준.",
+  "method": "GSC API (sites, sitemaps, searchAnalytics, urlInspection) + wp.com Stats API",
+  "sites": {
+    "AS_blogger": {
+      "url": "https://apt-signal.blogspot.com/",
+      "gsc_registered": true,
+      "permission": "siteOwner",
+      "sitemaps": [
+        {"path": "atom.xml", "submitted": 26, "indexed": 0, "lastSubmitted": "2026-04-30"},
+        {"path": "sitemap.xml", "submitted": 31, "indexed": 0, "lastSubmitted": "2026-04-30"},
+        {"path": "sitemap-pages.xml", "submitted": 3, "indexed": 0, "lastSubmitted": "2026-04-30"}
+      ],
+      "search_analytics_28d": {"clicks": 0, "impressions": 1, "ctr": 0, "position": 5},
+      "url_inspection_samples": [
+        {"url": "...2026/04/2026-1.html", "coverage": "Redirect error", "fetchState": "REDIRECT_ERROR", "lastCrawl": "2026-04-28", "note": "mobile crawl m=1 redirect 일시적 실패 — 4/30 sitemap 재제출 후 회복 대기"},
+        {"url": "...2026/05/2026_0655614690.html", "coverage": "Discovered - currently not indexed", "note": "정상 큐 대기"}
+      ],
+      "db_published": 23,
+      "wp_stats": null
+    },
+    "TS_wordpress": {
+      "url": "https://travelsignalblog.wordpress.com/",
+      "gsc_registered": true,
+      "permission": "siteOwner",
+      "sitemaps": [
+        {"path": "sitemap.xml", "submitted": 73, "indexed": 0, "lastSubmitted": "2026-04-22"}
+      ],
+      "search_analytics_28d": {"clicks": 0, "impressions": 17, "ctr": 0, "position": 6.18},
+      "url_inspection_samples": [
+        {"url": "...2026/04/26/japan-golden-week-travel-guide/", "coverage": "Discovered - currently not indexed", "note": "10일 색인 큐 대기 — Google이 알지만 색인 우선순위 낮음"},
+        {"url": "...2026/05/02/ganghwa-island-family-travel-course-2026/", "coverage": "URL is unknown to Google", "note": "0일 전 발행, 정상"}
+      ],
+      "wp_stats": {
+        "total_views": 2,
+        "best_day": "2026-04-08",
+        "best_day_views": 2,
+        "followers": 1,
+        "wp_posts_count": 75,
+        "system_publish_count": 22
+      },
+      "search_terms_7d": [],
+      "referrers_7d": []
+    },
+    "WS_wordpress": {
+      "url": "https://worldsignalblog.wordpress.com/",
+      "gsc_registered": true,
+      "permission": "siteOwner",
+      "sitemaps": [
+        {"path": "sitemap.xml", "submitted": 87, "indexed": 0, "lastSubmitted": "2026-04-22"}
+      ],
+      "search_analytics_28d": {"clicks": 0, "impressions": 0, "ctr": 0, "position": 0},
+      "url_inspection_samples": [
+        {"url": "...?p=304 (friendly: /2026/04/26/overcome-spring-fatigue-5-ways/)", "coverage": "URL is unknown to Google", "note": "재검사 필요 — friendly URL로"},
+        {"url": "...?p=362 (friendly: /2026/05/02/codependency-alcoholic-family-symptoms-recovery/)", "coverage": "URL is unknown to Google", "note": "정상 (0일 전)"}
+      ],
+      "wp_stats": {
+        "total_views": 28,
+        "best_day": "2026-04-21",
+        "best_day_views": 13,
+        "followers": 1,
+        "wp_posts_count": 87,
+        "system_publish_count": 21,
+        "referrers_5_2": "100% WordPress.com Reader (검색엔진 0%)"
+      },
+      "search_terms_7d": []
+    }
+  },
+  "robots_txt_status": {
+    "TS": "정상 — wp-admin, wp-login 등 일반 차단만. noindex 없음.",
+    "WS": "정상 — TS와 동일.",
+    "AS": "정상 — /search 차단만. Allow: /."
+  },
+  "diagnosis": {
+    "previous_belief_rejected": "이전 SNAPSHOT 평가표의 'GSC 색인 회복 30%'는 stale/wrong. 실제 0/220 indexed (0%).",
+    "rejected_hypotheses": [
+      "noindex meta 또는 robots.txt 차단 — 검증 결과 차단 없음",
+      "wp.com Free 플랜 SEO 차단 — 검증 결과 robots.txt 정상",
+      "?p=ID URL 형식 SEO 불리 — 301 redirect 정상, sitemap에는 friendly URL 등록"
+    ],
+    "actual_root_cause": "indexing delay + 약한 site reputation. 'Discovered - currently not indexed' 상태가 핵심 — Google이 URL을 알지만 색인 우선순위 낮음. 새 wp.com 서브도메인 + Blogger 신규는 1~3개월 indexing delay 정상 범위.",
+    "as_4_26_redirect_error_note": "AS 4/26 'Redirect error' (4/28 1회 크롤)는 mobile crawler m=1 redirect 일시적 실패. 4/30 sitemap 재제출 후 다음 크롤 대기."
+  },
+  "implications": {
+    "adsense_hypothesis": "AS도 indexing 0/60 (atom 26 + sitemap 31 + pages 3)이고 28일 impressions=1이면, AdSense 통과해도 단기 수익 ≈ 0. AdSense 신청 가설 자체보다 indexing 회복이 우선 의제로 부상.",
+    "wp_publish_continuation": "TS/WS 즉시 발행 중단은 보류. 'Discovered - currently not indexed' 단계 도달은 정상 진행이라 1달 더 데이터 누적 후 6/2 재평가 합리. 다만 TS 누적 2 views, WS 28 views (모두 wp.com Reader) 는 SEO 외 monetization 가능성도 거의 0 시사.",
+    "next_layer_if_no_progress": "1달 후 indexed 여전히 0이면 (a) content quality 의심 — Claude 생성물 'helpful content' 기준 미달, (b) 외부 backlink 작전 필요, (c) Google manual indexing request UI 사용"
+  },
+  "comparison_targets": {
+    "5_6_evaluation": "F2 fix 4건 회수/유지 결정 시 — indexed 변화 + impressions trend 같이 측정",
+    "6_2_one_month": "1달 후 동일 query 재실행 — TS 17 imp → ?, indexed 0 → ?, AS sitemap 60 → indexed ? "
+  }
+}
