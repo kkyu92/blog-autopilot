@@ -1,7 +1,7 @@
 # Content Autopilot — TODO
 
-> 마지막 점검: 2026-04-30 (자동 점검)
-> 빌드: **FAIL** (Next.js app/ 미존재) | 테스트: **350 PASS / 0 FAIL** (회귀 전부 수정) | Lint: 21 errors, 2 warnings
+> 마지막 점검: 2026-05-05 (자동 점검)
+> 빌드: **FAIL** (Next.js app/ 미존재) | 테스트: **339 PASS / 0 FAIL** (WP→Blogger 테스트 재작성 정상 감소) | Lint: **5 errors, 2 warnings** (16 errors 해소)
 
 ---
 
@@ -47,6 +47,15 @@
 - [x] feat(blogger-posts): scripts/blogger/update-posts.mjs — AS spot-check P0 fix (환각 도메인 제거, 면책 고지 추가)
 - [x] **테스트 회귀 수정**: auto-publish.test.ts vi.mock에 `getClaudeCallStats` 추가 — 6 FAIL → 0 FAIL (350 PASS)
 
+### 신뢰성 + 마이그레이션 (2026-05-01~05-05)
+- [x] fix(reliability): F2-A 강화 — revision_feedback wording + JSON_RETRY_GUARD (5/1 evidence)
+- [x] feat(spotcheck-5-1): WP update-posts.mjs 신규 + Blogger update-posts.mjs 5/1 P0 fix
+- [x] fix(reliability): editor inferStatus — flat final_meta drift fallback (5/2 evidence)
+- [x] fix(reliability): writeAndReview disclaimer auto-apply — caller가 review.modified_html 반영
+- [x] feat(reliability): L1 editor fallback + L2 writer prompt — disclaimer 누락 차단 (5/3~5/4 evidence)
+- [x] feat(migration): WP → Blogger cut-over 통합 변경 (5/5) — wp-to-blogger.mjs RC 완성
+- [x] fix(migration): OAuth token refresh per publish + already-migrated skip — 매 발행 직전 토큰 갱신
+
 ---
 
 ## 신규 발견 이슈 (2026-04-27)
@@ -54,12 +63,12 @@
 ### 빌드 오류 (미해결)
 - [ ] **`pnpm build` FAIL** — Next.js가 `pages`/`app` 디렉토리를 찾지 못함. GUI 제거 후 Next.js 의존성 전체 정리 필요 (next, react, react-dom, shadcn 등 제거 또는 `package.json` build 스크립트 교체).
 
-### Lint 에러 (21 errors, 1 warning)
-- [ ] `src/lib/__tests__/healthcheck.test.ts` — `any` 타입 **16개** → 구체 타입 명시 (`@typescript-eslint/no-explicit-any`) — pingWithRetry 테스트 추가로 4개 신규 증가
-- [ ] `src/lib/__tests__/llm.test.ts` — `any` 타입 3개 → 구체 타입 명시
-- [ ] `src/lib/__tests__/trends.test.ts` — `any` 타입 2개 → 구체 타입 명시
-- [ ] `src/lib/blogger.ts:295` — 미사용 변수 `niche` (warning)
-- [ ] `eslint-config-next` — "Pages directory cannot be found" 경고 발생 (CLI 전환 후 next 전용 lint 규칙 잔존, eslint-config-next → 범용 TS lint config 교체 필요)
+### Lint 에러 (2026-04-27 발견, 일부 수정)
+- [x] `src/lib/__tests__/healthcheck.test.ts` — `any` 타입 **16개** 해소 완료 (2026-05-05 확인)
+- [ ] `src/lib/__tests__/llm.test.ts` — `any` 타입 3개 (line 114, 122, 174) → 구체 타입 명시
+- [ ] `src/lib/__tests__/trends.test.ts` — `any` 타입 2개 (line 29, 220) → 구체 타입 명시
+- [ ] `src/lib/blogger.ts:295` — 미사용 변수 `niche` (warning) — 2026-04-27 이후 미수정
+- [ ] `eslint-config-next` — "Pages directory cannot be found" 경고 발생 (CLI 전환 후 next 전용 lint 규칙 잔존)
 
 ---
 
@@ -68,8 +77,16 @@
 ### 테스트 회귀 (즉시 수정 필요)
 - [x] **`auto-publish.test.ts` Scenario 1~4, 6, 7 총 6개 FAIL** — `getClaudeCallStats` vi.mock 추가로 수정 완료 (2026-04-30 확인: 350 PASS)
 
-### Lint 신규 경고 (1개 추가, 총 2 warnings)
+### Lint 신규 경고 (2026-04-29)
 - [ ] `scripts/mid-review/fetch.mjs:80` — `toIsoDate` 함수 정의 후 미사용 (`@typescript-eslint/no-unused-vars` warning) — 함수 제거 또는 실제 사용 코드 추가
+
+---
+
+## 신규 발견 이슈 (2026-05-05)
+
+- [ ] `scripts/migration/wp-to-blogger.mjs:180` — `accessToken` 초기화 후 미사용 (lint warning 신규) — per-publish freshToken으로 교체됐으므로 초기 선언 제거
+- [ ] `auto-publish.ts:666` — TODO(post-PR6): uniqueIndex(slug, platform) 충돌 처리 미구현
+- [ ] `auto-publish.ts:751` — TODO(post-PR6): N consecutive 백업 fail 시 queue_exhausted dispatchIssue 미구현
 
 ---
 
@@ -81,9 +98,10 @@
 ### 즉시 (빌드/린트 복구)
 - [ ] Next.js 의존성 제거 — `next build` → CLI 전용 `package.json`으로 전환 (build 스크립트 삭제 또는 `tsc --noEmit`으로 교체)
 - [ ] `eslint-config-next` → `@typescript-eslint/eslint-plugin` 등 범용 TS lint config으로 교체 (next 전용 규칙 제거)
-- [ ] 테스트 파일 `any` 타입 명시화 (lint 21 errors) — `as any` → `as ReturnType<typeof vi.fn>` 등 vitest 타입 활용
+- [ ] 테스트 파일 `any` 타입 명시화 (lint 5 errors 잔존) — `llm.test.ts` 3개, `trends.test.ts` 2개
 - [ ] `blogger.ts` `niche` 미사용 변수 제거 (lint warning)
-- [ ] `scripts/mid-review/fetch.mjs:80` `toIsoDate` 미사용 함수 제거 (lint warning 신규)
+- [ ] `scripts/mid-review/fetch.mjs:80` `toIsoDate` 미사용 함수 제거 (lint warning)
+- [ ] `scripts/migration/wp-to-blogger.mjs:180` `accessToken` 초기 선언 제거 (lint warning 신규)
 
 ### 즉시 (AdSense 승인 준비 — 사용자 수동 액션)
 - [x] Blogger Pages HTML 템플릿 준비 완료 (docs/blogger/about.html, privacy.html, contact.html)
