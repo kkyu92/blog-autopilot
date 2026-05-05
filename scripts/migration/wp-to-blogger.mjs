@@ -226,9 +226,24 @@ async function main() {
           continue;
         }
 
+        // 이미 target platform 에 박제됐으면 skip — retry 안전, 동일 wp_id 중복 발행 방지
+        const alreadyMigrated = db
+          .prepare(
+            'SELECT id FROM published_posts WHERE niche = ? AND platform = ? AND (slug = ? OR slug = ?) LIMIT 1',
+          )
+          .get(legacy.niche, src.targetPlatform, legacy.slug, `${legacy.slug}-migrated`);
+        if (alreadyMigrated) {
+          console.log(`  ⏭️  ${wp.id}: already migrated to ${src.targetPlatform} — skipping`);
+          srcLog.skipped.push({ ...item, reason: 'already migrated' });
+          continue;
+        }
+
+        // OAuth access token 1시간 만료 회피 — 매 publish 직전 refresh (long-running batch 보호)
+        const freshToken = await getBloggerAccessToken();
+
         // Publish to Blogger
         const pub = await publishToBlogger({
-          accessToken,
+          accessToken: freshToken,
           blogId: src.targetBlogId,
           title: wp.title,
           html: wp.content,
