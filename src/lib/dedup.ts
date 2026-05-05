@@ -6,7 +6,7 @@ import { publishedPosts, type Niche, type Platform, type PublishedPost } from ".
 // ── checkAndResolve: 4단계 dedup ─────────────────────────────────────────────
 
 export interface DedupInput {
-  niche: "WS" | "TS" | "AS";
+  niche: "HS" | "TS" | "AS";
   keyword: string;
   evergreen: boolean;
   proposedSlug?: string;

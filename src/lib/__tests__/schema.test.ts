@@ -5,7 +5,7 @@ import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { publishedPosts } from "../schema";
 
 const BASE_POST = {
-  niche: "WS" as const,
+  niche: "HS" as const,
   keyword: "foo",
   title: "title1",
   slug: "a-b",
@@ -40,7 +40,7 @@ describe("schema 0001_pr5_schema_boost", () => {
   });
 
   it("UNIQUE(niche, slug) allows same slug across different niches", () => {
-    db.insert(publishedPosts).values({ ...BASE_POST, niche: "WS", platform: "wordpress_ws" }).run();
+    db.insert(publishedPosts).values({ ...BASE_POST, niche: "HS", platform: "wordpress_ws" }).run();
     expect(() =>
       db
         .insert(publishedPosts)
@@ -71,7 +71,7 @@ describe("schema 0001_pr5_schema_boost", () => {
       sqlite
         .prepare(
           `INSERT INTO published_posts (niche, keyword, title, slug, platform, external_url, published_at, status)
-           VALUES ('WS', 'k', 't', 's1', 'wordpress_ws', 'https://e.com/3', '2026-04-26T00:00:00Z', 'failed')`,
+           VALUES ('HS', 'k', 't', 's1', 'wordpress_ws', 'https://e.com/3', '2026-04-26T00:00:00Z', 'failed')`,
         )
         .run();
     }).not.toThrow();

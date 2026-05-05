@@ -12,7 +12,7 @@ function daysAgoISO(n: number): string {
 }
 
 const BASE = {
-  niche: "WS" as const,
+  niche: "HS" as const,
   keyword: "테스트 키워드",
   title: "기존 글 제목",
   slug: "test-slug",
@@ -41,7 +41,7 @@ describe("dedup.checkAndResolve", () => {
     db.insert(publishedPosts).values({ ...BASE, slug: "foo" }).run();
 
     const result = await checkAndResolve(db, {
-      niche: "WS",
+      niche: "HS",
       keyword: "다른 키워드",
       evergreen: false,
       proposedSlug: "foo",
@@ -54,7 +54,7 @@ describe("dedup.checkAndResolve", () => {
   it("L1: same slug different niche → pass (cross-niche is OK)", async () => {
     db
       .insert(publishedPosts)
-      .values({ ...BASE, niche: "WS", slug: "foo", platform: "wordpress_ws" })
+      .values({ ...BASE, niche: "HS", slug: "foo", platform: "wordpress_ws" })
       .run();
 
     const result = await checkAndResolve(db, {
@@ -84,7 +84,7 @@ describe("dedup.checkAndResolve", () => {
     }
 
     const result = await checkAndResolve(db, {
-      niche: "WS",
+      niche: "HS",
       keyword: "신규 키워드",
       evergreen: false,
       proposedSlug: "foo",
@@ -107,7 +107,7 @@ describe("dedup.checkAndResolve", () => {
       .run();
 
     const result = await checkAndResolve(db, {
-      niche: "WS",
+      niche: "HS",
       keyword: BASE.keyword,
       evergreen: true,
     });
@@ -126,7 +126,7 @@ describe("dedup.checkAndResolve", () => {
       .run();
 
     const result = await checkAndResolve(db, {
-      niche: "WS",
+      niche: "HS",
       keyword: BASE.keyword,
       evergreen: true,
     });
@@ -146,7 +146,7 @@ describe("dedup.checkAndResolve", () => {
       .run();
 
     const result = await checkAndResolve(db, {
-      niche: "WS",
+      niche: "HS",
       keyword: BASE.keyword,
       evergreen: true,
     });
@@ -163,7 +163,7 @@ describe("dedup.checkAndResolve", () => {
       .run();
 
     const result = await checkAndResolve(db, {
-      niche: "WS",
+      niche: "HS",
       keyword: BASE.keyword,
       evergreen: false,
       trend: { search_volume_trend: "급상승", priority_score: 95 },
@@ -182,7 +182,7 @@ describe("dedup.checkAndResolve", () => {
       .run();
 
     const result = await checkAndResolve(db, {
-      niche: "WS",
+      niche: "HS",
       keyword: BASE.keyword,
       evergreen: false,
       trend: { search_volume_trend: "급상승", priority_score: 100 },
@@ -204,7 +204,7 @@ describe("dedup.checkAndResolve", () => {
       .run();
 
     const result = await checkAndResolve(db, {
-      niche: "WS",
+      niche: "HS",
       keyword: BASE.keyword,
       evergreen: false,
       trend: { search_volume_trend: "급상승", priority_score: 85 },
@@ -222,7 +222,7 @@ describe("dedup.checkAndResolve", () => {
       .run();
 
     const result = await checkAndResolve(db, {
-      niche: "WS",
+      niche: "HS",
       keyword: BASE.keyword,
       evergreen: false,
       trend: { search_volume_trend: "상승", priority_score: 70 },
@@ -238,7 +238,7 @@ describe("dedup.checkAndResolve", () => {
       .run();
 
     const result = await checkAndResolve(db, {
-      niche: "WS",
+      niche: "HS",
       keyword: BASE.keyword,
       evergreen: false,
       trend: { search_volume_trend: "급상승", priority_score: 75 },
@@ -261,7 +261,7 @@ describe("dedup.checkAndResolve", () => {
       .run();
 
     const result = await checkAndResolve(db, {
-      niche: "WS",
+      niche: "HS",
       keyword: BASE.keyword,
       evergreen: true,
       proposedSlug: "foo",
@@ -280,7 +280,7 @@ describe("dedup.checkAndResolve", () => {
       .run();
 
     const result = await checkAndResolve(db, {
-      niche: "WS",
+      niche: "HS",
       keyword: BASE.keyword,
       evergreen: false,
     });
@@ -292,7 +292,7 @@ describe("dedup.checkAndResolve", () => {
 
   it("신규 키워드: no existing rows → pass", async () => {
     const result = await checkAndResolve(db, {
-      niche: "WS",
+      niche: "HS",
       keyword: "완전 새로운 키워드",
       evergreen: false,
     });

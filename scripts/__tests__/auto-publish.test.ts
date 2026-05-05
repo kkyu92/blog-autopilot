@@ -173,14 +173,14 @@ describe('auto-publish.ts integration (7 시나리오)', () => {
     });
 
     const { runMain } = await import('../auto-publish');
-    const code = await runMain(['node', 'auto-publish.ts', '--niche=WS', '--slot-count=1', '--mode=normal']);
+    const code = await runMain(['node', 'auto-publish.ts', '--niche=HS', '--slot-count=1', '--mode=normal']);
 
     expect(code).toBe(0);
 
     const rows = testDb.select().from(publishedPosts).all();
     expect(rows).toHaveLength(1);
     expect(rows[0].status).toBe('published');
-    expect(rows[0].niche).toBe('WS');
+    expect(rows[0].niche).toBe('HS');
     expect(rows[0].slug).toBe('test-slug');
     expect(rows[0].externalUrl).toBe('https://ws.example.com/test-slug');
     expect(rows[0].scheduledSlot).toBeTruthy();
@@ -212,7 +212,7 @@ describe('auto-publish.ts integration (7 시나리오)', () => {
     });
 
     const { runMain } = await import('../auto-publish');
-    const code = await runMain(['node', 'auto-publish.ts', '--niche=WS', '--slot-count=1']);
+    const code = await runMain(['node', 'auto-publish.ts', '--niche=HS', '--slot-count=1']);
 
     expect(code).toBe(0);
     expect(callClaude).toHaveBeenCalledTimes(2); // writer called twice
@@ -244,7 +244,7 @@ describe('auto-publish.ts integration (7 시나리오)', () => {
     });
 
     const { runMain } = await import('../auto-publish');
-    const code = await runMain(['node', 'auto-publish.ts', '--niche=WS', '--slot-count=1']);
+    const code = await runMain(['node', 'auto-publish.ts', '--niche=HS', '--slot-count=1']);
 
     // 1 slot, 1 failure → discard ratio 100% → exit 1
     expect(code).toBe(1);
@@ -262,7 +262,7 @@ describe('auto-publish.ts integration (7 시나리오)', () => {
     // Title contains niche + keyword.
     const args = ghCall[1] as string[];
     const titleIdx = args.indexOf('--title');
-    expect(args[titleIdx + 1]).toContain('WS');
+    expect(args[titleIdx + 1]).toContain('HS');
     expect(args[titleIdx + 1]).toContain('test keyword');
   });
 
@@ -291,7 +291,7 @@ describe('auto-publish.ts integration (7 시나리오)', () => {
     });
 
     const { runMain } = await import('../auto-publish');
-    const code = await runMain(['node', 'auto-publish.ts', '--niche=WS', '--slot-count=1']);
+    const code = await runMain(['node', 'auto-publish.ts', '--niche=HS', '--slot-count=1']);
 
     expect(code).toBe(0);
 
@@ -314,13 +314,13 @@ describe('auto-publish.ts integration (7 시나리오)', () => {
     vi.mocked(runAll).mockResolvedValue({
       allPassed: false,
       results: [
-        { service: 'Blogger-WS', ok: false, reason: 'HTTP 401' },
+        { service: 'Blogger-HS', ok: false, reason: 'HTTP 401' },
         { service: 'Pexels', ok: true },
       ],
     });
 
     const { runMain } = await import('../auto-publish');
-    const code = await runMain(['node', 'auto-publish.ts', '--niche=WS', '--slot-count=1']);
+    const code = await runMain(['node', 'auto-publish.ts', '--niche=HS', '--slot-count=1']);
 
     expect(code).toBe(2);
     expect(pickQueue).not.toHaveBeenCalled();
@@ -367,7 +367,7 @@ describe('auto-publish.ts integration (7 시나리오)', () => {
     });
 
     const { runMain } = await import('../auto-publish');
-    const code = await runMain(['node', 'auto-publish.ts', '--niche=WS', '--slot-count=1']);
+    const code = await runMain(['node', 'auto-publish.ts', '--niche=HS', '--slot-count=1']);
 
     expect(code).toBe(0);
 
@@ -417,7 +417,7 @@ describe('auto-publish.ts integration (7 시나리오)', () => {
     });
 
     const { runMain } = await import('../auto-publish');
-    const code = await runMain(['node', 'auto-publish.ts', '--niche=WS', '--slot-count=1']);
+    const code = await runMain(['node', 'auto-publish.ts', '--niche=HS', '--slot-count=1']);
 
     expect(code).toBe(0);
     expect(callClaude).toHaveBeenCalledTimes(2); // writer called twice (schema retry)
@@ -467,7 +467,7 @@ describe('auto-publish.ts integration (7 시나리오)', () => {
     });
 
     const { runMain } = await import('../auto-publish');
-    const code = await runMain(['node', 'auto-publish.ts', '--niche=WS', '--slot-count=1']);
+    const code = await runMain(['node', 'auto-publish.ts', '--niche=HS', '--slot-count=1']);
 
     expect(code).toBe(0);
     // publishScheduled가 modified_html을 받아야 함 (원본 아닌)
@@ -505,7 +505,7 @@ describe('auto-publish.ts integration (7 시나리오)', () => {
     });
 
     const { runMain } = await import('../auto-publish');
-    const code = await runMain(['node', 'auto-publish.ts', '--niche=WS', '--slot-count=2']);
+    const code = await runMain(['node', 'auto-publish.ts', '--niche=HS', '--slot-count=2']);
 
     expect(code).toBe(0);
 

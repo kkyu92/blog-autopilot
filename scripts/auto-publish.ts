@@ -89,7 +89,7 @@ function errMessage(err: unknown): string {
   try { return JSON.stringify(err); } catch { return String(err); }
 }
 
-type Niche = 'WS' | 'TS' | 'AS';
+type Niche = 'HS' | 'TS' | 'AS';
 type Mode = 'normal' | 'healthcheck-only';
 
 interface CliArgs {
@@ -405,7 +405,7 @@ async function publishToPlatform(
 function platformForNiche(niche: Niche): 'blogger_as' | 'blogger_trip' | 'blogger_health' {
   if (niche === 'TS') return 'blogger_trip';
   // (도메인 trip-signal.blogspot.com — niche 명명은 TS 그대로 유지)
-  if (niche === 'WS') return 'blogger_health';
+  if (niche === 'HS') return 'blogger_health';
   return 'blogger_as';
 }
 
@@ -779,11 +779,11 @@ function parseCliArgs(argv: string[]): CliArgs {
 
   const nicheArg = values.niche as string;
   const niches: Niche[] = nicheArg === 'all'
-    ? ['WS', 'TS', 'AS']
+    ? ['HS', 'TS', 'AS']
     : (nicheArg.split(',') as Niche[]);
 
   for (const n of niches) {
-    if (!['WS', 'TS', 'AS'].includes(n)) {
+    if (!['HS', 'TS', 'AS'].includes(n)) {
       throw new Error(`Invalid niche: ${n}`);
     }
   }

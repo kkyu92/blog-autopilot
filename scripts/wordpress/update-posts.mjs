@@ -49,7 +49,7 @@ function appendDisclaimer(content, contextText) {
 
 const TARGETS = [
   {
-    site: "WS",
+    site: "HS",
     id: 349,
     label: "[57] 근력운동 주 2회",
     transforms: [
@@ -58,7 +58,7 @@ const TARGETS = [
   },
   // 5/2 spot-check 추가
   {
-    site: "WS",
+    site: "HS",
     id: 358,
     label: "[66] 30대 대장암 조기 발견",
     transforms: [

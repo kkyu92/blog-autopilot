@@ -40,7 +40,7 @@ const SOURCES = [
     targetBlogId: process.env.GOOGLE_BLOG_ID_TRIP,
   },
   {
-    niche: 'WS',
+    niche: 'HS',
     sourcePlatform: 'wordpress_ws',
     targetPlatform: 'blogger_health',
     wpToken: process.env.WORDPRESS_WS_ACCESS_TOKEN,

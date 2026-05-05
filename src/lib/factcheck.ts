@@ -10,7 +10,7 @@ const PROMPT_PATH = path.resolve(__dirname, '../../prompts/agents/fact-checker.m
 const PROMPT = fs.readFileSync(PROMPT_PATH, 'utf-8');
 
 export interface FactCheckInput {
-  niche: 'WS' | 'TS' | 'AS';
+  niche: 'HS' | 'TS' | 'AS';
   draft: { content_html: string; title: string; keyword: string };
 }
 

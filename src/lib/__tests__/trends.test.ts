@@ -60,7 +60,7 @@ describe('pickQueue', () => {
     vi.mocked(callClaude).mockResolvedValueOnce(JSON.stringify(manyCandidates));
 
     const { pickQueue } = await import('../trends');
-    const result = await pickQueue({ niche: 'WS', signals: NO_SIGNALS });
+    const result = await pickQueue({ niche: 'HS', signals: NO_SIGNALS });
 
     expect(result).toHaveLength(5);
   });
@@ -87,11 +87,11 @@ describe('pickQueue', () => {
     vi.mocked(callClaude).mockResolvedValueOnce(JSON.stringify([VALID_CANDIDATE]));
 
     const { pickQueue } = await import('../trends');
-    await pickQueue({ niche: 'WS', signals: NO_SIGNALS });
+    await pickQueue({ niche: 'HS', signals: NO_SIGNALS });
 
     const callArgs = vi.mocked(callClaude).mock.calls[0][0];
     const parsed = JSON.parse(callArgs.userMessage);
-    expect(parsed.niche).toBe('WS');
+    expect(parsed.niche).toBe('HS');
   });
 
   // Test 5: expectJson:true passed
@@ -127,7 +127,7 @@ describe('pickQueue', () => {
     );
 
     const { pickQueue } = await import('../trends');
-    const result = await pickQueue({ niche: 'WS', signals: NO_SIGNALS });
+    const result = await pickQueue({ niche: 'HS', signals: NO_SIGNALS });
 
     expect(result).toHaveLength(2);
     expect(result[0].keyword).toBe('아파트 전세 시세');
@@ -258,7 +258,7 @@ describe('pickQueue', () => {
     vi.mocked(callClaude).mockResolvedValue(JSON.stringify([VALID_CANDIDATE]));
     const { pickQueue } = await import('../trends');
     await pickQueue({
-      niche: 'WS',
+      niche: 'HS',
       signals: {
         daily_trends: [],
         wellness: [
@@ -300,7 +300,7 @@ describe('pickQueue', () => {
 
     const { pickQueue } = await import('../trends');
     await expect(
-      pickQueue({ niche: 'WS', signals: NO_SIGNALS })
+      pickQueue({ niche: 'HS', signals: NO_SIGNALS })
     ).rejects.toThrow('API failure');
   });
 });

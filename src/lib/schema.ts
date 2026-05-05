@@ -5,7 +5,7 @@ export const publishedPosts = sqliteTable(
   "published_posts",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
-    niche: text("niche", { enum: ["WS", "TS", "AS"] }).notNull(),
+    niche: text("niche", { enum: ["HS", "TS", "AS"] }).notNull(),
     category: text("category"),
     keyword: text("keyword").notNull(),
     title: text("title").notNull(),
@@ -46,7 +46,7 @@ export const publishedPosts = sqliteTable(
 export type PublishedPost = typeof publishedPosts.$inferSelect;
 export type NewPublishedPost = typeof publishedPosts.$inferInsert;
 
-export type Niche = "WS" | "TS" | "AS";
+export type Niche = "HS" | "TS" | "AS";
 export type Platform =
   | "wordpress_ws"
   | "wordpress_ts"

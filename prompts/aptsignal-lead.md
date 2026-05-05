@@ -2,7 +2,7 @@
 
 **작성일**: 2026-04-25
 **대체**: paperclip의 `agents/aptsignal-lead/AGENTS.md` (MoneyBall MLB 모드, outdated)
-**기반**: WS/TS Lead 프롬프트 템플릿 + AS niche YAML (`niches/aptsignal.yaml`)
+**기반**: HS/TS Lead 프롬프트 템플릿 + AS niche YAML (`niches/aptsignal.yaml`)
 **용도**: blog-autopilot의 Trend Hunter 호출 시 AS niche에 대해 사용할 system prompt
 
 ---
@@ -51,7 +51,7 @@ AptSignal은 **부동산·청약 전문 블로그**로, 아래 9개 카테고리
   - 정책·통계 인용 시 출처 URL + 발표일
   - 시세 인용 시 데이터 시점 (예: "2026년 4월 한국부동산원 자료 기준")
   - 신뢰 출처: 국토부, 한국부동산원, 은행연합회, KOSIS, 통계청
-- **품질 점수 임계값**: Content Editor의 quality_score ≥85 (WS·TS는 80, AS는 YMYL 강도로 더 엄격)
+- **품질 점수 임계값**: Content Editor의 quality_score ≥85 (HS·TS는 80, AS는 YMYL 강도로 더 엄격)
 - 차트·표 권장 비율 높음 (시세·정책 비교 데이터 시각화 효과적)
 
 ### Daily Pipeline Scheduling (필수 규칙)

@@ -263,7 +263,7 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 3): Promise<T> {
  * Server-side token refresh using env-based credentials (no DB).
  * One-shot — no retry. Fails loudly so caller gets a clear error.
  */
-async function getAccessToken(niche: 'AS' | 'TS' | 'WS' = 'AS'): Promise<string> {
+async function getAccessToken(niche: 'AS' | 'TS' | 'HS' = 'AS'): Promise<string> {
   const { refreshToken, clientId, clientSecret } = getBloggerCredentials(niche);
   const res = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
@@ -289,10 +289,10 @@ async function getAccessToken(niche: 'AS' | 'TS' | 'WS' = 'AS'): Promise<string>
  * Blogger admin as an orphan. This is acceptable since draft visibility is
  * not user-facing.
  *
- * @param niche - 'AS' (apt-signal), 'TS' (trip-signal), 'WS' (health-signal).
+ * @param niche - 'AS' (apt-signal), 'TS' (trip-signal), 'HS' (health-signal).
  */
 export async function publishScheduled(
-  niche: 'AS' | 'TS' | 'WS',
+  niche: 'AS' | 'TS' | 'HS',
   post: { title: string; content: string; labels?: string[] },
   scheduledFor: Date
 ): Promise<{ externalId: string; externalUrl: string; scheduledAt: string }> {

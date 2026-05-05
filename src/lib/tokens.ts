@@ -99,14 +99,14 @@ export interface BloggerCredentials {
 // niche → BLOG_ID env suffix 매핑 (도메인 일관 명명)
 // AS → apt-signal.blogspot.com (GOOGLE_BLOG_ID_APT, fallback GOOGLE_BLOG_ID for backward compat)
 // TS → trip-signal.blogspot.com (GOOGLE_BLOG_ID_TRIP)
-// WS → health-signal.blogspot.com (GOOGLE_BLOG_ID_HEALTH)
-const BLOG_ID_ENV_SUFFIX: Record<'AS' | 'TS' | 'WS', string> = {
+// HS → health-signal.blogspot.com (GOOGLE_BLOG_ID_HEALTH)
+const BLOG_ID_ENV_SUFFIX: Record<'AS' | 'TS' | 'HS', string> = {
   AS: 'APT',
   TS: 'TRIP',
-  WS: 'HEALTH',
+  HS: 'HEALTH',
 };
 
-export function getBloggerCredentials(niche: 'AS' | 'TS' | 'WS' = 'AS'): BloggerCredentials {
+export function getBloggerCredentials(niche: 'AS' | 'TS' | 'HS' = 'AS'): BloggerCredentials {
   const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
   const suffix = BLOG_ID_ENV_SUFFIX[niche];
   // AS는 backward compat — 기존 GOOGLE_BLOG_ID env도 fallback 인정

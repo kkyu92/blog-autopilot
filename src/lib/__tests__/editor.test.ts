@@ -44,7 +44,7 @@ describe('editor.review', () => {
     vi.mocked(factcheck).mockResolvedValue({ verdict: 'pass' });
 
     const { review } = await import('../editor');
-    const result = await review({ draft: validDraft(), niche: 'WS' });
+    const result = await review({ draft: validDraft(), niche: 'HS' });
 
     expect(result.verdict).toBe('pass');
     expect(result.score).toBe(88);
@@ -94,7 +94,7 @@ describe('editor.review', () => {
     expect(result.feedback).toMatch(/image_slots/i);
   });
 
-  // Test 4: WS niche → factcheck called once with niche='WS'
+  // Test 4: WS niche → factcheck called once with niche='HS'
   it('WS niche → factcheck 호출 (niche=WS)', async () => {
     const { callClaude } = await import('../llm');
     const { factcheck } = await import('../factcheck');
@@ -109,10 +109,10 @@ describe('editor.review', () => {
     vi.mocked(factcheck).mockResolvedValue({ verdict: 'pass' });
 
     const { review } = await import('../editor');
-    await review({ draft: validDraft(), niche: 'WS' });
+    await review({ draft: validDraft(), niche: 'HS' });
 
     expect(factcheck).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(factcheck).mock.calls[0][0].niche).toBe('WS');
+    expect(vi.mocked(factcheck).mock.calls[0][0].niche).toBe('HS');
   });
 
   // Test 5: AS niche → factcheck called once with niche='AS'
@@ -176,7 +176,7 @@ describe('editor.review', () => {
     });
 
     const { review } = await import('../editor');
-    const result = await review({ draft: validDraft(), niche: 'WS' });
+    const result = await review({ draft: validDraft(), niche: 'HS' });
 
     // 새 정책: factcheck needs_revision은 hard reject 안 함, LLM editor가 approved하면 pass
     expect(result.verdict).toBe('pass');
@@ -294,7 +294,7 @@ describe('editor.review', () => {
     });
 
     const { review } = await import('../editor');
-    const result = await review({ draft: validDraft(), niche: 'WS' });
+    const result = await review({ draft: validDraft(), niche: 'HS' });
 
     expect(result.disclaimer_inserted).toBeUndefined();
     expect(result.modified_html).toBeUndefined();
@@ -314,7 +314,7 @@ describe('editor.review', () => {
     vi.mocked(factcheck).mockResolvedValue({ verdict: 'pass' });
 
     const { review } = await import('../editor');
-    const result = await review({ draft: validDraft(), niche: 'WS' });
+    const result = await review({ draft: validDraft(), niche: 'HS' });
 
     expect(result.verdict).toBe('revision_needed');
     expect(result.feedback).toContain('CTA가 누락되었습니다');
@@ -399,7 +399,7 @@ describe('editor.review', () => {
 
     const { review } = await import('../editor');
     const draft = { ...validDraft(), word_count: 500, image_slots: [] };
-    const result = await review({ draft, niche: 'WS' });
+    const result = await review({ draft, niche: 'HS' });
 
     // word_count + image_slots 정량 fail은 hard reject 유지
     expect(result.verdict).toBe('revision_needed');

@@ -116,7 +116,7 @@ Your home directory is $AGENT_HOME. Everything personal to you lives there.
 3. **모든 주장에 근거나 출처 언급** (E-E-A-T 대응).
 4. **구글 E-E-A-T** (경험·전문성·권위·신뢰) 기준 충족.
 5. **YMYL 주의**: 건강, 금융, 법률 관련 키워드는 정보 제공 수준으로만 다루고, 전문적 조언은 피한다.
-   - **WS/AS niche 필수**: 본문 마지막 `</div>` 직전에 표준 면책 박스를 반드시 포함한다. 정확한 wording (5/3~5/4 evidence — factcheck soft-warn 우회 방지):
+   - **HS/AS niche 필수**: 본문 마지막 `</div>` 직전에 표준 면책 박스를 반드시 포함한다. 정확한 wording (5/3~5/4 evidence — factcheck soft-warn 우회 방지):
      ```html
      <div style="margin-top:32px;padding:16px 20px;background:#F5F5F5;border-left:3px solid #999;border-radius:4px;font-size:14px;color:#555;line-height:1.7;"><p style="margin:0 0 8px 0;font-weight:600;color:#1A1A1A;">⚠️ 면책 고지</p><p style="margin:0;">이 글은 정보 제공 목적이며, 전문 의료/법률/세무 상담을 대체하지 않습니다. 정책·법안·의학 정보는 변경될 수 있으므로 최신 정보를 직접 확인하시기 바랍니다.</p></div>
      ```

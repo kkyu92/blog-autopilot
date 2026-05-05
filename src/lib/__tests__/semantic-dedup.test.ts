@@ -29,7 +29,7 @@ describe('batchSemanticDedup', () => {
 
   it('returns empty when no recent posts in relevant niches', async () => {
     const candidates: SemanticDedupCandidate[] = [
-      { niche: 'WS', keyword: '춘곤증 극복법' },
+      { niche: 'HS', keyword: '춘곤증 극복법' },
     ];
     const callMock = vi.fn();
     const result = await batchSemanticDedup(candidates, { TS: [{ id: 1, niche: 'TS', keyword: '여행', category: null }] }, callMock);
@@ -39,11 +39,11 @@ describe('batchSemanticDedup', () => {
 
   it('parses LLM response with duplicates', async () => {
     const candidates: SemanticDedupCandidate[] = [
-      { niche: 'WS', keyword: '춘곤증 극복법' },
+      { niche: 'HS', keyword: '춘곤증 극복법' },
       { niche: 'TS', keyword: '일본 골든위크 여행 코스' },
     ];
     const recent: Record<string, RecentPublished[]> = {
-      WS: [{ id: 1, niche: 'WS', keyword: '춘곤증 극복 방법 5가지', category: '건강·라이프' }],
+      HS: [{ id: 1, niche: 'HS', keyword: '춘곤증 극복 방법 5가지', category: '건강·라이프' }],
       TS: [{ id: 4, niche: 'TS', keyword: '일본 황금연휴 여행', category: '일본여행' }],
     };
     const callMock = vi.fn().mockResolvedValue(JSON.stringify({
@@ -81,10 +81,10 @@ describe('batchSemanticDedup', () => {
 
   it('passes candidates and recent posts in user message', async () => {
     const candidates: SemanticDedupCandidate[] = [
-      { niche: 'WS', keyword: 'k1' },
+      { niche: 'HS', keyword: 'k1' },
     ];
     const recent: Record<string, RecentPublished[]> = {
-      WS: [{ id: 1, niche: 'WS', keyword: 'old', category: 'cat' }],
+      HS: [{ id: 1, niche: 'HS', keyword: 'old', category: 'cat' }],
     };
     const callMock = vi.fn().mockResolvedValue(JSON.stringify({ duplicates: [] }));
 
@@ -93,19 +93,19 @@ describe('batchSemanticDedup', () => {
     expect(callMock).toHaveBeenCalledOnce();
     const userMsg = callMock.mock.calls[0][0].userMessage;
     const parsed = JSON.parse(userMsg);
-    expect(parsed.new_candidates).toEqual([{ idx: 0, niche: 'WS', keyword: 'k1' }]);
+    expect(parsed.new_candidates).toEqual([{ idx: 0, niche: 'HS', keyword: 'k1' }]);
     expect(parsed.recent_published).toEqual({
-      WS: [{ id: 1, niche: 'WS', keyword: 'old', category: 'cat' }],
+      HS: [{ id: 1, niche: 'HS', keyword: 'old', category: 'cat' }],
     });
     expect(callMock.mock.calls[0][0].expectJson).toBe(true);
   });
 
   it('filters recent_published to only relevant niches', async () => {
     const candidates: SemanticDedupCandidate[] = [
-      { niche: 'WS', keyword: 'k1' },
+      { niche: 'HS', keyword: 'k1' },
     ];
     const recent: Record<string, RecentPublished[]> = {
-      WS: [{ id: 1, niche: 'WS', keyword: 'old', category: 'c' }],
+      HS: [{ id: 1, niche: 'HS', keyword: 'old', category: 'c' }],
       TS: [{ id: 2, niche: 'TS', keyword: 'travel', category: 'c' }],
       AS: [{ id: 3, niche: 'AS', keyword: 'apt', category: 'c' }],
     };
@@ -115,15 +115,15 @@ describe('batchSemanticDedup', () => {
 
     const userMsg = callMock.mock.calls[0][0].userMessage;
     const parsed = JSON.parse(userMsg);
-    expect(Object.keys(parsed.recent_published)).toEqual(['WS']);
+    expect(Object.keys(parsed.recent_published)).toEqual(['HS']);
   });
 
   it('drops malformed duplicates from LLM response', async () => {
     const candidates: SemanticDedupCandidate[] = [
-      { niche: 'WS', keyword: 'k1' },
+      { niche: 'HS', keyword: 'k1' },
     ];
     const recent: Record<string, RecentPublished[]> = {
-      WS: [{ id: 1, niche: 'WS', keyword: 'old', category: null }],
+      HS: [{ id: 1, niche: 'HS', keyword: 'old', category: null }],
     };
     const callMock = vi.fn().mockResolvedValue(JSON.stringify({
       duplicates: [
@@ -142,10 +142,10 @@ describe('batchSemanticDedup', () => {
 
   it('returns empty when LLM returns no duplicates field', async () => {
     const candidates: SemanticDedupCandidate[] = [
-      { niche: 'WS', keyword: 'k1' },
+      { niche: 'HS', keyword: 'k1' },
     ];
     const recent: Record<string, RecentPublished[]> = {
-      WS: [{ id: 1, niche: 'WS', keyword: 'old', category: null }],
+      HS: [{ id: 1, niche: 'HS', keyword: 'old', category: null }],
     };
     const callMock = vi.fn().mockResolvedValue(JSON.stringify({}));
 
@@ -167,33 +167,33 @@ describe('loadRecentByNiche', () => {
 
   it('returns rows grouped by niche within window', () => {
     db.insert(publishedPosts).values([
-      { ...BASE, niche: 'WS', keyword: 'ws-keyword', slug: 'ws-1', platform: 'wordpress_ws', publishedAt: daysAgoISO(5), category: 'health' },
+      { ...BASE, niche: 'HS', keyword: 'ws-keyword', slug: 'ws-1', platform: 'wordpress_ws', publishedAt: daysAgoISO(5), category: 'health' },
       { ...BASE, niche: 'TS', keyword: 'ts-keyword', slug: 'ts-1', platform: 'wordpress_ts', publishedAt: daysAgoISO(10), category: 'travel' },
       { ...BASE, niche: 'AS', keyword: 'as-keyword', slug: 'as-1', platform: 'blogger_as', publishedAt: daysAgoISO(20), category: 'apt' },
     ]).run();
 
-    const result = loadRecentByNiche(db, ['WS', 'TS', 'AS'], 30);
+    const result = loadRecentByNiche(db, ['HS', 'TS', 'AS'], 30);
 
-    expect(result.WS).toHaveLength(1);
-    expect(result.WS[0].keyword).toBe('ws-keyword');
+    expect(result.HS).toHaveLength(1);
+    expect(result.HS[0].keyword).toBe('ws-keyword');
     expect(result.TS).toHaveLength(1);
     expect(result.AS).toHaveLength(1);
   });
 
   it('excludes rows outside window', () => {
     db.insert(publishedPosts).values([
-      { ...BASE, niche: 'WS', keyword: 'recent', slug: 's-recent', platform: 'wordpress_ws', publishedAt: daysAgoISO(5) },
-      { ...BASE, niche: 'WS', keyword: 'old', slug: 's-old', platform: 'wordpress_ws', publishedAt: daysAgoISO(60) },
+      { ...BASE, niche: 'HS', keyword: 'recent', slug: 's-recent', platform: 'wordpress_ws', publishedAt: daysAgoISO(5) },
+      { ...BASE, niche: 'HS', keyword: 'old', slug: 's-old', platform: 'wordpress_ws', publishedAt: daysAgoISO(60) },
     ]).run();
 
-    const result = loadRecentByNiche(db, ['WS'], 30);
-    expect(result.WS).toHaveLength(1);
-    expect(result.WS[0].keyword).toBe('recent');
+    const result = loadRecentByNiche(db, ['HS'], 30);
+    expect(result.HS).toHaveLength(1);
+    expect(result.HS[0].keyword).toBe('recent');
   });
 
   it('returns empty arrays for niches with no posts', () => {
-    const result = loadRecentByNiche(db, ['WS', 'TS'], 30);
-    expect(result.WS).toEqual([]);
+    const result = loadRecentByNiche(db, ['HS', 'TS'], 30);
+    expect(result.HS).toEqual([]);
     expect(result.TS).toEqual([]);
   });
 });

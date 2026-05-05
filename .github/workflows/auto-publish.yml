@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
     inputs:
       niche:
-        description: '대상 niche (all | WS | TS | AS)'
+        description: '대상 niche (all | HS | TS | AS)'
         type: choice
-        options: [all, WS, TS, AS]
+        options: [all, HS, TS, AS]
         default: all
       slot_count:
         description: 'niche당 슬롯 수'

@@ -19,7 +19,7 @@ describe('factcheck', () => {
 
     const { factcheck } = await import('../factcheck');
     const result = await factcheck({
-      niche: 'WS',
+      niche: 'HS',
       draft: {
         content_html: '<p>건강한 생활습관에 대한 글입니다.</p>',
         title: '건강 생활습관',
@@ -51,7 +51,7 @@ describe('factcheck', () => {
 
     const { factcheck } = await import('../factcheck');
     const result = await factcheck({
-      niche: 'WS',
+      niche: 'HS',
       draft: {
         content_html: '<p>연구에 따르면 90%가 효과적입니다.</p>',
         title: '건강 효과',
@@ -117,7 +117,7 @@ describe('factcheck', () => {
     const { factcheck } = await import('../factcheck');
     await expect(
       factcheck({
-        niche: 'WS',
+        niche: 'HS',
         draft: {
           content_html: '<p>건강 정보</p>',
           title: '건강',
@@ -200,7 +200,7 @@ describe('factcheck', () => {
 
     const { factcheck } = await import('../factcheck');
     await factcheck({
-      niche: 'WS',
+      niche: 'HS',
       draft: {
         content_html: '<p>건강 정보</p>',
         title: '건강',
@@ -220,7 +220,7 @@ describe('factcheck', () => {
 
     const { factcheck } = await import('../factcheck');
     await expect(
-      factcheck({ niche: 'WS', draft: { content_html: '<p>x</p>', title: 't', keyword: 'k' } }),
+      factcheck({ niche: 'HS', draft: { content_html: '<p>x</p>', title: 't', keyword: 'k' } }),
     ).rejects.toThrow(/unexpected verdict/);
   });
 
@@ -238,11 +238,11 @@ describe('factcheck', () => {
       keyword: '의료 가이드라인 2026',
     };
 
-    await factcheck({ niche: 'WS', draft: inputDraft });
+    await factcheck({ niche: 'HS', draft: inputDraft });
 
     const call = vi.mocked(callClaude).mock.calls[0][0];
     const parsed = JSON.parse(call.userMessage);
-    expect(parsed.niche).toBe('WS');
+    expect(parsed.niche).toBe('HS');
     expect(parsed.title).toBe(inputDraft.title);
     expect(parsed.keyword).toBe(inputDraft.keyword);
     expect(parsed.content_html).toBe(inputDraft.content_html);

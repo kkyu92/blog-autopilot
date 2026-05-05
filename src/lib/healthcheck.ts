@@ -43,13 +43,13 @@ async function pingPexels(): Promise<HealthResult> {
 }
 
 // niche → BLOG_ID env suffix (도메인 일관 명명, tokens.ts와 동일)
-const BLOG_ID_ENV_SUFFIX: Record<'AS' | 'TS' | 'WS', string> = {
+const BLOG_ID_ENV_SUFFIX: Record<'AS' | 'TS' | 'HS', string> = {
   AS: 'APT',
   TS: 'TRIP',
-  WS: 'HEALTH',
+  HS: 'HEALTH',
 };
 
-async function pingBlogger(niche: 'AS' | 'TS' | 'WS'): Promise<HealthResult> {
+async function pingBlogger(niche: 'AS' | 'TS' | 'HS'): Promise<HealthResult> {
   const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
   const suffix = BLOG_ID_ENV_SUFFIX[niche];
   const blogId =
@@ -154,7 +154,7 @@ export async function runAll(): Promise<HealthReport> {
     pingWithRetry('Pexels', pingPexels),
     pingWithRetry('Blogger-AS', () => pingBlogger('AS')),
     pingWithRetry('Blogger-TS', () => pingBlogger('TS')),
-    pingWithRetry('Blogger-WS', () => pingBlogger('WS')),
+    pingWithRetry('Blogger-HS', () => pingBlogger('HS')),
     pingWithRetry('claude-cli', pingClaudeCli),
   ]);
   return { allPassed: results.every(r => r.ok), results };

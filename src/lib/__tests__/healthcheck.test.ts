@@ -6,7 +6,7 @@ vi.mock('../llm', () => ({
 }));
 
 // 5/5 WP→Blogger 마이그레이션 후 healthcheck = Pixabay + Pexels + Blogger × 3 niche + claude-cli = 6 services.
-// fetch 호출 8회 (Pixabay 1 + Pexels 1 + Blogger-AS token+blogs 2 + Blogger-TS token+blogs 2 + Blogger-WS token+blogs 2).
+// fetch 호출 8회 (Pixabay 1 + Pexels 1 + Blogger-AS token+blogs 2 + Blogger-TS token+blogs 2 + Blogger-HS token+blogs 2).
 
 interface FetchOpts {
   pixabay?: { ok: boolean; status: number };
@@ -142,7 +142,7 @@ describe('healthcheck.runAll', () => {
     expect(ts!.reason).toBe('GOOGLE_BLOG_ID_TRIP missing');
   });
 
-  it('Blogger WS BLOG_ID missing → Blogger-WS ok=false, reason = GOOGLE_BLOG_ID_HEALTH missing', async () => {
+  it('Blogger HS BLOG_ID missing → Blogger-HS ok=false, reason = GOOGLE_BLOG_ID_HEALTH missing', async () => {
     vi.stubEnv('GOOGLE_BLOG_ID_HEALTH', '');
 
     global.fetch = makeFetchMock() as unknown as typeof fetch;
@@ -153,10 +153,10 @@ describe('healthcheck.runAll', () => {
     const { runAll } = await import('../healthcheck');
     const report = await runAll();
 
-    const ws = report.results.find((r) => r.service === 'Blogger-WS');
-    expect(ws).toBeDefined();
-    expect(ws!.ok).toBe(false);
-    expect(ws!.reason).toBe('GOOGLE_BLOG_ID_HEALTH missing');
+    const hs = report.results.find((r) => r.service === 'Blogger-HS');
+    expect(hs).toBeDefined();
+    expect(hs!.ok).toBe(false);
+    expect(hs!.reason).toBe('GOOGLE_BLOG_ID_HEALTH missing');
   });
 
   it('Blogger token refresh HTTP 400 → 모든 niche fail', async () => {
@@ -170,7 +170,7 @@ describe('healthcheck.runAll', () => {
     const { runAll } = await import('../healthcheck');
     const report = await runAll();
 
-    for (const niche of ['AS', 'TS', 'WS']) {
+    for (const niche of ['AS', 'TS', 'HS']) {
       const r = report.results.find((res) => res.service === `Blogger-${niche}`);
       expect(r).toBeDefined();
       expect(r!.ok).toBe(false);
@@ -178,7 +178,7 @@ describe('healthcheck.runAll', () => {
     }
   });
 
-  it('Blogger token OK but AS blogs API 403 → Blogger-AS ok=false, TS/WS 정상', async () => {
+  it('Blogger token OK but AS blogs API 403 → Blogger-AS ok=false, TS/HS 정상', async () => {
     global.fetch = makeFetchMock({
       bloggerBlogsAs: { ok: false, status: 403 },
     }) as unknown as typeof fetch;
@@ -193,7 +193,7 @@ describe('healthcheck.runAll', () => {
     expect(as!.ok).toBe(false);
     expect(as!.reason).toContain('403');
     expect(report.results.find((r) => r.service === 'Blogger-TS')!.ok).toBe(true);
-    expect(report.results.find((r) => r.service === 'Blogger-WS')!.ok).toBe(true);
+    expect(report.results.find((r) => r.service === 'Blogger-HS')!.ok).toBe(true);
   });
 
   it('fetch timeout (AbortError) → ok=false, reason includes abort/timeout', async () => {
@@ -207,7 +207,7 @@ describe('healthcheck.runAll', () => {
     const report = await runAll();
 
     // All 5 fetch-based services should fail
-    const fetchServices = ['Pixabay', 'Pexels', 'Blogger-AS', 'Blogger-TS', 'Blogger-WS'];
+    const fetchServices = ['Pixabay', 'Pexels', 'Blogger-AS', 'Blogger-TS', 'Blogger-HS'];
     for (const svc of fetchServices) {
       const r = report.results.find((res) => res.service === svc);
       expect(r).toBeDefined();
@@ -245,7 +245,7 @@ describe('healthcheck.runAll', () => {
     expect(serviceNames).toContain('Pexels');
     expect(serviceNames).toContain('Blogger-AS');
     expect(serviceNames).toContain('Blogger-TS');
-    expect(serviceNames).toContain('Blogger-WS');
+    expect(serviceNames).toContain('Blogger-HS');
     expect(serviceNames).toContain('claude-cli');
     expect(report.results).toHaveLength(6);
   });
@@ -261,7 +261,7 @@ describe('healthcheck.runAll', () => {
     const { runAll } = await import('../healthcheck');
     const report = await runAll();
 
-    for (const niche of ['AS', 'TS', 'WS']) {
+    for (const niche of ['AS', 'TS', 'HS']) {
       const r = report.results.find((res) => res.service === `Blogger-${niche}`);
       expect(r!.ok).toBe(false);
       expect(r!.reason).toBe('GOOGLE_REFRESH_TOKEN missing');

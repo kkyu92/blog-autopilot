@@ -209,7 +209,7 @@ export interface KeywordCandidate {
 }
 
 export interface PickQueueOptions {
-  niche: 'WS' | 'TS' | 'AS';
+  niche: 'HS' | 'TS' | 'AS';
   count?: number;
   /** Optional pre-fetched signals to feed LLM. If omitted, fetches Google daily trends + niche-specific aggregator. */
   signals?: {
@@ -233,13 +233,13 @@ export interface PickQueueOptions {
 
 // Niche definition yaml은 trend-hunter persona에 niche-specific 카테고리 가이드를 inject하기 위해 사용.
 // paperclip 시절은 SHARED_RULES.md + AGENTS.md 인프라가 자동 로드했지만 우리 lib은 독립이라 명시 inject.
-const NICHE_YAML_FILES: Record<'WS' | 'TS' | 'AS', string> = {
-  WS: 'worldsignal.yaml',
+const NICHE_YAML_FILES: Record<'HS' | 'TS' | 'AS', string> = {
+  HS: 'worldsignal.yaml',
   TS: 'travelsignal.yaml',
   AS: 'aptsignal.yaml',
 };
 
-function loadNicheYaml(niche: 'WS' | 'TS' | 'AS'): string {
+function loadNicheYaml(niche: 'HS' | 'TS' | 'AS'): string {
   const filePath = path.resolve(__dirname_trends, '../../niches', NICHE_YAML_FILES[niche]);
   try {
     return fs.readFileSync(filePath, 'utf8');
@@ -271,7 +271,7 @@ export async function pickQueue(opts: PickQueueOptions): Promise<KeywordCandidat
   }
 
   let wellness: WellnessSignal[] = opts.signals?.wellness ?? [];
-  if (opts.niche === 'WS' && !opts.signals?.wellness) {
+  if (opts.niche === 'HS' && !opts.signals?.wellness) {
     try {
       wellness = await aggregateWsSignals({ windowHours: 72, maxItems: 60 });
     } catch (err) {
@@ -306,7 +306,7 @@ export async function pickQueue(opts: PickQueueOptions): Promise<KeywordCandidat
           })),
         }
       : {}),
-    ...(opts.niche === 'WS' && wellness.length > 0
+    ...(opts.niche === 'HS' && wellness.length > 0
       ? {
           wellness_news: wellness.map((s) => ({
             title: s.title,
@@ -335,7 +335,7 @@ export async function pickQueue(opts: PickQueueOptions): Promise<KeywordCandidat
         ? 'AS niche: realestate_news 가 제공되었으면 그 안의 fresh title 들에서 키워드 후보를 우선 추출하라. ' +
           '각도(지역·정책·청약일정·세금·신혼부부·청년임대·재건축·신도시 등) 다양화 — 한 카테고리에 3개 이상 몰림 금지. ' +
           'evergreen 키워드 머릿속 generate 는 realestate_news 가 비어있을 때만 fallback. '
-        : opts.niche === 'WS' && wellness.length > 0
+        : opts.niche === 'HS' && wellness.length > 0
         ? 'WS niche: wellness_news 가 제공되었으면 그 안의 fresh title 들에서 키워드 후보를 우선 추출하라. ' +
           '각도(질환·영양·운동·정신건강·예방·가족건강 등) 다양화 — 한 카테고리에 3개 이상 몰림 금지. ' +
           'evergreen 키워드 머릿속 generate 는 wellness_news 가 비어있을 때만 fallback. '

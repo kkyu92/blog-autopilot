@@ -27,7 +27,7 @@ describe('getBloggerCredentials', () => {
   });
 
   it('niche=WS → GOOGLE_BLOG_ID_HEALTH 반환', () => {
-    const result = getBloggerCredentials('WS');
+    const result = getBloggerCredentials('HS');
     expect(result.blogId).toBe('health-blog');
   });
 
@@ -62,7 +62,7 @@ describe('getBloggerCredentials', () => {
     vi.stubEnv('GOOGLE_REFRESH_TOKEN', 'rt');
     vi.stubEnv('GOOGLE_CLIENT_ID', 'cid');
     vi.stubEnv('GOOGLE_CLIENT_SECRET', 'cs');
-    expect(() => getBloggerCredentials('WS')).toThrow(/GOOGLE_BLOG_ID_HEALTH/);
+    expect(() => getBloggerCredentials('HS')).toThrow(/GOOGLE_BLOG_ID_HEALTH/);
   });
 
   it('missing GOOGLE_CLIENT_ID → throws', () => {
