@@ -42,29 +42,23 @@ async function pingPexels(): Promise<HealthResult> {
   }
 }
 
-async function pingWordPress(niche: 'WS' | 'TS'): Promise<HealthResult> {
-  const token = process.env[`WORDPRESS_${niche}_ACCESS_TOKEN`];
-  const blogId = process.env[`WORDPRESS_${niche}_BLOG_ID`];
-  if (!token) return { service: `WP-${niche}`, ok: false, reason: `WORDPRESS_${niche}_ACCESS_TOKEN missing` };
-  if (!blogId) return { service: `WP-${niche}`, ok: false, reason: `WORDPRESS_${niche}_BLOG_ID missing` };
-  try {
-    const res = await fetchWithTimeout(
-      `https://public-api.wordpress.com/rest/v1.1/sites/${blogId}/posts?number=1`,
-      { headers: { Authorization: `Bearer ${token}` } },
-    );
-    return { service: `WP-${niche}`, ok: res.ok, reason: res.ok ? undefined : `HTTP ${res.status}` };
-  } catch (e) {
-    return { service: `WP-${niche}`, ok: false, reason: String(e) };
-  }
-}
+// niche → BLOG_ID env suffix (도메인 일관 명명, tokens.ts와 동일)
+const BLOG_ID_ENV_SUFFIX: Record<'AS' | 'TS' | 'WS', string> = {
+  AS: 'APT',
+  TS: 'TRIP',
+  WS: 'HEALTH',
+};
 
-async function pingBlogger(niche: 'AS' = 'AS'): Promise<HealthResult> {
+async function pingBlogger(niche: 'AS' | 'TS' | 'WS'): Promise<HealthResult> {
   const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
-  const blogId = process.env.GOOGLE_BLOG_ID;
+  const suffix = BLOG_ID_ENV_SUFFIX[niche];
+  const blogId =
+    process.env[`GOOGLE_BLOG_ID_${suffix}`] ??
+    (niche === 'AS' ? process.env.GOOGLE_BLOG_ID : undefined);
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
   if (!refreshToken) return { service: `Blogger-${niche}`, ok: false, reason: 'GOOGLE_REFRESH_TOKEN missing' };
-  if (!blogId) return { service: `Blogger-${niche}`, ok: false, reason: 'GOOGLE_BLOG_ID missing' };
+  if (!blogId) return { service: `Blogger-${niche}`, ok: false, reason: `GOOGLE_BLOG_ID_${suffix} missing` };
   if (!clientId) return { service: `Blogger-${niche}`, ok: false, reason: 'GOOGLE_CLIENT_ID missing' };
   if (!clientSecret) return { service: `Blogger-${niche}`, ok: false, reason: 'GOOGLE_CLIENT_SECRET missing' };
   try {
@@ -158,9 +152,9 @@ export async function runAll(): Promise<HealthReport> {
   const results = await Promise.all([
     pingWithRetry('Pixabay', pingPixabay),
     pingWithRetry('Pexels', pingPexels),
-    pingWithRetry('WP-WS', () => pingWordPress('WS')),
-    pingWithRetry('WP-TS', () => pingWordPress('TS')),
-    pingWithRetry('Blogger-AS', () => pingBlogger()),
+    pingWithRetry('Blogger-AS', () => pingBlogger('AS')),
+    pingWithRetry('Blogger-TS', () => pingBlogger('TS')),
+    pingWithRetry('Blogger-WS', () => pingBlogger('WS')),
     pingWithRetry('claude-cli', pingClaudeCli),
   ]);
   return { allPassed: results.every(r => r.ok), results };

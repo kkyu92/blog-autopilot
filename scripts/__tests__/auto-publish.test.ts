@@ -26,9 +26,6 @@ vi.mock('../../src/lib/editor', () => ({
 vi.mock('../../src/lib/images', () => ({
   fetchForSlots: vi.fn(),
 }));
-vi.mock('../../src/lib/wordpress', () => ({
-  publishScheduled: vi.fn(),
-}));
 vi.mock('../../src/lib/blogger', () => ({
   publishScheduled: vi.fn(),
 }));
@@ -161,7 +158,7 @@ describe('auto-publish.ts integration (7 시나리오)', () => {
     const { callClaude } = await import('../../src/lib/llm');
     const { review } = await import('../../src/lib/editor');
     const { fetchForSlots } = await import('../../src/lib/images');
-    const { publishScheduled: wpPublish } = await import('../../src/lib/wordpress');
+    const { publishScheduled: bloggerPublish } = await import('../../src/lib/blogger');
     const { execFileSync } = await import('node:child_process');
 
     vi.mocked(pickQueue).mockResolvedValue([mockCandidate()]);
@@ -169,7 +166,7 @@ describe('auto-publish.ts integration (7 시나리오)', () => {
     vi.mocked(callClaude).mockResolvedValue(mockDraftJson());
     vi.mocked(review).mockResolvedValue({ verdict: 'pass', score: 90 });
     vi.mocked(fetchForSlots).mockResolvedValue(mockImageResults());
-    vi.mocked(wpPublish).mockResolvedValue({
+    vi.mocked(bloggerPublish).mockResolvedValue({
       externalId: 'wp-123',
       externalUrl: 'https://ws.example.com/test-slug',
       scheduledAt: '2026-04-27T00:00:00Z',
@@ -198,7 +195,7 @@ describe('auto-publish.ts integration (7 시나리오)', () => {
     const { callClaude } = await import('../../src/lib/llm');
     const { review } = await import('../../src/lib/editor');
     const { fetchForSlots } = await import('../../src/lib/images');
-    const { publishScheduled: wpPublish } = await import('../../src/lib/wordpress');
+    const { publishScheduled: bloggerPublish } = await import('../../src/lib/blogger');
 
     vi.mocked(pickQueue).mockResolvedValue([mockCandidate()]);
     vi.mocked(checkAndResolve).mockResolvedValue({ action: 'pass', reason: '신규' });
@@ -208,7 +205,7 @@ describe('auto-publish.ts integration (7 시나리오)', () => {
       .mockResolvedValueOnce({ verdict: 'revision_needed', score: 60, feedback: '더 길게' })
       .mockResolvedValueOnce({ verdict: 'pass', score: 88 });
     vi.mocked(fetchForSlots).mockResolvedValue(mockImageResults());
-    vi.mocked(wpPublish).mockResolvedValue({
+    vi.mocked(bloggerPublish).mockResolvedValue({
       externalId: 'wp-456',
       externalUrl: 'https://ws.example.com/test-slug',
       scheduledAt: '2026-04-27T00:00:00Z',
@@ -275,7 +272,7 @@ describe('auto-publish.ts integration (7 시나리오)', () => {
     const { callClaude } = await import('../../src/lib/llm');
     const { review } = await import('../../src/lib/editor');
     const { fetchForSlots } = await import('../../src/lib/images');
-    const { publishScheduled: wpPublish } = await import('../../src/lib/wordpress');
+    const { publishScheduled: bloggerPublish } = await import('../../src/lib/blogger');
 
     vi.mocked(pickQueue).mockResolvedValue([
       mockCandidate({ keyword: 'first-kw' }),
@@ -287,7 +284,7 @@ describe('auto-publish.ts integration (7 시나리오)', () => {
     vi.mocked(callClaude).mockResolvedValue(mockDraftJson({ slug: 'second-slug' }));
     vi.mocked(review).mockResolvedValue({ verdict: 'pass', score: 90 });
     vi.mocked(fetchForSlots).mockResolvedValue(mockImageResults());
-    vi.mocked(wpPublish).mockResolvedValue({
+    vi.mocked(bloggerPublish).mockResolvedValue({
       externalId: 'wp-789',
       externalUrl: 'https://ws.example.com/second-slug',
       scheduledAt: '2026-04-27T00:00:00Z',
@@ -317,7 +314,7 @@ describe('auto-publish.ts integration (7 시나리오)', () => {
     vi.mocked(runAll).mockResolvedValue({
       allPassed: false,
       results: [
-        { service: 'WP-WS', ok: false, reason: 'HTTP 401' },
+        { service: 'Blogger-WS', ok: false, reason: 'HTTP 401' },
         { service: 'Pexels', ok: true },
       ],
     });
@@ -338,7 +335,7 @@ describe('auto-publish.ts integration (7 시나리오)', () => {
     const { callClaude } = await import('../../src/lib/llm');
     const { review } = await import('../../src/lib/editor');
     const { fetchForSlots } = await import('../../src/lib/images');
-    const { publishScheduled: wpPublish } = await import('../../src/lib/wordpress');
+    const { publishScheduled: bloggerPublish } = await import('../../src/lib/blogger');
 
     const placeholderUrl = 'https://via.placeholder.com/1200x630.png?text=No+Image';
 
@@ -363,7 +360,7 @@ describe('auto-publish.ts integration (7 시나리오)', () => {
         alt_text: 'a2',
       },
     ]);
-    vi.mocked(wpPublish).mockResolvedValue({
+    vi.mocked(bloggerPublish).mockResolvedValue({
       externalId: 'wp-ph',
       externalUrl: 'https://ws.example.com/test-slug',
       scheduledAt: '2026-04-27T00:00:00Z',
@@ -374,8 +371,8 @@ describe('auto-publish.ts integration (7 시나리오)', () => {
 
     expect(code).toBe(0);
 
-    // wpPublish was called with content_html containing the placeholder URL injected.
-    const publishArgs = vi.mocked(wpPublish).mock.calls[0];
+    // bloggerPublish was called with content containing the placeholder URL injected.
+    const publishArgs = vi.mocked(bloggerPublish).mock.calls[0];
     const post = publishArgs[1];
     expect(post.content).toContain(placeholderUrl);
     // Both markers replaced — no <!-- IMAGE_SLOT_N --> stragglers.
@@ -395,7 +392,7 @@ describe('auto-publish.ts integration (7 시나리오)', () => {
     const { callClaude } = await import('../../src/lib/llm');
     const { review } = await import('../../src/lib/editor');
     const { fetchForSlots } = await import('../../src/lib/images');
-    const { publishScheduled: wpPublish } = await import('../../src/lib/wordpress');
+    const { publishScheduled: bloggerPublish } = await import('../../src/lib/blogger');
 
     vi.mocked(pickQueue).mockResolvedValue([mockCandidate()]);
     vi.mocked(checkAndResolve).mockResolvedValue({ action: 'pass', reason: '신규' });
@@ -413,7 +410,7 @@ describe('auto-publish.ts integration (7 시나리오)', () => {
       .mockResolvedValueOnce(mockDraftJson());
     vi.mocked(review).mockResolvedValue({ verdict: 'pass', score: 90 });
     vi.mocked(fetchForSlots).mockResolvedValue(mockImageResults());
-    vi.mocked(wpPublish).mockResolvedValue({
+    vi.mocked(bloggerPublish).mockResolvedValue({
       externalId: 'wp-retry',
       externalUrl: 'https://ws.example.com/test-slug',
       scheduledAt: '2026-04-27T00:00:00Z',
@@ -449,7 +446,7 @@ describe('auto-publish.ts integration (7 시나리오)', () => {
     const { callClaude } = await import('../../src/lib/llm');
     const { review } = await import('../../src/lib/editor');
     const { fetchForSlots } = await import('../../src/lib/images');
-    const { publishScheduled: wpPublish } = await import('../../src/lib/wordpress');
+    const { publishScheduled: bloggerPublish } = await import('../../src/lib/blogger');
 
     vi.mocked(pickQueue).mockResolvedValue([mockCandidate()]);
     vi.mocked(checkAndResolve).mockResolvedValue({ action: 'pass', reason: '신규' });
@@ -463,7 +460,7 @@ describe('auto-publish.ts integration (7 시나리오)', () => {
       modified_html: modifiedHtml,
     });
     vi.mocked(fetchForSlots).mockResolvedValue(mockImageResults());
-    vi.mocked(wpPublish).mockResolvedValue({
+    vi.mocked(bloggerPublish).mockResolvedValue({
       externalId: 'wp-disc',
       externalUrl: 'https://ws.example.com/test-slug',
       scheduledAt: '2026-04-27T00:00:00Z',
@@ -474,8 +471,8 @@ describe('auto-publish.ts integration (7 시나리오)', () => {
 
     expect(code).toBe(0);
     // publishScheduled가 modified_html을 받아야 함 (원본 아닌)
-    expect(wpPublish).toHaveBeenCalledTimes(1);
-    const publishedPost = vi.mocked(wpPublish).mock.calls[0][1];
+    expect(bloggerPublish).toHaveBeenCalledTimes(1);
+    const publishedPost = vi.mocked(bloggerPublish).mock.calls[0][1];
     expect(publishedPost.content).toBe(modifiedHtml);
     expect(publishedPost.content).toContain('⚠️ 면책');
   });
@@ -486,7 +483,7 @@ describe('auto-publish.ts integration (7 시나리오)', () => {
     const { callClaude } = await import('../../src/lib/llm');
     const { review } = await import('../../src/lib/editor');
     const { fetchForSlots } = await import('../../src/lib/images');
-    const { publishScheduled: wpPublish } = await import('../../src/lib/wordpress');
+    const { publishScheduled: bloggerPublish } = await import('../../src/lib/blogger');
 
     vi.mocked(pickQueue).mockResolvedValue([
       mockCandidate({ keyword: 'kw-A' }),
@@ -497,11 +494,15 @@ describe('auto-publish.ts integration (7 시나리오)', () => {
     vi.mocked(callClaude).mockResolvedValue(mockDraftJson({ slug: 'same-slug' }));
     vi.mocked(review).mockResolvedValue({ verdict: 'pass', score: 90 });
     vi.mocked(fetchForSlots).mockResolvedValue(mockImageResults());
-    vi.mocked(wpPublish).mockImplementation(async (_niche, post) => ({
-      externalId: `wp-${post.slug}`,
-      externalUrl: `https://ws.example.com/${post.slug}`,
-      scheduledAt: '2026-04-27T00:00:00Z',
-    }));
+    let callCount = 0;
+    vi.mocked(bloggerPublish).mockImplementation(async () => {
+      callCount += 1;
+      return {
+        externalId: `bg-${callCount}`,
+        externalUrl: `https://ws.example.com/post-${callCount}`,
+        scheduledAt: '2026-04-27T00:00:00Z',
+      };
+    });
 
     const { runMain } = await import('../auto-publish');
     const code = await runMain(['node', 'auto-publish.ts', '--niche=WS', '--slot-count=2']);
@@ -515,9 +516,7 @@ describe('auto-publish.ts integration (7 시나리오)', () => {
     expect(rows[0].status).toBe('published');
     expect(rows[1].status).toBe('published');
 
-    // wpPublish was invoked with the deduped slug for the 2nd post.
-    expect(wpPublish).toHaveBeenCalledTimes(2);
-    const secondCallPost = vi.mocked(wpPublish).mock.calls[1][1];
-    expect(secondCallPost.slug).toBe('same-slug-2');
+    // bloggerPublish 2회 호출 확인 (slug 충돌 회피는 DB INSERT 측 책임 — Blogger API에는 slug 필드 없음)
+    expect(bloggerPublish).toHaveBeenCalledTimes(2);
   });
 });

@@ -20,7 +20,6 @@ import { callClaude, getClaudeCallStats } from '../src/lib/llm';
 import { buildCurrentDateHeader } from '../src/lib/current-date';
 import { review, type EditorReviewResult } from '../src/lib/editor';
 import { fetchForSlots, type ImageResult } from '../src/lib/images';
-import { publishScheduled as wpPublish } from '../src/lib/wordpress';
 import { publishScheduled as bloggerPublish } from '../src/lib/blogger';
 import { publishedPosts } from '../src/lib/schema';
 import {
@@ -388,28 +387,12 @@ async function publishToPlatform(
   scheduledFor: Date,
 ): Promise<PublishedRecord> {
   // draft.content_html is already image-injected by writeAndReview (paperclip flow)
-  // featured_image: imageResults 첫 항목의 image_url을 썸네일/대표 이미지로 자동 사용 (paperclip 누락 fix)
-  const firstImage = imageResults.find((r) => r.image_url && r.source !== 'placeholder')?.image_url
-    ?? imageResults[0]?.image_url;
-  if (niche === 'WS' || niche === 'TS') {
-    return wpPublish(
-      niche,
-      {
-        title: draft.title,
-        content: draft.content_html,
-        slug: finalSlug,
-        excerpt: draft.meta_description,
-        categories: draft.category ? [draft.category] : undefined,
-        tags: draft.labels,
-        featured_image_url: firstImage,
-      },
-      scheduledFor,
-    );
-  }
-
-  // AS → Blogger
+  // 5/5 WP→Blogger 마이그레이션 후 niche 3개 모두 Blogger publishScheduled 단일 분기.
+  // finalSlug + meta_description은 Blogger API에서 직접 사용 X (URL은 title 기반 자동 생성, excerpt 별도 미지원).
+  void finalSlug;
+  void imageResults;
   return bloggerPublish(
-    'AS',
+    niche,
     {
       title: draft.title,
       content: draft.content_html,
@@ -419,9 +402,10 @@ async function publishToPlatform(
   );
 }
 
-function platformForNiche(niche: Niche): 'wordpress_ws' | 'wordpress_ts' | 'blogger_as' {
-  if (niche === 'WS') return 'wordpress_ws';
-  if (niche === 'TS') return 'wordpress_ts';
+function platformForNiche(niche: Niche): 'blogger_as' | 'blogger_trip' | 'blogger_health' {
+  if (niche === 'TS') return 'blogger_trip';
+  // (도메인 trip-signal.blogspot.com — niche 명명은 TS 그대로 유지)
+  if (niche === 'WS') return 'blogger_health';
   return 'blogger_as';
 }
 

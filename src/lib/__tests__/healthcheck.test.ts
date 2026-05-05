@@ -5,20 +5,57 @@ vi.mock('../llm', () => ({
   callClaude: vi.fn(),
 }));
 
+// 5/5 WP→Blogger 마이그레이션 후 healthcheck = Pixabay + Pexels + Blogger × 3 niche + claude-cli = 6 services.
+// fetch 호출 8회 (Pixabay 1 + Pexels 1 + Blogger-AS token+blogs 2 + Blogger-TS token+blogs 2 + Blogger-WS token+blogs 2).
+
+interface FetchOpts {
+  pixabay?: { ok: boolean; status: number };
+  pexels?: { ok: boolean; status: number };
+  bloggerToken?: { ok: boolean; status: number; json?: () => Promise<unknown> };
+  bloggerBlogsAs?: { ok: boolean; status: number };
+  bloggerBlogsTs?: { ok: boolean; status: number };
+  bloggerBlogsWs?: { ok: boolean; status: number };
+  rejectAll?: Error;
+}
+
+function makeFetchMock(opts: FetchOpts = {}) {
+  if (opts.rejectAll) {
+    return vi.fn().mockRejectedValue(opts.rejectAll);
+  }
+  return vi.fn().mockImplementation(async (url: string) => {
+    const u = String(url);
+    if (u.includes('pixabay')) return opts.pixabay ?? { ok: true, status: 200 };
+    if (u.includes('pexels')) return opts.pexels ?? { ok: true, status: 200 };
+    if (u.includes('oauth2.googleapis.com/token')) {
+      return (
+        opts.bloggerToken ?? {
+          ok: true,
+          status: 200,
+          json: async () => ({ access_token: 'tok' }),
+        }
+      );
+    }
+    if (u.includes('blogger/v3/blogs/as-blog')) return opts.bloggerBlogsAs ?? { ok: true, status: 200 };
+    if (u.includes('blogger/v3/blogs/ts-blog')) return opts.bloggerBlogsTs ?? { ok: true, status: 200 };
+    if (u.includes('blogger/v3/blogs/ws-blog')) return opts.bloggerBlogsWs ?? { ok: true, status: 200 };
+    return { ok: false, status: 404 };
+  });
+}
+
 describe('healthcheck.runAll', () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    // Default: all env vars present
+    // Default: all env vars present (Blogger 3 niche)
     vi.stubEnv('PIXABAY_API_KEY', 'px-key');
     vi.stubEnv('PEXELS_API_KEY', 'pe-key');
-    vi.stubEnv('WORDPRESS_WS_ACCESS_TOKEN', 'ws-token');
-    vi.stubEnv('WORDPRESS_WS_BLOG_ID', 'ws-blog');
-    vi.stubEnv('WORDPRESS_TS_ACCESS_TOKEN', 'ts-token');
-    vi.stubEnv('WORDPRESS_TS_BLOG_ID', 'ts-blog');
-    vi.stubEnv('GOOGLE_REFRESH_TOKEN', 'as-refresh');
-    vi.stubEnv('GOOGLE_BLOG_ID', 'as-blog');
+    vi.stubEnv('GOOGLE_REFRESH_TOKEN', 'g-refresh');
     vi.stubEnv('GOOGLE_CLIENT_ID', 'g-client-id');
     vi.stubEnv('GOOGLE_CLIENT_SECRET', 'g-client-secret');
+    vi.stubEnv('GOOGLE_BLOG_ID_APT', 'as-blog');
+    vi.stubEnv('GOOGLE_BLOG_ID_TRIP', 'ts-blog');
+    vi.stubEnv('GOOGLE_BLOG_ID_HEALTH', 'ws-blog');
+    // backward-compat fallback (AS only)
+    vi.stubEnv('GOOGLE_BLOG_ID', 'as-blog');
   });
 
   afterEach(() => {
@@ -26,17 +63,7 @@ describe('healthcheck.runAll', () => {
   });
 
   it('6종 모두 200 → allPassed=true, 6 results', async () => {
-    // Blogger needs 2 fetch calls (token + API), others need 1 each → 5 + 1 = 6 total
-    // Pixabay, Pexels, WP-WS, WP-TS: 1 each = 4
-    // Blogger: 2 (token refresh + blogs GET)
-    // Total fetch calls: 6
-    global.fetch = vi.fn()
-      .mockResolvedValueOnce({ ok: true, status: 200 }) // Pixabay
-      .mockResolvedValueOnce({ ok: true, status: 200 }) // Pexels
-      .mockResolvedValueOnce({ ok: true, status: 200 }) // WP-WS
-      .mockResolvedValueOnce({ ok: true, status: 200 }) // WP-TS
-      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ access_token: 'tok' }) }) // Blogger token
-      .mockResolvedValueOnce({ ok: true, status: 200 }) as any; // Blogger blogs GET
+    global.fetch = makeFetchMock() as unknown as typeof fetch;
 
     const { callClaude } = await import('../llm');
     vi.mocked(callClaude).mockResolvedValue('OK');
@@ -46,17 +73,11 @@ describe('healthcheck.runAll', () => {
 
     expect(report.allPassed).toBe(true);
     expect(report.results).toHaveLength(6);
-    expect(report.results.every(r => r.ok)).toBe(true);
+    expect(report.results.every((r) => r.ok)).toBe(true);
   });
 
   it('Pexels 401 → allPassed=false, Pexels result ok=false', async () => {
-    global.fetch = vi.fn()
-      .mockResolvedValueOnce({ ok: true, status: 200 }) // Pixabay
-      .mockResolvedValueOnce({ ok: false, status: 401 }) // Pexels 401
-      .mockResolvedValueOnce({ ok: true, status: 200 }) // WP-WS
-      .mockResolvedValueOnce({ ok: true, status: 200 }) // WP-TS
-      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ access_token: 'tok' }) }) // Blogger token
-      .mockResolvedValueOnce({ ok: true, status: 200 }) as any; // Blogger blogs GET
+    global.fetch = makeFetchMock({ pexels: { ok: false, status: 401 } }) as unknown as typeof fetch;
 
     const { callClaude } = await import('../llm');
     vi.mocked(callClaude).mockResolvedValue('OK');
@@ -65,20 +86,14 @@ describe('healthcheck.runAll', () => {
     const report = await runAll();
 
     expect(report.allPassed).toBe(false);
-    const pexels = report.results.find(r => r.service === 'Pexels');
+    const pexels = report.results.find((r) => r.service === 'Pexels');
     expect(pexels).toBeDefined();
     expect(pexels!.ok).toBe(false);
     expect(pexels!.reason).toContain('401');
   });
 
   it('claude CLI throws → claude-cli result ok=false', async () => {
-    global.fetch = vi.fn()
-      .mockResolvedValueOnce({ ok: true, status: 200 }) // Pixabay
-      .mockResolvedValueOnce({ ok: true, status: 200 }) // Pexels
-      .mockResolvedValueOnce({ ok: true, status: 200 }) // WP-WS
-      .mockResolvedValueOnce({ ok: true, status: 200 }) // WP-TS
-      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ access_token: 'tok' }) }) // Blogger token
-      .mockResolvedValueOnce({ ok: true, status: 200 }) as any; // Blogger blogs GET
+    global.fetch = makeFetchMock() as unknown as typeof fetch;
 
     const { callClaude } = await import('../llm');
     vi.mocked(callClaude).mockRejectedValue(new Error('OAuth expired'));
@@ -87,7 +102,7 @@ describe('healthcheck.runAll', () => {
     const report = await runAll();
 
     expect(report.allPassed).toBe(false);
-    const cli = report.results.find(r => r.service === 'claude-cli');
+    const cli = report.results.find((r) => r.service === 'claude-cli');
     expect(cli).toBeDefined();
     expect(cli!.ok).toBe(false);
     expect(cli!.reason).toContain('OAuth expired');
@@ -96,12 +111,7 @@ describe('healthcheck.runAll', () => {
   it('Pixabay env missing → result reason = PIXABAY_API_KEY missing', async () => {
     vi.stubEnv('PIXABAY_API_KEY', '');
 
-    global.fetch = vi.fn()
-      .mockResolvedValueOnce({ ok: true, status: 200 }) // Pexels
-      .mockResolvedValueOnce({ ok: true, status: 200 }) // WP-WS
-      .mockResolvedValueOnce({ ok: true, status: 200 }) // WP-TS
-      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ access_token: 'tok' }) }) // Blogger token
-      .mockResolvedValueOnce({ ok: true, status: 200 }) as any; // Blogger blogs GET
+    global.fetch = makeFetchMock() as unknown as typeof fetch;
 
     const { callClaude } = await import('../llm');
     vi.mocked(callClaude).mockResolvedValue('OK');
@@ -109,22 +119,16 @@ describe('healthcheck.runAll', () => {
     const { runAll } = await import('../healthcheck');
     const report = await runAll();
 
-    const pixabay = report.results.find(r => r.service === 'Pixabay');
+    const pixabay = report.results.find((r) => r.service === 'Pixabay');
     expect(pixabay).toBeDefined();
     expect(pixabay!.ok).toBe(false);
     expect(pixabay!.reason).toBe('PIXABAY_API_KEY missing');
   });
 
-  it('WordPress WS env missing → WP-WS ok=false, reason = WORDPRESS_WS_ACCESS_TOKEN missing', async () => {
-    vi.stubEnv('WORDPRESS_WS_ACCESS_TOKEN', '');
+  it('Blogger TS BLOG_ID missing → Blogger-TS ok=false, reason = GOOGLE_BLOG_ID_TRIP missing', async () => {
+    vi.stubEnv('GOOGLE_BLOG_ID_TRIP', '');
 
-    global.fetch = vi.fn()
-      .mockResolvedValueOnce({ ok: true, status: 200 }) // Pixabay
-      .mockResolvedValueOnce({ ok: true, status: 200 }) // Pexels
-      // WP-WS skips fetch (env missing)
-      .mockResolvedValueOnce({ ok: true, status: 200 }) // WP-TS
-      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ access_token: 'tok' }) }) // Blogger token
-      .mockResolvedValueOnce({ ok: true, status: 200 }) as any; // Blogger blogs GET
+    global.fetch = makeFetchMock() as unknown as typeof fetch;
 
     const { callClaude } = await import('../llm');
     vi.mocked(callClaude).mockResolvedValue('OK');
@@ -132,22 +136,16 @@ describe('healthcheck.runAll', () => {
     const { runAll } = await import('../healthcheck');
     const report = await runAll();
 
-    const wpWs = report.results.find(r => r.service === 'WP-WS');
-    expect(wpWs).toBeDefined();
-    expect(wpWs!.ok).toBe(false);
-    expect(wpWs!.reason).toBe('WORDPRESS_WS_ACCESS_TOKEN missing');
+    const ts = report.results.find((r) => r.service === 'Blogger-TS');
+    expect(ts).toBeDefined();
+    expect(ts!.ok).toBe(false);
+    expect(ts!.reason).toBe('GOOGLE_BLOG_ID_TRIP missing');
   });
 
-  it('WordPress WS blogId missing → WP-WS ok=false, reason = WORDPRESS_WS_BLOG_ID missing', async () => {
-    vi.stubEnv('WORDPRESS_WS_BLOG_ID', '');
+  it('Blogger WS BLOG_ID missing → Blogger-WS ok=false, reason = GOOGLE_BLOG_ID_HEALTH missing', async () => {
+    vi.stubEnv('GOOGLE_BLOG_ID_HEALTH', '');
 
-    global.fetch = vi.fn()
-      .mockResolvedValueOnce({ ok: true, status: 200 }) // Pixabay
-      .mockResolvedValueOnce({ ok: true, status: 200 }) // Pexels
-      // WP-WS skips fetch (env missing)
-      .mockResolvedValueOnce({ ok: true, status: 200 }) // WP-TS
-      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ access_token: 'tok' }) }) // Blogger token
-      .mockResolvedValueOnce({ ok: true, status: 200 }) as any; // Blogger blogs GET
+    global.fetch = makeFetchMock() as unknown as typeof fetch;
 
     const { callClaude } = await import('../llm');
     vi.mocked(callClaude).mockResolvedValue('OK');
@@ -155,19 +153,16 @@ describe('healthcheck.runAll', () => {
     const { runAll } = await import('../healthcheck');
     const report = await runAll();
 
-    const wpWs = report.results.find(r => r.service === 'WP-WS');
-    expect(wpWs).toBeDefined();
-    expect(wpWs!.ok).toBe(false);
-    expect(wpWs!.reason).toBe('WORDPRESS_WS_BLOG_ID missing');
+    const ws = report.results.find((r) => r.service === 'Blogger-WS');
+    expect(ws).toBeDefined();
+    expect(ws!.ok).toBe(false);
+    expect(ws!.reason).toBe('GOOGLE_BLOG_ID_HEALTH missing');
   });
 
-  it('Blogger token refresh HTTP 400 → Blogger-AS ok=false', async () => {
-    global.fetch = vi.fn()
-      .mockResolvedValueOnce({ ok: true, status: 200 }) // Pixabay
-      .mockResolvedValueOnce({ ok: true, status: 200 }) // Pexels
-      .mockResolvedValueOnce({ ok: true, status: 200 }) // WP-WS
-      .mockResolvedValueOnce({ ok: true, status: 200 }) // WP-TS
-      .mockResolvedValueOnce({ ok: false, status: 400 }) as any; // Blogger token refresh 400
+  it('Blogger token refresh HTTP 400 → 모든 niche fail', async () => {
+    global.fetch = makeFetchMock({
+      bloggerToken: { ok: false, status: 400 },
+    }) as unknown as typeof fetch;
 
     const { callClaude } = await import('../llm');
     vi.mocked(callClaude).mockResolvedValue('OK');
@@ -175,20 +170,18 @@ describe('healthcheck.runAll', () => {
     const { runAll } = await import('../healthcheck');
     const report = await runAll();
 
-    const blogger = report.results.find(r => r.service === 'Blogger-AS');
-    expect(blogger).toBeDefined();
-    expect(blogger!.ok).toBe(false);
-    expect(blogger!.reason).toContain('400');
+    for (const niche of ['AS', 'TS', 'WS']) {
+      const r = report.results.find((res) => res.service === `Blogger-${niche}`);
+      expect(r).toBeDefined();
+      expect(r!.ok).toBe(false);
+      expect(r!.reason).toContain('400');
+    }
   });
 
-  it('Blogger token OK but blogs API 403 → Blogger-AS ok=false', async () => {
-    global.fetch = vi.fn()
-      .mockResolvedValueOnce({ ok: true, status: 200 }) // Pixabay
-      .mockResolvedValueOnce({ ok: true, status: 200 }) // Pexels
-      .mockResolvedValueOnce({ ok: true, status: 200 }) // WP-WS
-      .mockResolvedValueOnce({ ok: true, status: 200 }) // WP-TS
-      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ access_token: 'tok' }) }) // Blogger token
-      .mockResolvedValueOnce({ ok: false, status: 403 }) as any; // Blogger blogs GET 403
+  it('Blogger token OK but AS blogs API 403 → Blogger-AS ok=false, TS/WS 정상', async () => {
+    global.fetch = makeFetchMock({
+      bloggerBlogsAs: { ok: false, status: 403 },
+    }) as unknown as typeof fetch;
 
     const { callClaude } = await import('../llm');
     vi.mocked(callClaude).mockResolvedValue('OK');
@@ -196,15 +189,16 @@ describe('healthcheck.runAll', () => {
     const { runAll } = await import('../healthcheck');
     const report = await runAll();
 
-    const blogger = report.results.find(r => r.service === 'Blogger-AS');
-    expect(blogger).toBeDefined();
-    expect(blogger!.ok).toBe(false);
-    expect(blogger!.reason).toContain('403');
+    const as = report.results.find((r) => r.service === 'Blogger-AS');
+    expect(as!.ok).toBe(false);
+    expect(as!.reason).toContain('403');
+    expect(report.results.find((r) => r.service === 'Blogger-TS')!.ok).toBe(true);
+    expect(report.results.find((r) => r.service === 'Blogger-WS')!.ok).toBe(true);
   });
 
   it('fetch timeout (AbortError) → ok=false, reason includes abort/timeout', async () => {
     const abortError = new DOMException('The operation was aborted', 'AbortError');
-    global.fetch = vi.fn().mockRejectedValue(abortError) as any;
+    global.fetch = makeFetchMock({ rejectAll: abortError }) as unknown as typeof fetch;
 
     const { callClaude } = await import('../llm');
     vi.mocked(callClaude).mockResolvedValue('OK');
@@ -213,9 +207,9 @@ describe('healthcheck.runAll', () => {
     const report = await runAll();
 
     // All 5 fetch-based services should fail
-    const fetchServices = ['Pixabay', 'Pexels', 'WP-WS', 'WP-TS', 'Blogger-AS'];
+    const fetchServices = ['Pixabay', 'Pexels', 'Blogger-AS', 'Blogger-TS', 'Blogger-WS'];
     for (const svc of fetchServices) {
-      const r = report.results.find(res => res.service === svc);
+      const r = report.results.find((res) => res.service === svc);
       expect(r).toBeDefined();
       expect(r!.ok).toBe(false);
     }
@@ -223,13 +217,7 @@ describe('healthcheck.runAll', () => {
   });
 
   it('claude CLI returns string without "OK" → ok=false, reason mentions unexpected', async () => {
-    global.fetch = vi.fn()
-      .mockResolvedValueOnce({ ok: true, status: 200 }) // Pixabay
-      .mockResolvedValueOnce({ ok: true, status: 200 }) // Pexels
-      .mockResolvedValueOnce({ ok: true, status: 200 }) // WP-WS
-      .mockResolvedValueOnce({ ok: true, status: 200 }) // WP-TS
-      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ access_token: 'tok' }) }) // Blogger token
-      .mockResolvedValueOnce({ ok: true, status: 200 }) as any; // Blogger blogs GET
+    global.fetch = makeFetchMock() as unknown as typeof fetch;
 
     const { callClaude } = await import('../llm');
     vi.mocked(callClaude).mockResolvedValue('Sorry, I cannot do that.');
@@ -237,20 +225,14 @@ describe('healthcheck.runAll', () => {
     const { runAll } = await import('../healthcheck');
     const report = await runAll();
 
-    const cli = report.results.find(r => r.service === 'claude-cli');
+    const cli = report.results.find((r) => r.service === 'claude-cli');
     expect(cli).toBeDefined();
     expect(cli!.ok).toBe(false);
     expect(cli!.reason).toContain('unexpected');
   });
 
   it('Promise.all parallel — all 6 services present in results, service names correct', async () => {
-    global.fetch = vi.fn()
-      .mockResolvedValueOnce({ ok: true, status: 200 }) // Pixabay
-      .mockResolvedValueOnce({ ok: true, status: 200 }) // Pexels
-      .mockResolvedValueOnce({ ok: true, status: 200 }) // WP-WS
-      .mockResolvedValueOnce({ ok: true, status: 200 }) // WP-TS
-      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ access_token: 'tok' }) }) // Blogger token
-      .mockResolvedValueOnce({ ok: true, status: 200 }) as any; // Blogger blogs GET
+    global.fetch = makeFetchMock() as unknown as typeof fetch;
 
     const { callClaude } = await import('../llm');
     vi.mocked(callClaude).mockResolvedValue('OK');
@@ -258,24 +240,20 @@ describe('healthcheck.runAll', () => {
     const { runAll } = await import('../healthcheck');
     const report = await runAll();
 
-    const serviceNames = report.results.map(r => r.service);
+    const serviceNames = report.results.map((r) => r.service);
     expect(serviceNames).toContain('Pixabay');
     expect(serviceNames).toContain('Pexels');
-    expect(serviceNames).toContain('WP-WS');
-    expect(serviceNames).toContain('WP-TS');
     expect(serviceNames).toContain('Blogger-AS');
+    expect(serviceNames).toContain('Blogger-TS');
+    expect(serviceNames).toContain('Blogger-WS');
     expect(serviceNames).toContain('claude-cli');
     expect(report.results).toHaveLength(6);
   });
 
-  it('Blogger env missing → Blogger-AS ok=false, reason = GOOGLE_REFRESH_TOKEN missing', async () => {
+  it('Blogger env missing → 모든 niche ok=false, reason = GOOGLE_REFRESH_TOKEN missing', async () => {
     vi.stubEnv('GOOGLE_REFRESH_TOKEN', '');
 
-    global.fetch = vi.fn()
-      .mockResolvedValueOnce({ ok: true, status: 200 }) // Pixabay
-      .mockResolvedValueOnce({ ok: true, status: 200 }) // Pexels
-      .mockResolvedValueOnce({ ok: true, status: 200 }) // WP-WS
-      .mockResolvedValueOnce({ ok: true, status: 200 }) as any; // WP-TS
+    global.fetch = makeFetchMock() as unknown as typeof fetch;
 
     const { callClaude } = await import('../llm');
     vi.mocked(callClaude).mockResolvedValue('OK');
@@ -283,10 +261,11 @@ describe('healthcheck.runAll', () => {
     const { runAll } = await import('../healthcheck');
     const report = await runAll();
 
-    const blogger = report.results.find(r => r.service === 'Blogger-AS');
-    expect(blogger).toBeDefined();
-    expect(blogger!.ok).toBe(false);
-    expect(blogger!.reason).toBe('GOOGLE_REFRESH_TOKEN missing');
+    for (const niche of ['AS', 'TS', 'WS']) {
+      const r = report.results.find((res) => res.service === `Blogger-${niche}`);
+      expect(r!.ok).toBe(false);
+      expect(r!.reason).toBe('GOOGLE_REFRESH_TOKEN missing');
+    }
   });
 
   it('claude CLI timeout → ok=false, reason contains "timeout" + retry exhaustion', async () => {
@@ -305,7 +284,7 @@ describe('healthcheck.runAll', () => {
     await vi.advanceTimersByTimeAsync(35_000);
 
     const report = await promise;
-    const claudeResult = report.results.find(r => r.service === 'claude-cli');
+    const claudeResult = report.results.find((r) => r.service === 'claude-cli');
     expect(claudeResult?.ok).toBe(false);
     expect(claudeResult?.reason).toMatch(/timeout/);
     expect(claudeResult?.reason).toContain('after 3 attempts');
@@ -316,16 +295,21 @@ describe('healthcheck.runAll', () => {
   // ─── Retry 정책 ───────────────────────────────────────────────
 
   it('retry: 5xx → 2번째 시도 success → 최종 ok=true (recovery)', async () => {
-    // Promise.all parallel — fetch는 병렬 호출 순서대로 mock 소비.
-    // Pixabay 1st → Pexels → WP-WS → WP-TS → Blogger token → Blogger blogs → Pixabay 2nd (backoff 후).
-    global.fetch = vi.fn()
-      .mockResolvedValueOnce({ ok: false, status: 500 })  // 1: Pixabay attempt 1 (transient)
-      .mockResolvedValueOnce({ ok: true, status: 200 })   // 2: Pexels
-      .mockResolvedValueOnce({ ok: true, status: 200 })   // 3: WP-WS
-      .mockResolvedValueOnce({ ok: true, status: 200 })   // 4: WP-TS
-      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ access_token: 'tok' }) }) // 5: Blogger token
-      .mockResolvedValueOnce({ ok: true, status: 200 })   // 6: Blogger blogs GET
-      .mockResolvedValueOnce({ ok: true, status: 200 }) as any; // 7: Pixabay attempt 2 (recover)
+    let pixabayCount = 0;
+    global.fetch = vi.fn().mockImplementation(async (url: string) => {
+      const u = String(url);
+      if (u.includes('pixabay')) {
+        pixabayCount += 1;
+        if (pixabayCount === 1) return { ok: false, status: 500 };
+        return { ok: true, status: 200 };
+      }
+      if (u.includes('pexels')) return { ok: true, status: 200 };
+      if (u.includes('oauth2.googleapis.com/token')) {
+        return { ok: true, status: 200, json: async () => ({ access_token: 'tok' }) };
+      }
+      if (u.includes('blogger/v3/blogs/')) return { ok: true, status: 200 };
+      return { ok: false, status: 404 };
+    }) as unknown as typeof fetch;
 
     const { callClaude } = await import('../llm');
     vi.mocked(callClaude).mockResolvedValue('OK');
@@ -334,21 +318,21 @@ describe('healthcheck.runAll', () => {
     const report = await runAll();
 
     expect(report.allPassed).toBe(true);
-    const pixabay = report.results.find(r => r.service === 'Pixabay');
+    const pixabay = report.results.find((r) => r.service === 'Pixabay');
     expect(pixabay!.ok).toBe(true);
   }, 10_000);
 
   it('retry: 5xx 3회 모두 실패 → reason "after 3 attempts" 포함', async () => {
-    // 병렬 ordering: 다른 5 services 먼저 (mocks 1-6, Blogger 2번 포함), 그 다음 Pixabay 2nd/3rd.
-    global.fetch = vi.fn()
-      .mockResolvedValueOnce({ ok: false, status: 503 })  // 1: Pixabay attempt 1
-      .mockResolvedValueOnce({ ok: true, status: 200 })   // 2: Pexels
-      .mockResolvedValueOnce({ ok: true, status: 200 })   // 3: WP-WS
-      .mockResolvedValueOnce({ ok: true, status: 200 })   // 4: WP-TS
-      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ access_token: 'tok' }) }) // 5: Blogger token
-      .mockResolvedValueOnce({ ok: true, status: 200 })   // 6: Blogger blogs GET
-      .mockResolvedValueOnce({ ok: false, status: 503 })  // 7: Pixabay attempt 2 (backoff 후)
-      .mockResolvedValueOnce({ ok: false, status: 503 }) as any; // 8: Pixabay attempt 3
+    global.fetch = vi.fn().mockImplementation(async (url: string) => {
+      const u = String(url);
+      if (u.includes('pixabay')) return { ok: false, status: 503 };
+      if (u.includes('pexels')) return { ok: true, status: 200 };
+      if (u.includes('oauth2.googleapis.com/token')) {
+        return { ok: true, status: 200, json: async () => ({ access_token: 'tok' }) };
+      }
+      if (u.includes('blogger/v3/blogs/')) return { ok: true, status: 200 };
+      return { ok: false, status: 404 };
+    }) as unknown as typeof fetch;
 
     const { callClaude } = await import('../llm');
     vi.mocked(callClaude).mockResolvedValue('OK');
@@ -357,21 +341,30 @@ describe('healthcheck.runAll', () => {
     const report = await runAll();
 
     expect(report.allPassed).toBe(false);
-    const pixabay = report.results.find(r => r.service === 'Pixabay');
+    const pixabay = report.results.find((r) => r.service === 'Pixabay');
     expect(pixabay!.ok).toBe(false);
     expect(pixabay!.reason).toContain('503');
     expect(pixabay!.reason).toContain('after 3 attempts');
   }, 10_000);
 
-  it('retry: 4xx (permanent) → 재시도 안 함, fetch 호출 1회만', async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce({ ok: false, status: 401 })  // Pixabay 401 (permanent — no retry)
-      .mockResolvedValueOnce({ ok: true, status: 200 })   // Pexels
-      .mockResolvedValueOnce({ ok: true, status: 200 })   // WP-WS
-      .mockResolvedValueOnce({ ok: true, status: 200 })   // WP-TS
-      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ access_token: 'tok' }) }) // Blogger token
-      .mockResolvedValueOnce({ ok: true, status: 200 }); // Blogger blogs GET
-    global.fetch = fetchMock as any;
+  it('retry: 4xx (permanent) → 재시도 안 함, fetch 호출 1회만 (Pixabay)', async () => {
+    let pixabayCount = 0;
+    let totalCount = 0;
+    const fetchMock = vi.fn().mockImplementation(async (url: string) => {
+      totalCount += 1;
+      const u = String(url);
+      if (u.includes('pixabay')) {
+        pixabayCount += 1;
+        return { ok: false, status: 401 };
+      }
+      if (u.includes('pexels')) return { ok: true, status: 200 };
+      if (u.includes('oauth2.googleapis.com/token')) {
+        return { ok: true, status: 200, json: async () => ({ access_token: 'tok' }) };
+      }
+      if (u.includes('blogger/v3/blogs/')) return { ok: true, status: 200 };
+      return { ok: false, status: 404 };
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
 
     const { callClaude } = await import('../llm');
     vi.mocked(callClaude).mockResolvedValue('OK');
@@ -379,24 +372,36 @@ describe('healthcheck.runAll', () => {
     const { runAll } = await import('../healthcheck');
     const report = await runAll();
 
-    // Pixabay 1 + Pexels 1 + WP-WS 1 + WP-TS 1 + Blogger 2 = 6회
-    expect(fetchMock).toHaveBeenCalledTimes(6);
-    const pixabay = report.results.find(r => r.service === 'Pixabay');
+    // Pixabay 4xx → 재시도 없음 (1 call). 다른 서비스도 모두 1회씩만 (정상).
+    // Blogger 3 niche × 2 fetch (token+blogs) = 6, Pixabay 1, Pexels 1 = 총 8.
+    expect(pixabayCount).toBe(1);
+    expect(totalCount).toBe(8);
+    const pixabay = report.results.find((r) => r.service === 'Pixabay');
     expect(pixabay!.ok).toBe(false);
     expect(pixabay!.reason).toContain('401');
-    expect(pixabay!.reason).not.toContain('after');  // retry 안 했으니 "after N attempts" 안 붙음
+    expect(pixabay!.reason).not.toContain('after');
   });
 
   it('retry: env missing (permanent) → fetch 호출 안 함', async () => {
     vi.stubEnv('PIXABAY_API_KEY', '');
 
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce({ ok: true, status: 200 })   // Pexels
-      .mockResolvedValueOnce({ ok: true, status: 200 })   // WP-WS
-      .mockResolvedValueOnce({ ok: true, status: 200 })   // WP-TS
-      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ access_token: 'tok' }) }) // Blogger token
-      .mockResolvedValueOnce({ ok: true, status: 200 }); // Blogger blogs GET
-    global.fetch = fetchMock as any;
+    let pixabayCount = 0;
+    let totalCount = 0;
+    const fetchMock = vi.fn().mockImplementation(async (url: string) => {
+      totalCount += 1;
+      const u = String(url);
+      if (u.includes('pixabay')) {
+        pixabayCount += 1;
+        return { ok: true, status: 200 };
+      }
+      if (u.includes('pexels')) return { ok: true, status: 200 };
+      if (u.includes('oauth2.googleapis.com/token')) {
+        return { ok: true, status: 200, json: async () => ({ access_token: 'tok' }) };
+      }
+      if (u.includes('blogger/v3/blogs/')) return { ok: true, status: 200 };
+      return { ok: false, status: 404 };
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
 
     const { callClaude } = await import('../llm');
     vi.mocked(callClaude).mockResolvedValue('OK');
@@ -404,8 +409,9 @@ describe('healthcheck.runAll', () => {
     const { runAll } = await import('../healthcheck');
     await runAll();
 
-    // Pixabay 0 (env missing) + Pexels 1 + WP-WS 1 + WP-TS 1 + Blogger 2 = 5회
-    expect(fetchMock).toHaveBeenCalledTimes(5);
+    // Pixabay env missing → fetch 0. Pexels 1 + Blogger 6 = 7.
+    expect(pixabayCount).toBe(0);
+    expect(totalCount).toBe(7);
   });
 });
 

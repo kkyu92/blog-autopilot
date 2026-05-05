@@ -78,11 +78,16 @@ jobs:
           WORDPRESS_TS_SITE: ${{ secrets.WORDPRESS_TS_SITE }}
           WORDPRESS_TS_CATEGORY_ID: ${{ secrets.WORDPRESS_TS_CATEGORY_ID }}
 
-          # Blogger (AS) — healthcheck.ts + tokens.ts 가 사용하는 실제 키 이름
+          # Blogger 멀티블로그 (AS / TS / WS) — 5/5 WP→Blogger 마이그레이션 후
+          # 도메인 일관 명명: APT (apt-signal), TRIP (trip-signal), HEALTH (health-signal).
+          # GOOGLE_BLOG_ID 는 backward-compat fallback (AS only). 신규 cron 부터는 _APT 사용.
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
           GOOGLE_BLOG_ID: ${{ secrets.GOOGLE_BLOG_ID }}
+          GOOGLE_BLOG_ID_APT: ${{ secrets.GOOGLE_BLOG_ID_APT }}
+          GOOGLE_BLOG_ID_TRIP: ${{ secrets.GOOGLE_BLOG_ID_TRIP }}
+          GOOGLE_BLOG_ID_HEALTH: ${{ secrets.GOOGLE_BLOG_ID_HEALTH }}
 
           # DB / 백업 (self-hosted runner의 영속 경로)
           DATABASE_PATH: ${{ secrets.DATABASE_PATH }}

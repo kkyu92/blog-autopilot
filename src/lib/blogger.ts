@@ -263,8 +263,8 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 3): Promise<T> {
  * Server-side token refresh using env-based credentials (no DB).
  * One-shot — no retry. Fails loudly so caller gets a clear error.
  */
-async function getAccessToken(): Promise<string> {
-  const { refreshToken, clientId, clientSecret } = getBloggerCredentials();
+async function getAccessToken(niche: 'AS' | 'TS' | 'WS' = 'AS'): Promise<string> {
+  const { refreshToken, clientId, clientSecret } = getBloggerCredentials(niche);
   const res = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -281,23 +281,23 @@ async function getAccessToken(): Promise<string> {
 }
 
 /**
- * Publish a scheduled post to Blogger (niche AS — only valid value currently).
+ * Publish a scheduled post to Blogger. Multi-niche after 5/5 WP→Blogger 마이그레이션.
  * Two-step: create draft (isDraft=true) → publish with publishDate.
  *
  * NOTE on orphan drafts: each step is retried independently. If step 1 (draft)
  * succeeds but step 2 (publish) exhausts all retries, the draft remains in
  * Blogger admin as an orphan. This is acceptable since draft visibility is
- * not user-facing for the AS niche.
+ * not user-facing.
  *
- * @param niche - Only 'AS' is currently valid.
+ * @param niche - 'AS' (apt-signal), 'TS' (trip-signal), 'WS' (health-signal).
  */
 export async function publishScheduled(
-  niche: 'AS' = 'AS',
+  niche: 'AS' | 'TS' | 'WS',
   post: { title: string; content: string; labels?: string[] },
   scheduledFor: Date
 ): Promise<{ externalId: string; externalUrl: string; scheduledAt: string }> {
-  const { blogId } = getBloggerCredentials();
-  const accessToken = await getAccessToken();
+  const { blogId } = getBloggerCredentials(niche);
+  const accessToken = await getAccessToken(niche);
 
   // Step 1: create draft (isDraft=true) — retried independently
   const draft = await withRetry(async () => {

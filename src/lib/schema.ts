@@ -11,7 +11,13 @@ export const publishedPosts = sqliteTable(
     title: text("title").notNull(),
     slug: text("slug").notNull(),
     platform: text("platform", {
-      enum: ["wordpress_ws", "wordpress_ts", "blogger_as"],
+      enum: [
+        "wordpress_ws",
+        "wordpress_ts",
+        "blogger_as",
+        "blogger_trip",
+        "blogger_health",
+      ],
     }).notNull(),
     externalPostId: text("external_post_id"),
     externalUrl: text("external_url").notNull(),
@@ -41,7 +47,12 @@ export type PublishedPost = typeof publishedPosts.$inferSelect;
 export type NewPublishedPost = typeof publishedPosts.$inferInsert;
 
 export type Niche = "WS" | "TS" | "AS";
-export type Platform = "wordpress_ws" | "wordpress_ts" | "blogger_as";
+export type Platform =
+  | "wordpress_ws"
+  | "wordpress_ts"
+  | "blogger_as"
+  | "blogger_trip"
+  | "blogger_health";
 
 export interface PostMetadata {
   priority_score?: number;
