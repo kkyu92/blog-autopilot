@@ -23,7 +23,7 @@ from typing import Optional
 from dotenv import load_dotenv
 
 # ── Config ──────────────────────────────────────────────────
-PROJECT_DIR = Path.home() / "projects" / "content-autopilot"
+PROJECT_DIR = Path.home() / "projects" / "blog-autopilot"
 load_dotenv(PROJECT_DIR / ".env")
 
 BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
