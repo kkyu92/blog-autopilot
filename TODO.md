@@ -1,7 +1,7 @@
 # Content Autopilot — TODO
 
-> 마지막 점검: 2026-05-05 (자동 점검)
-> 빌드: **FAIL** (Next.js app/ 미존재) | 테스트: **339 PASS / 0 FAIL** (WP→Blogger 테스트 재작성 정상 감소) | Lint: **5 errors, 2 warnings** (16 errors 해소)
+> 마지막 점검: 2026-05-06 (자동 점검)
+> 빌드: **FAIL** (Next.js app/ 미존재, 미변동) | 테스트: **339 PASS / 0 FAIL** (23 파일, 미변동) | Lint: **5 errors, 2 warnings** (미변동)
 
 ---
 
@@ -87,6 +87,13 @@
 - [ ] `scripts/migration/wp-to-blogger.mjs:180` — `accessToken` 초기화 후 미사용 (lint warning 신규) — per-publish freshToken으로 교체됐으므로 초기 선언 제거
 - [ ] `auto-publish.ts:666` — TODO(post-PR6): uniqueIndex(slug, platform) 충돌 처리 미구현
 - [ ] `auto-publish.ts:751` — TODO(post-PR6): N consecutive 백업 fail 시 queue_exhausted dispatchIssue 미구현
+
+---
+
+## 신규 발견 이슈 (2026-05-06)
+
+- [ ] `scripts/migration/relabel-as.mjs` — AS 라벨 통합(21→6) 스크립트 추가됨 (f4c0ebc). dry-run 확인 후 `--apply` 실행 필요 (Blogger API + DB 동시 갱신)
+- [ ] `docs/blogger/CONSOLE_SETUP_GUIDE.md` — Search Console 설정 가이드 추가됨. 사용자가 Google Search Console에서 검색설명 ON 여부 확인 필요
 
 ---
 
