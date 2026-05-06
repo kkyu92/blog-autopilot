@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
+  <rect width="192" height="192" rx="32" fill="#1e3a5f"/>
+  <rect x="42" y="78" width="36" height="86" rx="3" fill="#e8c468"/>
+  <rect x="86" y="50" width="36" height="114" rx="3" fill="#e8c468"/>
+  <rect x="130" y="92" width="32" height="72" rx="3" fill="#e8c468"/>
+  <g fill="#1e3a5f">
+    <rect x="50" y="88" width="6" height="6"/>
+    <rect x="62" y="88" width="6" height="6"/>
+    <rect x="50" y="102" width="6" height="6"/>
+    <rect x="62" y="102" width="6" height="6"/>
+    <rect x="50" y="116" width="6" height="6"/>
+    <rect x="62" y="116" width="6" height="6"/>
+    <rect x="50" y="130" width="6" height="6"/>
+    <rect x="62" y="130" width="6" height="6"/>
+    <rect x="50" y="144" width="6" height="6"/>
+    <rect x="62" y="144" width="6" height="6"/>
+    <rect x="94" y="60" width="6" height="6"/>
+    <rect x="108" y="60" width="6" height="6"/>
+    <rect x="94" y="74" width="6" height="6"/>
+    <rect x="108" y="74" width="6" height="6"/>
+    <rect x="94" y="88" width="6" height="6"/>
+    <rect x="108" y="88" width="6" height="6"/>
+    <rect x="94" y="102" width="6" height="6"/>
+    <rect x="108" y="102" width="6" height="6"/>
+    <rect x="94" y="116" width="6" height="6"/>
+    <rect x="108" y="116" width="6" height="6"/>
+    <rect x="94" y="130" width="6" height="6"/>
+    <rect x="108" y="130" width="6" height="6"/>
+    <rect x="94" y="144" width="6" height="6"/>
+    <rect x="108" y="144" width="6" height="6"/>
+    <rect x="138" y="102" width="6" height="6"/>
+    <rect x="148" y="102" width="6" height="6"/>
+    <rect x="138" y="116" width="6" height="6"/>
+    <rect x="148" y="116" width="6" height="6"/>
+    <rect x="138" y="130" width="6" height="6"/>
+    <rect x="148" y="130" width="6" height="6"/>
+    <rect x="138" y="144" width="6" height="6"/>
+    <rect x="148" y="144" width="6" height="6"/>
+  </g>
+  <circle cx="146" cy="40" r="14" fill="#e8c468"/>
+  <path d="M132 40 Q146 26 160 40" stroke="#e8c468" stroke-width="3" fill="none" opacity="0.6"/>
+  <path d="M124 40 Q146 18 168 40" stroke="#e8c468" stroke-width="3" fill="none" opacity="0.3"/>
+</svg>
