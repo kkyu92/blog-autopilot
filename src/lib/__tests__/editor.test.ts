@@ -535,4 +535,24 @@ describe('editor.review', () => {
 
     expect(result.verdict).toBe('pass');
   });
+
+  // 5/7 cron 25451848284 TS FIFA 월드컵 호텔 evidence: LLM이 review 응답을 chunk 패턴
+  // (_resume_note + html_part2) 으로 반환 → throw 대신 revision_needed 처리해서 retry 유도.
+  it('LLM chunk drift (_resume_note + html_part2) → revision_needed (throw 안 함)', async () => {
+    const { callClaude } = await import('../llm');
+    const { factcheck } = await import('../factcheck');
+    vi.mocked(callClaude).mockResolvedValue(
+      JSON.stringify({
+        _resume_note: '응답이 길어서 분할됩니다.',
+        html_part2: '<p>continuation chunk</p>',
+      }),
+    );
+    vi.mocked(factcheck).mockResolvedValue({ verdict: 'pass' });
+
+    const { review } = await import('../editor');
+    const result = await review({ draft: validDraft(), niche: 'TS' });
+
+    // throw 안 하고 revision_needed로 fallback (writeAndReview attempt 2 retry 유도)
+    expect(result.verdict).toBe('revision_needed');
+  });
 });

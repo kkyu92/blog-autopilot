@@ -155,6 +155,12 @@ export async function review(input: EditorReviewInput): Promise<EditorReviewResu
     // 케이스만 잡아 풀린 케이스 영구 fail. 핵심 4 키 모두 매칭이면 wrap이 풀린 approve 응답으로 추론.
     const FLAT_FINAL_META_KEYS = ['title', 'meta_description', 'slug', 'labels'] as const;
     if (FLAT_FINAL_META_KEYS.every((k) => k in p)) return 'approved';
+    // 5/7 cron 25451848284 TS FIFA 월드컵 호텔 예약 evidence: LLM이 review 응답을 chunk 패턴
+    // (_resume_note + html_part2) 으로 반환 — review 자체가 incomplete 상태로 보아야 함. throw
+    // 대신 revision_needed 처리해서 writeAndReview attempt 2에서 재시도 (5/2 flat-final_meta
+    // drift 패밀리와 동일 회복 메커니즘).
+    const CHUNK_PATTERN_KEYS = ['_resume_note', '_continue', 'html_part1', 'html_part2', 'html_part3'];
+    if (CHUNK_PATTERN_KEYS.some((k) => k in p)) return 'revision_needed';
     throw new Error(
       `editor: missing status/verdict (raw keys: ${Object.keys(p).join(',')})`,
     );
