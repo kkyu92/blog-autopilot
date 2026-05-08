@@ -1,4 +1,5 @@
 import { getValidTokens, type OAuthTokens } from "@/lib/tokens";
+import { normalizeLabels } from "./labels";
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID!;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET!;
@@ -299,13 +300,18 @@ export async function publishScheduled(
   const { blogId } = getBloggerCredentials(niche);
   const accessToken = await getAccessToken(niche);
 
+  // niche=AS: 통합 6 카테고리로 라벨 normalize (AdSense 사이트 주제 통일성).
+  //          unknown drop, 빈 배열 → default '시장분석'. HS/TS pass-through.
+  // 5/6 prep relabel-as.mjs 일회성 cleanup 의 정책을 발행 시점에 영구 강제.
+  const normalizedLabels = normalizeLabels(niche, post.labels);
+
   // Step 1: create draft (isDraft=true) — retried independently
   const draft = await withRetry(async () => {
     const draftBody: Record<string, unknown> = {
       title: post.title,
       content: post.content,
     };
-    if (post.labels !== undefined) draftBody.labels = post.labels;
+    if (normalizedLabels.length > 0) draftBody.labels = normalizedLabels;
 
     const res = await bloggerFetchWithTimeout(
       `https://www.googleapis.com/blogger/v3/blogs/${blogId}/posts?isDraft=true`,

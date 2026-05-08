@@ -60,6 +60,7 @@ describe('publishScheduled (Blogger)', () => {
     vi.resetAllMocks();
     vi.stubEnv('GOOGLE_REFRESH_TOKEN', 'test-refresh-token');
     vi.stubEnv('GOOGLE_BLOG_ID', 'test-blog-id-789');
+    vi.stubEnv('GOOGLE_BLOG_ID_HEALTH', 'test-blog-id-health-789');
     vi.stubEnv('GOOGLE_CLIENT_ID', 'test-client-id.apps.googleusercontent.com');
     vi.stubEnv('GOOGLE_CLIENT_SECRET', 'test-client-secret');
   });
@@ -123,10 +124,11 @@ describe('publishScheduled (Blogger)', () => {
       .mockResolvedValueOnce(makeOkResponse(draftResponse))
       .mockResolvedValueOnce(makeOkResponse(publishResponse));
 
-    await publishScheduled('AS', postWithLabels, scheduledDate);
+    // niche='HS' → labels pass-through (AS normalize 정책은 별도 test).
+    await publishScheduled('HS', postWithLabels, scheduledDate);
 
     const [draftUrl, draftInit] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[1];
-    expect(draftUrl).toContain('test-blog-id-789');
+    expect(draftUrl).toContain('test-blog-id-health-789');
     expect(draftInit.method).toBe('POST');
     expect(draftInit.headers['Authorization']).toBe('Bearer ya29.access-token-abc');
     expect(draftInit.headers['Content-Type']).toBe('application/json');
@@ -210,8 +212,54 @@ describe('publishScheduled (Blogger)', () => {
     expect(global.fetch).toHaveBeenCalledTimes(4);
   });
 
-  // 10. No labels passed → labels omitted from body (or undefined/absent)
-  it('no labels in post → labels field absent from draft body', async () => {
+  // 10. No labels passed (HS pass-through) → labels field absent from draft body
+  it('no labels in post (HS pass-through) → labels field absent from draft body', async () => {
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce(makeOkResponse(tokenResponse))
+      .mockResolvedValueOnce(makeOkResponse(draftResponse))
+      .mockResolvedValueOnce(makeOkResponse(publishResponse));
+
+    await publishScheduled('HS', minimalPost, scheduledDate);
+
+    const [, draftInit] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[1];
+    const body = JSON.parse(draftInit.body as string);
+    expect('labels' in body).toBe(false);
+  });
+
+  // 11. Multiple labels (HS pass-through) → all present in body
+  it('labels array (HS pass-through) → all labels in draft body', async () => {
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce(makeOkResponse(tokenResponse))
+      .mockResolvedValueOnce(makeOkResponse(draftResponse))
+      .mockResolvedValueOnce(makeOkResponse(publishResponse));
+
+    await publishScheduled('HS', postWithLabels, scheduledDate);
+
+    const [, draftInit] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[1];
+    const body = JSON.parse(draftInit.body as string);
+    expect(body.labels).toEqual(['tech', 'automation', 'ai']);
+  });
+
+  // 11a. AS normalize: 옛/random 라벨 → 통합 6 카테고리로 강제 (5/6 prep 정책 영구화)
+  it('AS niche → labels normalized to integrated 6 categories (drop unknown, default fallback)', async () => {
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce(makeOkResponse(tokenResponse))
+      .mockResolvedValueOnce(makeOkResponse(draftResponse))
+      .mockResolvedValueOnce(makeOkResponse(publishResponse));
+
+    const asPost = {
+      title: 'AS post',
+      content: '<p>x</p>',
+      labels: ['아파트 청약', '재건축', '양도세 중과'], // 매핑 2 + unknown 1
+    };
+    await publishScheduled('AS', asPost, scheduledDate);
+
+    const [, draftInit] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[1];
+    const body = JSON.parse(draftInit.body as string);
+    expect(body.labels.sort()).toEqual(['재건축·재개발', '청약'].sort());
+  });
+
+  it('AS niche + no labels → default 시장분석 적용', async () => {
     global.fetch = vi.fn()
       .mockResolvedValueOnce(makeOkResponse(tokenResponse))
       .mockResolvedValueOnce(makeOkResponse(draftResponse))
@@ -221,21 +269,7 @@ describe('publishScheduled (Blogger)', () => {
 
     const [, draftInit] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[1];
     const body = JSON.parse(draftInit.body as string);
-    expect('labels' in body).toBe(false);
-  });
-
-  // 11. Multiple labels passed → all present in body
-  it('labels array → all labels in draft body', async () => {
-    global.fetch = vi.fn()
-      .mockResolvedValueOnce(makeOkResponse(tokenResponse))
-      .mockResolvedValueOnce(makeOkResponse(draftResponse))
-      .mockResolvedValueOnce(makeOkResponse(publishResponse));
-
-    await publishScheduled('AS', postWithLabels, scheduledDate);
-
-    const [, draftInit] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[1];
-    const body = JSON.parse(draftInit.body as string);
-    expect(body.labels).toEqual(['tech', 'automation', 'ai']);
+    expect(body.labels).toEqual(['시장분석']);
   });
 
   // 12. Exp backoff timing: ~1s/2s waits between retries (fake timers)
