@@ -250,13 +250,13 @@ describe('publishScheduled (Blogger)', () => {
     const asPost = {
       title: 'AS post',
       content: '<p>x</p>',
-      labels: ['아파트 청약', '재건축', '양도세 중과'], // 매핑 2 + unknown 1
+      labels: ['아파트 청약', '재건축', '양도세 중과'], // 정확 2 + substring 1 (양도세→세금·절세)
     };
     await publishScheduled('AS', asPost, scheduledDate);
 
     const [, draftInit] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[1];
     const body = JSON.parse(draftInit.body as string);
-    expect(body.labels.sort()).toEqual(['재건축·재개발', '청약'].sort());
+    expect(body.labels.sort()).toEqual(['세금·절세', '재건축·재개발', '청약'].sort());
   });
 
   it('AS niche + no labels → default 시장분석 적용', async () => {
