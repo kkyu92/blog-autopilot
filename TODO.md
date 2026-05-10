@@ -1,7 +1,7 @@
 # Content Autopilot — TODO
 
-> 마지막 점검: 2026-05-06 (자동 점검)
-> 빌드: **FAIL** (Next.js app/ 미존재, 미변동) | 테스트: **339 PASS / 0 FAIL** (23 파일, 미변동) | Lint: **5 errors, 2 warnings** (미변동)
+> 마지막 점검: 2026-05-10 (자동 점검)
+> 빌드: **FAIL** (Next.js app/ 미존재, 미변동) | 테스트: **363 PASS / 0 FAIL** (24 파일, +24개) | Lint: **5 errors, 2 warnings** (미변동)
 
 ---
 
@@ -67,7 +67,7 @@
 - [x] `src/lib/__tests__/healthcheck.test.ts` — `any` 타입 **16개** 해소 완료 (2026-05-05 확인)
 - [ ] `src/lib/__tests__/llm.test.ts` — `any` 타입 3개 (line 114, 122, 174) → 구체 타입 명시
 - [ ] `src/lib/__tests__/trends.test.ts` — `any` 타입 2개 (line 29, 220) → 구체 타입 명시
-- [ ] `src/lib/blogger.ts:295` — 미사용 변수 `niche` (warning) — 2026-04-27 이후 미수정
+- [x] `src/lib/blogger.ts:295` — 미사용 변수 `niche` (warning) — b20ae93 `normalizeLabels(niche, ...)` 호출 추가로 해소 (2026-05-10 확인)
 - [ ] `eslint-config-next` — "Pages directory cannot be found" 경고 발생 (CLI 전환 후 next 전용 lint 규칙 잔존)
 
 ---
@@ -97,6 +97,16 @@
 
 ---
 
+## 신규 발견 이슈 (2026-05-10)
+
+신규 린트/빌드 이슈 없음. 주요 변경 내역:
+- `c1c0d50` fix(reliability): editor inferStatus chunk drift fallback (drift family 8번째)
+- `b20ae93` feat(labels): AS publisher normalize — `blogger.ts` niche 경고 사이드 이펙트 해소
+- `ba5cbd0` feat(labels): substring 매칭 추가 — LLM 자유 keyword 통합 6 자동 흡수
+- 테스트 파일 24개 / 363개 통과 (지난 점검 대비 +24개)
+
+---
+
 ## 다음 단계 (우선순위순)
 
 ### 즉시 (테스트 회귀 수정)
@@ -106,7 +116,6 @@
 - [ ] Next.js 의존성 제거 — `next build` → CLI 전용 `package.json`으로 전환 (build 스크립트 삭제 또는 `tsc --noEmit`으로 교체)
 - [ ] `eslint-config-next` → `@typescript-eslint/eslint-plugin` 등 범용 TS lint config으로 교체 (next 전용 규칙 제거)
 - [ ] 테스트 파일 `any` 타입 명시화 (lint 5 errors 잔존) — `llm.test.ts` 3개, `trends.test.ts` 2개
-- [ ] `blogger.ts` `niche` 미사용 변수 제거 (lint warning)
 - [ ] `scripts/mid-review/fetch.mjs:80` `toIsoDate` 미사용 함수 제거 (lint warning)
 - [ ] `scripts/migration/wp-to-blogger.mjs:180` `accessToken` 초기 선언 제거 (lint warning 신규)
 
