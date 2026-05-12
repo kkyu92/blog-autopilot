@@ -1,7 +1,16 @@
 # Content Autopilot — TODO
 
-> 마지막 점검: 2026-05-10 (자동 점검)
-> 빌드: **FAIL** (Next.js app/ 미존재, 미변동) | 테스트: **363 PASS / 0 FAIL** (24 파일, +24개) | Lint: **5 errors, 2 warnings** (미변동)
+> 마지막 점검: 2026-05-12 (자동 점검)
+> 빌드: **FAIL** (Next.js app/ 미존재, 미변동) | 테스트: **363 PASS / 0 FAIL** (미변동) | Lint: **5 errors, 2 warnings** (미변동)
+>
+> **5/12 KST 08:30 — runner sleep stuck 복구 (launchctl kickstart)**:
+> - 5/10 cron failure RC = broker.actions.githubusercontent.com timeout (6:28/10:17/13:53 UTC) — runner heartbeat 통신 불안정. publish 0건.
+> - 5/11 cron queued stuck = macOS sleep 후 process alive + heartbeat dead. 5/12 08:30 kickstart 로 즉시 pickup.
+> - 박제: `feedback_runner_sleep_recovery.md` (sleep + broker timeout 양 family 동일 처방 = launchctl kickstart).
+> - 진행 중: 5/11 cron (9 슬롯 = 5/12 KST 09/11/13) + 추가 dispatch slot_count=3 (5/12 KST 15/17/19) = niche당 6 = 18 backfill.
+>
+> **5/12 GSC 96+h 미해소**:
+> - AS homepage REDIRECT_ERROR lastCrawl 2026-05-08T01:33Z 그대로. mobile theme 토글 fix 효과 GSC 측 미반영. 자연 영역 (96+h) 초과 = 사용자 GSC URL Inspection 색인 재요청 + 추가 24~48h 대기.
 
 ---
 

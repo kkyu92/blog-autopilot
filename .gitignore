@@ -18,3 +18,7 @@ data/
 .gstack/
 HANDOFF_SNAPSHOT.md
 .claude/worktrees/
+
+# macOS
+.DS_Store
+**/.DS_Store
