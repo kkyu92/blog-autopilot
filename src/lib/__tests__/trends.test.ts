@@ -25,8 +25,8 @@ const VALID_CANDIDATE_2 = {
   image_keywords: ['office building', 'seoul'],
 };
 
-// Empty signals — bypasses getGoogleDailyTrends external call
-const NO_SIGNALS = { daily_trends: [] as any[] };
+// Empty signals — bypasses ALL external fetch calls (daily_trends + niche-specific aggregators)
+const NO_SIGNALS = { daily_trends: [] as any[], realestate: [] as any[], wellness: [] as any[], travel: [] as any[] };
 
 describe('pickQueue', () => {
   beforeEach(() => {
