@@ -1,13 +1,22 @@
 # Content Autopilot — TODO
 
-> 마지막 점검: 2026-05-12 (자동 점검)
+> 마지막 점검: 2026-05-12 (자동 점검 + 본 세션 18 backfill)
 > 빌드: **FAIL** (Next.js app/ 미존재, 미변동) | 테스트: **363 PASS / 0 FAIL** (미변동) | Lint: **5 errors, 2 warnings** (미변동)
 >
 > **5/12 KST 08:30 — runner sleep stuck 복구 (launchctl kickstart)**:
 > - 5/10 cron failure RC = broker.actions.githubusercontent.com timeout (6:28/10:17/13:53 UTC) — runner heartbeat 통신 불안정. publish 0건.
 > - 5/11 cron queued stuck = macOS sleep 후 process alive + heartbeat dead. 5/12 08:30 kickstart 로 즉시 pickup.
-> - 박제: `feedback_runner_sleep_recovery.md` (sleep + broker timeout 양 family 동일 처방 = launchctl kickstart).
-> - 진행 중: 5/11 cron (9 슬롯 = 5/12 KST 09/11/13) + 추가 dispatch slot_count=3 (5/12 KST 15/17/19) = niche당 6 = 18 backfill.
+> - 박제: `feedback_runner_sleep_recovery.md`.
+>
+> **5/12 KST 15~16 — HANG family RC 정정 + visibility log + 18 backfill 달성**:
+> - HANG family 3회 박제 RC 정정: 진짜 hang 1회 (writer attempt 1 retry JSON drift), 나머지 2회 = premature cancel + slow LLM 정상.
+> - callClaude visibility 로그 (commit `18801c6`) — 60초 주기 `[llm] still waiting` 출력. premature cancel 방지.
+> - JSON drift 패턴 직접 캡처: "부킹닷컴 해킹 피해 대처법 2026" 키워드. HTML 내 unescaped `"` → JSON.parse fail → retry hang → SIGTERM 15min 자연 처리.
+> - `scripts/blogger/publish-from-draft.ts` (드래프트 JSON 직접 발행 도구) 추가: writer-stage fail 시 raw dump 수동 fix + publish.
+> - 누적 발행 **218** (AS 54 / HS 81 / TS 83). 5/12 = AS 6 / HS 6 / TS 6 = **18/18 목표 달성**.
+>
+> **박제 갱신**:
+> - `feedback_auto_publish_slot_transition_hang.md` 완전 재작성: HANG family → premature cancel family + slow LLM.
 >
 > **5/12 GSC 96+h 미해소**:
 > - AS homepage REDIRECT_ERROR lastCrawl 2026-05-08T01:33Z 그대로. mobile theme 토글 fix 효과 GSC 측 미반영. 자연 영역 (96+h) 초과 = 사용자 GSC URL Inspection 색인 재요청 + 추가 24~48h 대기.
