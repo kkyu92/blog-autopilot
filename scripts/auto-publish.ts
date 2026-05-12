@@ -128,16 +128,19 @@ interface NicheState {
   usedSlotTimes: Set<string>;
 }
 
-async function pickAllQueues(niches: Niche[]): Promise<NicheQueue[]> {
+async function pickAllQueues(niches: Niche[], slotCount: number): Promise<NicheQueue[]> {
   // 4/28 사고 후 paperclip 안정성 복원: trend-hunter agent가 출력 단계에서 cannibalization
   // 사전 차단하도록 최근 30일 발행 키워드 리스트 inject. semantic-dedup layer는 backup으로.
   const db = getDb();
   const recentByNiche = loadRecentByNiche(db, niches, 30);
 
+  // slotCount + 3 buffer: dedup skip으로 소진되는 후보 보충 (56+ posts 이후 dedup 압력 증가)
+  const candidateCount = slotCount + 3;
+
   const queues: NicheQueue[] = [];
   for (const niche of niches) {
     const recentKeywords = (recentByNiche[niche] ?? []).map((r) => r.keyword);
-    const keywords = await pickQueue({ niche, recent_published_keywords: recentKeywords });
+    const keywords = await pickQueue({ niche, count: candidateCount, recent_published_keywords: recentKeywords });
     console.log(`[auto-publish] queue ${niche}: ${keywords.length} keywords (recent_inject: ${recentKeywords.length})`);
     if (keywords.length === 0) {
       console.warn(`[auto-publish] WARN ${niche} queue empty, skipping niche`);
@@ -848,7 +851,7 @@ export async function runMain(argv: string[] = process.argv): Promise<number> {
   }
 
   // Step 2: trends → niche 큐 준비
-  const queues = await pickAllQueues(args.niches);
+  const queues = await pickAllQueues(args.niches, args.slotCount);
   if (queues.length === 0) {
     console.error('[auto-publish] all queues empty, exit 1');
     return 1;
