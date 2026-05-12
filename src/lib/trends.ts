@@ -358,6 +358,9 @@ export async function pickQueue(opts: PickQueueOptions): Promise<KeywordCandidat
     expectJson: true,
   });
 
+  if (!raw) {
+    throw new Error('trends.pickQueue: callClaude returned empty response');
+  }
   const parsed = JSON.parse(raw);
 
   // Persona may return either an array directly or various envelope shapes
