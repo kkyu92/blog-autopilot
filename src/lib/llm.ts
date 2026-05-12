@@ -30,6 +30,10 @@ export interface CallClaudeOptions {
 
 const DEFAULT_TIMEOUT_MS = 900_000;
 const FORCE_KILL_GRACE_MS = 5_000;
+// F2-C (5/12 박제 정정): slow LLM (editor.review ~10min) visibility 로그 주기.
+// HANG family 3회 박제 (5/11~5/12) = 사실상 0회 진짜 hang, 모두 premature cancel evidence.
+// 60초마다 "still waiting" 로그로 사용자가 활성 LLM 호출 진행 중임을 인지 → cancel 방지.
+const PROGRESS_LOG_INTERVAL_MS = 60_000;
 // F1'-c: spawn-level transient OS error retry. 4/29 cron 25085433470 fail evidence:
 // "spawn claude ENOENT", "spawn Unknown system error -8". 호출 누적 후 OS-level transient.
 const SPAWN_RETRY_DELAY_MS = 5_000;
@@ -101,6 +105,7 @@ function spawnClaudeOnce(opts: CallClaudeOptions): Promise<{ stdout: string; std
   const systemPrompt = opts.expectJson ? opts.systemPrompt + JSON_GUARD : opts.systemPrompt;
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   return new Promise((resolve, reject) => {
+    const startedAt = Date.now();
     const child = spawn(
       'claude',
       [
@@ -127,11 +132,24 @@ function spawnClaudeOnce(opts: CallClaudeOptions): Promise<{ stdout: string; std
       reject(new Error(`claude CLI timeout after ${timeoutMs}ms (SIGTERM sent)`));
     }, timeoutMs);
 
+    const progressTimer = setInterval(() => {
+      if (settled) return;
+      const elapsedMin = ((Date.now() - startedAt) / 60_000).toFixed(1);
+      const timeoutMin = (timeoutMs / 60_000).toFixed(0);
+      console.log(`[llm] still waiting for claude CLI (elapsed ${elapsedMin}min / timeout ${timeoutMin}min)`);
+    }, PROGRESS_LOG_INTERVAL_MS);
+    progressTimer.unref?.();
+
+    const clearTimers = () => {
+      clearTimeout(timeoutTimer);
+      clearInterval(progressTimer);
+      if (forceKillTimer) clearTimeout(forceKillTimer);
+    };
+
     child.stdout.on('data', (chunk: Buffer) => { stdoutChunks.push(chunk); });
     child.stderr.on('data', (chunk: Buffer) => { stderrChunks.push(chunk); });
     child.on('close', (code, signal) => {
-      clearTimeout(timeoutTimer);
-      if (forceKillTimer) clearTimeout(forceKillTimer);
+      clearTimers();
       if (settled) return;
       settled = true;
       const stdout = Buffer.concat(stdoutChunks).toString('utf8').trim();
@@ -139,8 +157,7 @@ function spawnClaudeOnce(opts: CallClaudeOptions): Promise<{ stdout: string; std
       resolve({ stdout, stderr, code, signal });
     });
     child.on('error', (err) => {
-      clearTimeout(timeoutTimer);
-      if (forceKillTimer) clearTimeout(forceKillTimer);
+      clearTimers();
       if (settled) return;
       settled = true;
       reject(err);
