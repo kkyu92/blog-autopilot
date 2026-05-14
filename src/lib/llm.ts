@@ -101,7 +101,7 @@ function dumpBadOutput(stdout: string): string | null {
 }
 
 function spawnClaudeOnce(opts: CallClaudeOptions): Promise<{ stdout: string; stderr: string; code: number | null; signal: NodeJS.Signals | null }> {
-  const model = opts.model ?? 'sonnet';
+  const model = opts.model ?? (process.env.BLOG_LLM_MODEL_OVERRIDE as 'sonnet' | 'opus') ?? 'sonnet';
   const systemPrompt = opts.expectJson ? opts.systemPrompt + JSON_GUARD : opts.systemPrompt;
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   return new Promise((resolve, reject) => {
@@ -196,7 +196,8 @@ export async function callClaude(opts: CallClaudeOptions): Promise<string> {
   if (_claudeFirstCallAt === null) _claudeFirstCallAt = Date.now();
   const callIdx = _claudeCallCount;
   const uptimeMin = _claudeFirstCallAt ? ((Date.now() - _claudeFirstCallAt) / 60_000).toFixed(1) : '0.0';
-  console.log(`[llm] call #${callIdx} (uptime ${uptimeMin}min) model=${opts.model ?? 'sonnet'} expectJson=${!!opts.expectJson}`);
+  const resolvedModel = opts.model ?? (process.env.BLOG_LLM_MODEL_OVERRIDE as 'sonnet' | 'opus') ?? 'sonnet';
+  console.log(`[llm] call #${callIdx} (uptime ${uptimeMin}min) model=${resolvedModel} expectJson=${!!opts.expectJson}`);
 
   const maxJsonAttempts = opts.expectJson ? 1 + (opts.jsonRetries ?? 1) : 1;
   let lastErr: Error | null = null;
