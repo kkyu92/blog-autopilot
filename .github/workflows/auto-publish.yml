@@ -97,10 +97,6 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
 
-          # TEMP (2026-05-15 ~ 2026-05-19): sonnet 한도 도달 (resets 5/18 23:00 KST).
-          # 5/16 ~ 5/18 cron sonnet 회복 전까지 opus 로 fallback. 5/19 cron 이후 line 삭제.
-          BLOG_LLM_MODEL_OVERRIDE: opus
-
       # E: silent fail 방지 — 워크플로우 cancel(=timeout) 시 운영자에게 알림 issue 생성.
       # 4/27 자연 cron이 90min timeout으로 cancel되면서 4 슬롯이 silent fail이 된 사례 방지.
       # always() if cancelled() 로 publish step의 cancel 후에도 실행됨.
