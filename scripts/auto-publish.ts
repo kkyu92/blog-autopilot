@@ -217,6 +217,21 @@ interface WriterDraft {
 // SIGKILL까지 간 사례 방지.
 const SOFT_PASS_THRESHOLD = 70;
 
+// 5/17 fix: writer callClaude 15min hard timeout 발생 시 1회 자동 retry.
+// evidence: 5/13 잠실 장미아파트 + 5/17 1주택자 양도세 — 둘 다 부동산 정책+시뮬레이션 키워드 단발 fail.
+// 모델 출력 매우 길어져 첫 응답 안 옴 → SIGTERM. retry 는 다른 seed 라 짧게 끝날 가능성.
+// retry 도 timeout 이면 keyword permanent fail (기존 동작 유지). 슬롯 cascade hang 위험 없음 (병렬).
+async function callWriterWithTimeoutRetry(systemPrompt: string, userMessage: string): Promise<string> {
+  try {
+    return await callClaude({ systemPrompt, userMessage, expectJson: true });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (!/SIGTERM|timeout/i.test(msg)) throw err;
+    console.warn(`[writer] timeout (1차) — 1회 자동 retry: ${msg.slice(0, 120)}`);
+    return await callClaude({ systemPrompt, userMessage, expectJson: true });
+  }
+}
+
 async function writeAndReview(
   niche: Niche,
   keyword: string,
@@ -237,11 +252,10 @@ async function writeAndReview(
       revision_feedback: attempt === 1 ? null : lastFeedback,
     });
 
-    const writerOutput = await callClaude({
-      systemPrompt: buildCurrentDateHeader() + WRITER_PROMPT,
+    const writerOutput = await callWriterWithTimeoutRetry(
+      buildCurrentDateHeader() + WRITER_PROMPT,
       userMessage,
-      expectJson: true,
-    });
+    );
     const parsed = JSON.parse(writerOutput) as Record<string, unknown>;
     // F2-A (4/30 fix): missing field → 즉시 throw 대신 revision_feedback으로 attempt 2 retry.
     // 4/30 cron 25124826827 evidence: WS 자가면역 글이 LLM JSON drift로 title 필드 누락 →
