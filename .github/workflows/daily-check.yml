@@ -1,0 +1,34 @@
+name: Daily Check
+
+# KST 08:17 매일 — 오늘 9게시물 달성 검증. 부족 시 자동 보충 dispatch.
+# auto-publish cron(KST 01:17) 후 ~7시간 뒤. 보충 dispatch 의 90~120min 대기 포함.
+
+on:
+  schedule:
+    - cron: '17 23 * * *'  # UTC 23:17 = KST 08:17
+  workflow_dispatch: {}
+
+jobs:
+  check:
+    runs-on: [self-hosted, home]
+    timeout-minutes: 150  # 3 fill dispatches × 30min + buffer
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Daily check
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          DATABASE_PATH: ${{ secrets.DATABASE_PATH }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: pnpm tsx scripts/daily-check.ts
