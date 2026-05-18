@@ -373,7 +373,59 @@ export async function pickQueue(opts: PickQueueOptions): Promise<KeywordCandidat
     throw new Error(`trends.pickQueue: unexpected LLM response shape`);
   }
 
-  return candidates.slice(0, count).map(validateCandidate);
+  let picked = candidates.slice(0, count).map(validateCandidate);
+
+  // 5/18 fix: LLM 이 count 요구 무시하고 적게 응답하는 패턴 (특히 AS niche).
+  // evidence: 5/13, 5/17, 5/18 AS slot3 queue exhausted — count=6 요청에 3 keywords 반환.
+  // fallback: 부족분 만큼 picked + recent 를 dedup 에 추가하고 추가 호출.
+  if (picked.length < count) {
+    const shortage = count - picked.length;
+    console.warn(`[trends] pickQueue ${opts.niche}: LLM returned ${picked.length}/${count} — fallback retry for ${shortage}`);
+    const augmentedRecent = [...recentKeywords, ...picked.map((p) => p.keyword)];
+    const fallbackMessage = JSON.stringify({
+      niche: opts.niche,
+      count: shortage,
+      niche_definition_yaml: loadNicheYaml(opts.niche),
+      daily_trends_kr: dailyTrends.slice(0, 20).map((t) => ({ keyword: t.keyword, traffic: t.trafficVolume })),
+      ...(opts.niche === 'AS' && realestate.length > 0
+        ? { realestate_news: realestate.map((s) => ({ title: s.title, source: s.source, pubDate: s.pubDate })) }
+        : {}),
+      ...(opts.niche === 'HS' && wellness.length > 0
+        ? { wellness_news: wellness.map((s) => ({ title: s.title, source: s.source, pubDate: s.pubDate })) }
+        : {}),
+      ...(opts.niche === 'TS' && travel.length > 0
+        ? { travel_news: travel.map((s) => ({ title: s.title, source: s.source, pubDate: s.pubDate })) }
+        : {}),
+      recent_published_keywords: augmentedRecent,
+      instruction:
+        `FALLBACK retry — 직전 응답이 ${picked.length}/${count} 만 반환됨. ` +
+        `${shortage}개 추가 키워드를 picked + recent 와 완전히 다른 각도로 제시하라. ` +
+        `niche categories 안에서 시즌성·검색량 높은 evergreen 으로 fallback 가능. ` +
+        `recent_published_keywords 의 모든 항목과 dedup 규칙 유지.`,
+    });
+    try {
+      const fallbackRaw = await callClaude({
+        systemPrompt: TREND_HUNTER_PROMPT,
+        userMessage: fallbackMessage,
+        expectJson: true,
+      });
+      if (fallbackRaw) {
+        const fbParsed = JSON.parse(fallbackRaw);
+        const fbCandidates: unknown[] = Array.isArray(fbParsed)
+          ? fbParsed
+          : (fbParsed.keywords ?? fbParsed.candidates ?? fbParsed.daily_queue ?? fbParsed.queue ?? []);
+        if (Array.isArray(fbCandidates)) {
+          const additional = fbCandidates.slice(0, shortage).map(validateCandidate);
+          picked = [...picked, ...additional];
+          console.log(`[trends] pickQueue ${opts.niche}: fallback returned ${additional.length} — total ${picked.length}/${count}`);
+        }
+      }
+    } catch (err) {
+      console.warn(`[trends] pickQueue ${opts.niche}: fallback retry failed (continuing with ${picked.length}): ${(err as Error).message}`);
+    }
+  }
+
+  return picked;
 }
 
 function validateCandidate(raw: unknown): KeywordCandidate {
