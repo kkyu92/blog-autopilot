@@ -1,7 +1,14 @@
 # Content Autopilot — TODO
 
-> 마지막 점검: 2026-05-12 (야간 자동 점검)
-> 빌드: **FAIL** (Next.js app/ 미존재, 미변동) | 테스트: **363 PASS / 0 FAIL** (미변동) | Lint: **8 errors, 2 warnings** (↑ 이전 5 errors — trends.test.ts:29 `any[]` 3개 증가, 35b0690 사이드 이펙트)
+> 마지막 점검: 2026-05-18 (평일 아침 자동 점검)
+> 빌드: **FAIL** (Next.js app/ 미존재, 미변동) | 테스트: **363 PASS / 0 FAIL** (미변동) | Lint: **8 errors, 2 warnings** (미변동 — llm.test.ts 3개, trends.test.ts 5개 errors / fetch.mjs·wp-to-blogger.mjs warnings)
+>
+> **5/13~5/18 주요 변경사항**:
+> - `a3b8e05` fix(auto-publish): pickAllQueues count = slotCount+3 buffer (AS queue exhausted 재발 방지)
+> - `0362dbe` feat(llm): BLOG_LLM_MODEL_OVERRIDE env var — sonnet 한도 도달 시 opus 폴백
+> - `bdca69f` fix(auto-publish): writer 15min SIGTERM 시 1회 자동 retry (5/17 8/9 건 대응)
+> - `7f0787f` fix(trends): pickQueue fallback retry — LLM count 미달 반환 시 부족분 추가 호출
+> - `2db670b` feat(daily-check): KST 08:17 cron 자동화 — 9/9 검증 + 부족 자동 보충 dispatch
 >
 > **5/12 KST 08:30 — runner sleep stuck 복구 (launchctl kickstart)**:
 > - 5/10 cron failure RC = broker.actions.githubusercontent.com timeout (6:28/10:17/13:53 UTC) — runner heartbeat 통신 불안정. publish 0건.
@@ -74,6 +81,13 @@
 - [x] feat(migration): WP → Blogger cut-over 통합 변경 (5/5) — wp-to-blogger.mjs RC 완성
 - [x] fix(migration): OAuth token refresh per publish + already-migrated skip — 매 발행 직전 토큰 갱신
 
+### 안정성 패치 + 자동화 강화 (2026-05-13~05-18)
+- [x] fix(auto-publish): pickAllQueues count = slotCount+3 buffer — AS queue exhausted 재발 방지 (a3b8e05)
+- [x] feat(llm): BLOG_LLM_MODEL_OVERRIDE env var — sonnet 한도 도달 시 opus 폴백 지원 (0362dbe)
+- [x] fix(auto-publish): writer 15min SIGTERM 1회 자동 retry — callWriterWithTimeoutRetry 내부 helper (bdca69f)
+- [x] fix(trends): pickQueue fallback retry — LLM count 미달 시 부족분 추가 호출로 자동 보충 (7f0787f)
+- [x] feat(daily-check): KST 08:17 cron 자동화 — 9/9 검증, 부족 시 dispatch fill, RC 분석 + 이슈 생성 (2db670b)
+
 ---
 
 ## 신규 발견 이슈 (2026-04-27)
@@ -115,12 +129,6 @@
 
 ---
 
-## 신규 발견 이슈 (2026-05-12 야간)
-
-- [ ] `src/lib/__tests__/trends.test.ts:29` — `35b0690` 커밋 사이드 이펙트: NO_SIGNALS에 realestate/wellness/travel `any[]` 3개 추가 → lint errors 5→8. `as SignalMap` 또는 구체 타입으로 교체 필요.
-
----
-
 ## 신규 발견 이슈 (2026-05-10)
 
 신규 린트/빌드 이슈 없음. 주요 변경 내역:
@@ -128,6 +136,26 @@
 - `b20ae93` feat(labels): AS publisher normalize — `blogger.ts` niche 경고 사이드 이펙트 해소
 - `ba5cbd0` feat(labels): substring 매칭 추가 — LLM 자유 keyword 통합 6 자동 흡수
 - 테스트 파일 24개 / 363개 통과 (지난 점검 대비 +24개)
+
+---
+
+## 신규 발견 이슈 (2026-05-12 야간)
+
+- [ ] `src/lib/__tests__/trends.test.ts:29` — `35b0690` 커밋 사이드 이펙트: NO_SIGNALS에 realestate/wellness/travel `any[]` 3개 추가 → lint errors 5→8. `as SignalMap` 또는 구체 타입으로 교체 필요.
+
+---
+
+## 신규 발견 이슈 (2026-05-18)
+
+신규 lint/빌드 이슈 없음. 주요 변경 내역:
+- `2db670b` feat(daily-check): KST 08:17 cron 자동화 스크립트 + 워크플로우 신규 추가
+- `7f0787f` fix(trends): pickQueue fallback retry (테스트 363/363 통과 확인)
+- `bdca69f` fix(auto-publish): writer timeout 자동 retry
+- `0362dbe` feat(llm): BLOG_LLM_MODEL_OVERRIDE env var
+
+잠재 위험:
+- [ ] `.github/workflows/*.yml` — 모든 워크플로우에서 `pnpm/action-setup version: 9` 지정, 하지만 실제 사용 버전은 v10.33.0. 현재 self-hosted runner에서 정상 동작 중이나, lockfile 포맷 불일치로 GitHub-hosted runner 이용 시 문제 가능. `packageManager` 필드 추가 또는 `version: 10` 으로 통일 권장.
+- [ ] `STATUS.md` — 내용이 GUI 시절 기준으로 outdated (테스트 13개 표기, 실제 363개). 혼선 방지를 위해 CLI 전환 이후 현황으로 갱신 필요.
 
 ---
 
