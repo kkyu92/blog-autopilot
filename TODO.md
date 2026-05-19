@@ -1,7 +1,10 @@
 # Content Autopilot — TODO
 
-> 마지막 점검: 2026-05-18 (평일 아침 자동 점검)
+> 마지막 점검: 2026-05-19 (수동 전반 점검)
 > 빌드: **FAIL** (Next.js app/ 미존재, 미변동) | 테스트: **363 PASS / 0 FAIL** (미변동) | Lint: **8 errors, 2 warnings** (미변동 — llm.test.ts 3개, trends.test.ts 5개 errors / fetch.mjs·wp-to-blogger.mjs warnings)
+>
+> **5/19 주요 변경사항**:
+> - `2788473` feat(daily-check) + fix(trends): pickQueue fallback retry + KST 08:17 cron 자동화 정리 커밋 (2026-05-19 KST 07:19)
 >
 > **5/13~5/18 주요 변경사항**:
 > - `a3b8e05` fix(auto-publish): pickAllQueues count = slotCount+3 buffer (AS queue exhausted 재발 방지)
@@ -156,6 +159,15 @@
 잠재 위험:
 - [ ] `.github/workflows/*.yml` — 모든 워크플로우에서 `pnpm/action-setup version: 9` 지정, 하지만 실제 사용 버전은 v10.33.0. 현재 self-hosted runner에서 정상 동작 중이나, lockfile 포맷 불일치로 GitHub-hosted runner 이용 시 문제 가능. `packageManager` 필드 추가 또는 `version: 10` 으로 통일 권장.
 - [ ] `STATUS.md` — 내용이 GUI 시절 기준으로 outdated (테스트 13개 표기, 실제 363개). 혼선 방지를 위해 CLI 전환 이후 현황으로 갱신 필요.
+
+---
+
+## 신규 발견 이슈 (2026-05-19)
+
+신규 lint/빌드/테스트 이슈 없음. 상태 전회와 동일. 주요 확인 사항:
+- `2788473` (May 19 KST 07:19) — daily-check + trends 관련 커밋 정리. 코드 변경 없음(빈 커밋 형태).
+- STATUS.md 여전히 outdated (테스트 13개 표기, 실제 363개) — 5/18에 이어 미수정.
+- 모든 워크플로우 `pnpm/action-setup version: 9` vs 실제 v10.33.0 불일치 — 5/18에 이어 미수정.
 
 ---
 
