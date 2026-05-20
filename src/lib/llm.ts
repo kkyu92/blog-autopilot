@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { jsonrepair } from 'jsonrepair';
 
 export interface CallClaudeOptions {
   systemPrompt: string;
@@ -217,8 +218,9 @@ export async function callClaude(opts: CallClaudeOptions): Promise<string> {
     }
     try {
       const cleaned = extractJson(stdout);
-      JSON.parse(cleaned);
-      return cleaned;
+      const repaired = jsonrepair(cleaned);
+      JSON.parse(repaired);
+      return repaired;
     } catch (e) {
       const dumpPath = dumpBadOutput(stdout);
       if (dumpPath) console.error(`[llm] raw dumped → ${dumpPath}`);
