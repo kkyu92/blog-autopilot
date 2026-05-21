@@ -16,15 +16,48 @@ const STANDARD_DISCLAIMER_HTML =
   '<p style="margin:0;">이 글은 정보 제공 목적이며, 전문 의료/법률/세무 상담을 대체하지 않습니다. 정책·법안·의학 정보는 변경될 수 있으므로 최신 정보를 직접 확인하시기 바랍니다.</p>' +
   '</div>';
 
+const AUTHOR_BOX_BY_NICHE: Record<'HS' | 'TS' | 'AS', string> = {
+  AS:
+    '<div style="margin-top:40px;padding:20px 24px;background:#F8F9FA;border-radius:8px;border:1px solid #E8E8E8;">' +
+    '<p style="margin:0 0 4px 0;font-size:13px;font-weight:600;color:#888888;letter-spacing:0.04em;">글쓴이</p>' +
+    '<p style="margin:0 0 6px 0;font-size:15px;font-weight:700;color:#1A1A1A;">시그널 에디터 | apt-signal</p>' +
+    '<p style="margin:0;font-size:14px;color:#555555;line-height:1.7;">수도권 아파트 분양·청약 시장을 분석하는 부동산 정보 블로그 apt-signal 운영자입니다. ' +
+    '<a href="https://rt.molit.go.kr" target="_blank" rel="noopener noreferrer" style="color:#4285F4;">국토교통부 실거래가 데이터</a>와 ' +
+    '<a href="https://www.applyhome.co.kr" target="_blank" rel="noopener noreferrer" style="color:#4285F4;">청약홈 통계</a>를 기반으로 콘텐츠를 작성합니다.</p>' +
+    '</div>',
+  HS:
+    '<div style="margin-top:40px;padding:20px 24px;background:#F8F9FA;border-radius:8px;border:1px solid #E8E8E8;">' +
+    '<p style="margin:0 0 4px 0;font-size:13px;font-weight:600;color:#888888;letter-spacing:0.04em;">글쓴이</p>' +
+    '<p style="margin:0 0 6px 0;font-size:15px;font-weight:700;color:#1A1A1A;">헬스 에디터 | health-signal</p>' +
+    '<p style="margin:0;font-size:14px;color:#555555;line-height:1.7;">' +
+    '<a href="https://www.mohw.go.kr" target="_blank" rel="noopener noreferrer" style="color:#4285F4;">보건복지부</a>·' +
+    '<a href="https://www.kdca.go.kr" target="_blank" rel="noopener noreferrer" style="color:#4285F4;">질병관리청</a> 공식 가이드라인과 의학 연구를 기반으로 건강 정보를 큐레이션하는 health-signal 운영자입니다. ' +
+    '이 블로그의 콘텐츠는 전문가 상담을 대체하지 않으며, 정확한 정보 전달을 목표로 합니다.</p>' +
+    '</div>',
+  TS:
+    '<div style="margin-top:40px;padding:20px 24px;background:#F8F9FA;border-radius:8px;border:1px solid #E8E8E8;">' +
+    '<p style="margin:0 0 4px 0;font-size:13px;font-weight:600;color:#888888;letter-spacing:0.04em;">글쓴이</p>' +
+    '<p style="margin:0 0 6px 0;font-size:15px;font-weight:700;color:#1A1A1A;">트립 에디터 | trip-signal</p>' +
+    '<p style="margin:0;font-size:14px;color:#555555;line-height:1.7;">국내외 여행 정보와 실용적인 여행 팁을 큐레이션하는 trip-signal 운영자입니다. ' +
+    '<a href="https://www.visitkorea.or.kr" target="_blank" rel="noopener noreferrer" style="color:#4285F4;">한국관광공사</a> 공식 데이터와 직접 수집한 여행 정보를 바탕으로 콘텐츠를 제작합니다.</p>' +
+    '</div>',
+};
+
 // 5/4 ADMIN view 검증: factcheck "표준 wording 부재" soft-warn은 본문에 의미상 동등한 다른 wording의
 // disclaimer가 있어도 발생. broader idempotent check — '면책 고지' / '면책고지' (이모지 변형 포함) 매칭이면 skip.
 const DISCLAIMER_PATTERNS = ['면책 고지', '면책고지'];
+const AUTHOR_BOX_PATTERN = 'apt-signal 운영자|health-signal 운영자|trip-signal 운영자';
 
 function injectStandardDisclaimer(html: string): string {
   if (DISCLAIMER_PATTERNS.some((p) => html.includes(p))) return html; // idempotent
   const lastDivIdx = html.lastIndexOf('</div>');
   if (lastDivIdx < 0) return html + STANDARD_DISCLAIMER_HTML;
   return html.slice(0, lastDivIdx) + STANDARD_DISCLAIMER_HTML + html.slice(lastDivIdx);
+}
+
+function injectAuthorBox(html: string, niche: 'HS' | 'TS' | 'AS'): string {
+  if (new RegExp(AUTHOR_BOX_PATTERN).test(html)) return html; // idempotent
+  return html + AUTHOR_BOX_BY_NICHE[niche];
 }
 
 export interface EditorReviewInput {
@@ -46,6 +79,7 @@ export interface EditorReviewResult {
   reason?: string;
   feedback?: string;
   disclaimer_inserted?: boolean; // signals caller to update draft.content_html
+  author_box_inserted?: boolean;
   modified_html?: string;        // returned separately — caller decides to apply
   final_html?: string;           // from LLM persona output, present when LLM approves (status='approved')
   final_meta?: {                 // from LLM persona output, present when LLM approves
@@ -79,10 +113,21 @@ export async function review(input: EditorReviewInput): Promise<EditorReviewResu
     );
   }
 
-  // Step 2: YMYL factcheck (WS/AS niche only)
+  // Step 2a: Author box injection (all niches — AdSense E-E-A-T authorship signal)
+  let authorBoxInserted = false;
   let disclaimerInserted = false;
   let modifiedHtml: string | undefined;
 
+  {
+    const injected = injectAuthorBox(draft.content_html, niche);
+    if (injected !== draft.content_html) {
+      authorBoxInserted = true;
+      modifiedHtml = injected;
+      console.log(`[editor] author box injected for ${niche}`);
+    }
+  }
+
+  // Step 2b: YMYL factcheck (HS/AS niche only)
   if (niche === 'HS' || niche === 'AS') {
     // factcheck를 hard reject로 사용하지 않음. 운영 데이터 누적 전엔 학술 수준 출처(DOI/저널/URL) 강제는
     // 비현실적 (LLM이 매번 fail). 일단 console.warn 으로 logging + disclaimer만 적용. score deduction은
@@ -103,10 +148,13 @@ export async function review(input: EditorReviewInput): Promise<EditorReviewResu
       const fcDescriptions = fc.issues?.map((i) => i.description).join('; ') ?? 'factcheck 실패';
       console.warn(`[editor] factcheck soft-warn for ${niche} (no hard reject): ${fcDescriptions}`);
     }
-    // Disclaimer was added by factcheck — return separately, do NOT mutate input
+    // Disclaimer injection: base off modifiedHtml (contains author box) if present, else draft.content_html
+    const baseForDisclaimer = modifiedHtml ?? draft.content_html;
     if (fc.disclaimer_added && fc.modified_html) {
+      // factcheck returned its own modified_html — re-inject author box on top if needed
       disclaimerInserted = true;
-      modifiedHtml = fc.modified_html;
+      const withAuthorBox = injectAuthorBox(fc.modified_html, niche);
+      modifiedHtml = withAuthorBox;
     } else if (fc.verdict === 'needs_revision') {
       // 5/3~5/4 evidence (자연실험 9건 발행 중 AS 78/85/88 누락):
       // factcheck가 disclaimer 누락을 issues.type='disclaimer'로 감지하고 soft-warn 으로만 보고하면서
@@ -114,8 +162,8 @@ export async function review(input: EditorReviewInput): Promise<EditorReviewResu
       // L1 fallback: editor가 자체 표준 면책 박스 inject. idempotent (⚠️ 면책 고지 이미 있으면 skip).
       const hasDisclaimerIssue = fc.issues?.some((i) => i.type === 'disclaimer') ?? false;
       if (hasDisclaimerIssue) {
-        const injected = injectStandardDisclaimer(draft.content_html);
-        if (injected !== draft.content_html) {
+        const injected = injectStandardDisclaimer(baseForDisclaimer);
+        if (injected !== baseForDisclaimer) {
           disclaimerInserted = true;
           modifiedHtml = injected;
           console.warn(`[editor] L1 fallback disclaimer injected for ${niche} (factcheck soft-warn + disclaimer_added missing)`);
@@ -171,6 +219,12 @@ export async function review(input: EditorReviewInput): Promise<EditorReviewResu
   const score = parsed.quality_score ?? parsed.score ?? (llmRevisionNeeded ? 60 : 85);
   const llmFeedback = parsed.revision_notes ?? '';
 
+  const injectionMeta = {
+    ...(authorBoxInserted && { author_box_inserted: true }),
+    ...(disclaimerInserted && { disclaimer_inserted: true }),
+    ...(modifiedHtml !== undefined && { modified_html: modifiedHtml }),
+  };
+
   // Combine all failure signals
   if (issues.length > 0 || llmRevisionNeeded) {
     const feedbackParts = [...issues];
@@ -181,7 +235,7 @@ export async function review(input: EditorReviewInput): Promise<EditorReviewResu
       score,
       reason: feedbackParts.join('; '),
       feedback: feedbackParts.join('\n'),
-      ...(disclaimerInserted && { disclaimer_inserted: true, modified_html: modifiedHtml }),
+      ...injectionMeta,
     };
   }
 
@@ -189,7 +243,7 @@ export async function review(input: EditorReviewInput): Promise<EditorReviewResu
   return {
     verdict: 'pass',
     score,
-    ...(disclaimerInserted && { disclaimer_inserted: true, modified_html: modifiedHtml }),
+    ...injectionMeta,
     ...(parsed.final_html !== undefined && { final_html: parsed.final_html }),
     ...(parsed.final_meta !== undefined && { final_meta: parsed.final_meta }),
   };

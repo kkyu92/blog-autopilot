@@ -301,8 +301,8 @@ async function writeAndReview(
 
     // 5/2 8건 spot-check evidence: factcheck → editor.modified_html 메커니즘은 동작하지만
     // caller(여기)가 무시 → publish가 disclaimer 누락된 원본 사용. 5/1 3건 + 5/2 2건 사후 patch
-    // 패턴 발생. fix: review가 disclaimer 자동 inject 했으면 publish 직전 content_html에 반영.
-    if (result.disclaimer_inserted && result.modified_html) {
+    // 패턴 발생. fix: review가 disclaimer/author_box 자동 inject 했으면 publish 직전 content_html에 반영.
+    if (result.modified_html) {
       draftWithImages.content_html = result.modified_html;
     }
 
