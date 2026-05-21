@@ -1,7 +1,15 @@
 # Content Autopilot — TODO
 
-> 마지막 점검: 2026-05-19 (수동 전반 점검)
-> 빌드: **FAIL** (Next.js app/ 미존재, 미변동) | 테스트: **363 PASS / 0 FAIL** (미변동) | Lint: **8 errors, 2 warnings** (미변동 — llm.test.ts 3개, trends.test.ts 5개 errors / fetch.mjs·wp-to-blogger.mjs warnings)
+> 마지막 점검: 2026-05-21 (평일 아침 자동 점검)
+> 빌드: **FAIL** (Next.js app/ 미존재, 미변동) | 테스트: **356 PASS / 7 FAIL** (**회귀 발생** — 5/19 대비 +7 fail) | Lint: **8 errors, 3 warnings** (warning 1개 신규 — patch-author-box.mjs)
+>
+> **5/21 주요 변경사항** (5/19 이후 8개 커밋):
+> - `dd53edb` feat(adsense): E-E-A-T 강화 — author box 자동 주입 + 공식 출처 링크 필수화 → **editor.test.ts 5 FAIL 유발**
+> - `d4418db` feat(adsense): JSON-LD Article+FAQPage schema 주입 → **auto-publish.test.ts Scenario 9 FAIL 유발**
+> - `2c921d4` fix(llm): jsonrepair로 content_html 이중이스케이프 수정
+> - `c052d46` feat(publish): 일 발행 9→12 (4 slot)
+> - `5b10a35` feat(molit): 국토교통부 실거래가 API 연동 — AS 니치 실데이터 주입
+> - `9bb3137` feat(patch-molit-data): AS 기존 게시물 14건 실거래가 섹션 일괄 패치 스크립트
 >
 > **5/19 주요 변경사항**:
 > - `2788473` feat(daily-check) + fix(trends): pickQueue fallback retry + KST 08:17 cron 자동화 정리 커밋 (2026-05-19 KST 07:19)
@@ -168,6 +176,25 @@
 - `2788473` (May 19 KST 07:19) — daily-check + trends 관련 커밋 정리. 코드 변경 없음(빈 커밋 형태).
 - STATUS.md 여전히 outdated (테스트 13개 표기, 실제 363개) — 5/18에 이어 미수정.
 - 모든 워크플로우 `pnpm/action-setup version: 9` vs 실제 v10.33.0 불일치 — 5/18에 이어 미수정.
+
+---
+
+## 신규 발견 이슈 (2026-05-21)
+
+### 테스트 회귀 (즉시 수정 필요) — 5/19 대비 0→7 FAIL
+
+- [ ] **`editor.test.ts` 5 FAIL** — `dd53edb` (author box 자동 주입) 사이드 이펙트. 테스트가 `result.modified_html === undefined`를 기대하는 "fallback skip" 케이스에서 author box가 항상 주입돼 non-undefined 반환. 해결 방안: ① author box 주입을 별도 조건으로 분리하거나 ② 해당 테스트들이 author box 포함 HTML을 허용하도록 업데이트.
+  - `factcheck disclaimer_added=true → disclaimer_inserted=true + modified_html 반환 (input 불변)`
+  - `factcheck disclaimer issue + "⚠️ 면책 고지" 있음 → fallback skip`
+  - `factcheck disclaimer issue + "⚖️ 면책고지" 있음 → fallback skip`
+  - `factcheck disclaimer issue + "※ 면책 고지" 있음 → fallback skip`
+  - `factcheck needs_revision + source issue만 → fallback inject 안 함`
+- [ ] **`auto-publish.test.ts` Scenario 9 FAIL** — `d4418db` (JSON-LD schema 주입) 사이드 이펙트. publish된 HTML에 `<script type="application/ld+json">` 블록이 추가되어 exact equality 실패. 테스트의 expected HTML 또는 assertion 방식 업데이트 필요.
+- [ ] **`trends.test.ts` `signals.daily_trends injection` FAIL** — 5000ms timeout 초과. `callClaude` mock이 resolve되지 않거나 async 체인에서 hang 발생. mock 설정 또는 timeout 값 조정 필요.
+
+### Lint 신규 경고 (2026-05-21)
+
+- [ ] `scripts/patch-author-box.mjs:72` — `getAccessToken` 함수 정의 후 미사용 (`@typescript-eslint/no-unused-vars` warning 신규) — 함수 제거 또는 실제 사용 코드 연결 필요 (`dd53edb` 커밋 추가)
 
 ---
 
