@@ -63,6 +63,9 @@ jobs:
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
 
+          # 국토교통부 실거래가 API (AS 니치 실데이터 주입)
+          MOLIT_API_KEY: ${{ secrets.MOLIT_API_KEY }}
+
           # WordPress 멀티사이트 (WS / TS)
           # healthcheck.ts + tokens.ts 가 사용하는 실제 키 이름
           WORDPRESS_WS_ACCESS_TOKEN: ${{ secrets.WORDPRESS_WS_ACCESS_TOKEN }}

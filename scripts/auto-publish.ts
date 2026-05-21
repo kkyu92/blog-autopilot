@@ -27,6 +27,7 @@ import {
   loadRecentByNiche,
   type SemanticDedupCandidate,
 } from '../src/lib/semantic-dedup';
+import { buildTransactionContext } from '../src/lib/molit';
 
 const PROMPTS_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'prompts', 'agents');
 const WRITER_PROMPT = readFileSync(join(PROMPTS_DIR, 'content-writer.md'), 'utf8');
@@ -242,6 +243,18 @@ async function writeAndReview(
   let lastImages: ImageResult[] = [];
   let lastReview: EditorReviewResult | null = null;
 
+  // AS 니치는 실거래가 데이터 inject (지역 키워드 포함 시)
+  let realTransactionData: string | null = null;
+  if (niche === 'AS') {
+    realTransactionData = await buildTransactionContext(keyword).catch((err) => {
+      console.warn(`[molit] buildTransactionContext error: ${err instanceof Error ? err.message : String(err)}`);
+      return null;
+    });
+    if (realTransactionData) {
+      console.log(`[AS] molit 실거래가 데이터 주입: ${keyword} (${realTransactionData.split('\n')[0]})`);
+    }
+  }
+
   for (let attempt = 1; attempt <= 2; attempt++) {
     const userMessage = JSON.stringify({
       niche,
@@ -250,6 +263,7 @@ async function writeAndReview(
       include_charts: false, // 차트는 파이프라인 미지원 (chart_slots 빈 배열 강제)
       chart_recommended: false,
       revision_feedback: attempt === 1 ? null : lastFeedback,
+      ...(realTransactionData ? { real_transaction_data: realTransactionData } : {}),
     });
 
     const writerOutput = await callWriterWithTimeoutRetry(
