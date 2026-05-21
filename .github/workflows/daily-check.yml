@@ -1,11 +1,11 @@
 name: Daily Check
 
-# KST 08:17 매일 — 오늘 9게시물 달성 검증. 부족 시 자동 보충 dispatch.
-# auto-publish cron(KST 01:17) 후 ~7시간 뒤. 보충 dispatch 의 90~120min 대기 포함.
+# KST 07:17 매일 — 오늘 12게시물 달성 검증. 부족 시 자동 보충 dispatch.
+# auto-publish cron(KST 01:17) 후 ~6시간 뒤. 보충 dispatch 의 90~120min 대기 포함.
 
 on:
   schedule:
-    - cron: '17 23 * * *'  # UTC 23:17 = KST 08:17
+    - cron: '17 22 * * *'  # UTC 22:17 = KST 07:17
   workflow_dispatch: {}
 
 jobs:

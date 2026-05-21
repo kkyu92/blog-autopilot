@@ -1,9 +1,9 @@
 #!/usr/bin/env tsx
 // scripts/daily-check.ts
-// KST 08:17 cron — 오늘 9게시물 달성 검증. 부족 시 자동 보충 dispatch. RC 분석 + 리포트.
+// KST 07:17 cron — 오늘 12게시물 달성 검증. 부족 시 자동 보충 dispatch. RC 분석 + 리포트.
 //
 // flow:
-//   1. 오늘 KST cron run 찾기 (auto-publish.yml, started ~7h ago)
+//   1. 오늘 KST cron run 찾기 (auto-publish.yml, started ~6h ago)
 //   2. DB count per niche
 //   3. 부족 시 dispatch fill (1 slot/niche, 최대 3회)
 //   4. 각 dispatch 완료 대기 (max 30min)
@@ -16,8 +16,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const NICHES = ['HS', 'TS', 'AS'] as const;
-const TARGET_PER_NICHE = 3;
-const TARGET_TOTAL = 9;
+const TARGET_PER_NICHE = 4;
+const TARGET_TOTAL = 12;
 const MAX_FILL_DISPATCHES = 3;
 const FILL_WAIT_MAX_MIN = 30;
 
