@@ -408,11 +408,17 @@ async function publishToPlatform(
   // finalSlug + meta_description은 Blogger API에서 직접 사용 X (URL은 title 기반 자동 생성, excerpt 별도 미지원).
   void finalSlug;
   void imageResults;
+
+  const faqItems = (draft.faq_schema as FaqItem[] | undefined ?? []).filter(
+    (f): f is FaqItem => typeof f?.question === 'string' && typeof f?.answer === 'string',
+  );
+  const contentWithSchema = injectJsonLd(draft.content_html, draft.title, niche, scheduledFor, faqItems);
+
   return bloggerPublish(
     niche,
     {
       title: draft.title,
-      content: draft.content_html,
+      content: contentWithSchema,
       labels: draft.labels,
     },
     scheduledFor,
@@ -424,6 +430,85 @@ function platformForNiche(niche: Niche): 'blogger_as' | 'blogger_trip' | 'blogge
   // (도메인 trip-signal.blogspot.com — niche 명명은 TS 그대로 유지)
   if (niche === 'HS') return 'blogger_health';
   return 'blogger_as';
+}
+
+const NICHE_SITE_META: Record<Niche, { siteName: string; siteUrl: string; authorName: string; authorUrl: string }> = {
+  AS: {
+    siteName: 'apt-signal',
+    siteUrl: 'https://apt-signal.blogspot.com',
+    authorName: '시그널 에디터',
+    authorUrl: 'https://apt-signal.blogspot.com/p/blog-page.html',
+  },
+  HS: {
+    siteName: 'health-signal',
+    siteUrl: 'https://health-signal.blogspot.com',
+    authorName: '헬스 에디터',
+    authorUrl: 'https://health-signal.blogspot.com/p/health-signal.html',
+  },
+  TS: {
+    siteName: 'trip-signal',
+    siteUrl: 'https://trip-signal.blogspot.com',
+    authorName: '트립 에디터',
+    authorUrl: 'https://trip-signal.blogspot.com/p/trip-signal.html',
+  },
+};
+
+interface FaqItem {
+  question: string;
+  answer: string;
+}
+
+function injectJsonLd(
+  html: string,
+  title: string,
+  niche: Niche,
+  scheduledFor: Date,
+  faqSchema: FaqItem[],
+): string {
+  const meta = NICHE_SITE_META[niche];
+  const dateIso = scheduledFor.toISOString();
+
+  const articleSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'BlogPosting',
+    headline: title,
+    author: {
+      '@type': 'Person',
+      name: meta.authorName,
+      url: meta.authorUrl,
+    },
+    publisher: {
+      '@type': 'Organization',
+      name: meta.siteName,
+      url: meta.siteUrl,
+    },
+    datePublished: dateIso,
+    dateModified: dateIso,
+    mainEntityOfPage: {
+      '@type': 'WebPage',
+      '@id': meta.siteUrl,
+    },
+  };
+
+  const schemas: object[] = [articleSchema];
+
+  if (faqSchema.length > 0) {
+    schemas.push({
+      '@context': 'https://schema.org',
+      '@type': 'FAQPage',
+      mainEntity: faqSchema.map((item) => ({
+        '@type': 'Question',
+        name: item.question,
+        acceptedAnswer: { '@type': 'Answer', text: item.answer },
+      })),
+    });
+  }
+
+  const scriptBlock = schemas
+    .map((s) => `<script type="application/ld+json">\n${JSON.stringify(s, null, 2)}\n</script>`)
+    .join('\n');
+
+  return html + '\n' + scriptBlock;
 }
 
 // 주의: state.queueIdx를 mutation (pickViableCandidate 내부). 슬롯 순차 처리 가정. 병렬화 시 재설계 필요.
