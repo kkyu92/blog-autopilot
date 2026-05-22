@@ -57,34 +57,49 @@ input ↔ process ↔ output ↔ feedback (매출/검색/PV) → 다음 input �
 
 ---
 
-## Phase 3 — Blogger Analytics 통합 (즉시 가능)
+## Phase 3 — GA4 통합 (snippet ✅ / API 미시작)
 
-**목표**: 페이지뷰 / 체류시간 / 이탈률 → 인기 글 패턴 추출 → next gen content spec 자동 생성.
+**목표**: 페이지뷰 / 체류시간 / 이탈률 / 이벤트 → 인기 글 패턴 추출 → next gen content spec 자동 생성.
 
-### Scope
-1. **Blogger Insights API** 또는 **GA4 통합** (둘 중 1택)
-   - Blogger Insights: 기본 (페이지뷰만)
-   - GA4: 풍부 (체류시간 / 이벤트 / 전환) 단 추가 setup
-2. **Daily fetch** (`scripts/analytics-fetch.mjs`)
-3. **`page_metrics` 테이블** — date / blog / post_id / pageviews / avg_time / bounce_rate
-4. **인기 글 패턴 분석** — top 10 pageviews → 공통 특징 추출:
+**확정**: GA4 사용 (Blogger Insights X). 이유: 공식 API 안정성 + 체류시간 데이터 (클릭베이트 vs 진짜 가치 구분) + 전환 추적 → Phase 4 매출 매핑.
+
+### 현 상태
+- ✅ GA4 property 3개 (apt-signal / health-signal / trip-signal) 사용자 생성 완료
+- ✅ Blogger 템플릿 gtag snippet inject (데이터 GA4 dashboard 누적 중)
+- ❌ API 통합 미시작
+
+### Prerequisite (사용자 작업)
+- [ ] Measurement ID 3개 확보 → `.env` 박제 (`GA_MEASUREMENT_ID_AS` / `_HS` / `_TS`)
+- [ ] GCP Service Account 생성 + GA4 property 권한 부여 (`Viewer`)
+- [ ] Service Account JSON key 다운로드 → `.env` 박제 (`GA_SERVICE_ACCOUNT_KEY_PATH`)
+
+### Scope (구현)
+1. **`@google-analytics/data` npm install**
+2. **Daily fetch** (`scripts/analytics-fetch.mjs`) — 매일 어제 데이터 수집:
+   - 페이지별 pageviews / avg session duration / bounce rate / engagement rate
+   - 트래픽 source (organic search / direct / referral)
+   - 디바이스 (mobile / desktop / tablet)
+3. **`page_metrics` 테이블** — date / blog / post_url / pageviews / avg_time / bounce_rate / engagement
+4. **인기 글 패턴 분석** (`scripts/analytics-analyze.mjs`) — top 10 pageviews:
    - 제목 패턴 (질문형 / 숫자형 / 시기성)
    - keyword cluster
    - niche 분포
-5. **trends 통합** — 인기 패턴 → 다음 발행 spec 가중치
+5. **trends 통합** (`src/lib/trends.ts` enhance) — 인기 패턴 → 다음 발행 spec 가중치
 
 ### Outputs
 - `scripts/analytics-fetch.mjs`
-- `page_metrics` 테이블
-- `scripts/analytics-analyze.mjs` (주간 인기 글 리포트)
+- `scripts/analytics-analyze.mjs`
+- `page_metrics` 테이블 schema (`src/lib/db.ts`)
+- 주간 인기 글 리포트 (`docs/seo/analytics-weekly-YYYY-MM-DD.json`)
 
 ### Risk
-- Blogger Insights API = 제한 적음
-- GA4 통합 시 setup 큼 (Google Tag Manager 또는 직접 inject)
-- 페이지뷰 데이터 = 트래픽 적으면 의미 없음 (현재 blog별 트래픽 미상)
+- GA4 API quota: 1500 req/day (충분)
+- 페이지뷰 데이터 = 트래픽 적으면 noise (현재 blog별 PV 미상 — fetch 첫 주 baseline 으로 확인)
+- 서로 다른 GA4 property 3개 = service account 가 3개 모두 권한 필요
 
 ### Estimate
-- spec → 구현: 2~3 cycle
+- prerequisite: 사용자 30분 (GCP 클릭 작업)
+- spec → 구현: 2~3 cycle (워커 sess)
 - 첫 신호: 2~4주 후 (트래픽 누적 필요)
 
 ---
@@ -182,8 +197,8 @@ input ↔ process ↔ output ↔ feedback (매출/검색/PV) → 다음 input �
 
 ## Open Questions (사용자 결정)
 
-1. **GA4 vs Blogger Insights** — 둘 중 1택 (GA4 풍부 / Insights 간단)
-2. **3 번째 블로그 선택** — apt-signal / health-signal / ??? (TS niche blogger URL 미확정)
+1. ~~GA4 vs Blogger Insights~~ ✅ **GA4 확정** (snippet 이미 inject, property 3개 생성됨)
+2. ~~3 번째 블로그 선택~~ ✅ **이미 확정** — AS=apt-signal / HS=health-signal / TS=trip-signal
 3. **A/B test 시작 시점** — Phase 2 후 즉시 vs 트래픽 임계 도달 후
 4. **워커 자체 develop-cycle 회전 (C3)** — Phase 2~6 진행 자동화 layer 추가 여부
 
@@ -191,6 +206,9 @@ input ↔ process ↔ output ↔ feedback (매출/검색/PV) → 다음 input �
 
 ## 다음 step
 
-1. 사용자 review (본 spec 확정)
-2. Phase 2 (GSC) 구현 cycle 시작 (워커 sess)
-3. 1주 baseline 후 Phase 3 우선순위 재평가
+1. 사용자 GA4 prerequisite 작업 (30분):
+   - Measurement ID 3개 → `.env`
+   - GCP Service Account + GA4 권한 + JSON key
+2. 사용자 GSC OAuth 권한 부여 (3 property)
+3. Phase 2 (GSC) + Phase 3 (GA4) 구현 cycle 시작 (워커 sess 또는 본 sess 자율)
+4. 1~2주 baseline 후 우선순위 재평가
