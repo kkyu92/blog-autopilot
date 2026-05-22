@@ -69,9 +69,10 @@ input ↔ process ↔ output ↔ feedback (매출/검색/PV) → 다음 input �
 - ❌ API 통합 미시작
 
 ### Prerequisite (사용자 작업)
-- [ ] Measurement ID 3개 확보 → `.env` 박제 (`GA_MEASUREMENT_ID_AS` / `_HS` / `_TS`)
-- [ ] GCP Service Account 생성 + GA4 property 권한 부여 (`Viewer`)
-- [ ] Service Account JSON key 다운로드 → `.env` 박제 (`GA_SERVICE_ACCOUNT_KEY_PATH`)
+- [x] GA4 Property ID 3개 → `.env.local` 박제 완료 (2026-05-22)
+  - `GA4_PROPERTY_ID_APT=535902528` / `_HEALTH=535903543` / `_TRIP=535917110`
+- [ ] GCP Service Account 생성 + 3 GA4 property `Viewer` 권한 부여
+- [ ] Service Account JSON key 다운로드 → `.env.local` 박제 (`GA_SERVICE_ACCOUNT_KEY_PATH`)
 
 ### Scope (구현)
 1. **`@google-analytics/data` npm install**
