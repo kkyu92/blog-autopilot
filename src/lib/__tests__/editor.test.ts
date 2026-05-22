@@ -207,7 +207,9 @@ describe('editor.review', () => {
     const result = await review({ draft, niche: 'AS' });
 
     expect(result.disclaimer_inserted).toBe(true);
-    expect(result.modified_html).toBe(modifiedHtml);
+    // dd53edb: author box 가 disclaimer 위에 자동 inject → modified_html 가 disclaimer + author box 둘 다 포함
+    expect(result.modified_html).toContain('이 글은 정보 제공 목적이며');
+    expect(result.modified_html).toContain('글쓴이');
     // Input must NOT be mutated
     expect(draft.content_html).toBe(originalHtml);
   });
@@ -273,7 +275,9 @@ describe('editor.review', () => {
     const result = await review({ draft, niche: 'AS' });
 
     expect(result.disclaimer_inserted).toBeUndefined();
-    expect(result.modified_html).toBeUndefined();
+    // dd53edb: author box 가 fallback skip 케이스에도 자동 inject — disclaimer fallback 만 skip 보존
+    expect(result.modified_html).toContain('글쓴이');
+    expect(result.modified_html).not.toContain('이 글은 정보 제공 목적이며');
   });
 
   // Test 8d: source-only issue (disclaimer issue 없음) → fallback inject 안 함
@@ -297,7 +301,9 @@ describe('editor.review', () => {
     const result = await review({ draft: validDraft(), niche: 'HS' });
 
     expect(result.disclaimer_inserted).toBeUndefined();
-    expect(result.modified_html).toBeUndefined();
+    // dd53edb: author box 자동 inject — fallback disclaimer 만 skip 보존
+    expect(result.modified_html).toContain('글쓴이');
+    expect(result.modified_html).not.toContain('이 글은 정보 제공 목적이며');
   });
 
   // Test 9: LLM revision_needed → editor revision_needed even if quantitative passes

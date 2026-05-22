@@ -111,7 +111,7 @@ describe('callClaude', () => {
     // 안 = EC 95 88 — split as [EC] then [95 88]
     (spawn as ReturnType<typeof vi.fn>).mockReturnValue({
       stdout: {
-        on: (e: string, cb: any) => {
+        on: (e: string, cb: (...args: unknown[]) => void) => {
           if (e === 'data') {
             cb(Buffer.from([0xEC]));
             cb(Buffer.from([0x95, 0x88]));
@@ -119,7 +119,7 @@ describe('callClaude', () => {
         },
       },
       stderr: { on: vi.fn() },
-      on: (e: string, cb: any) => { if (e === 'close') cb(0, null); },
+      on: (e: string, cb: (...args: unknown[]) => void) => { if (e === 'close') cb(0, null); },
     });
     const result = await callClaude({ systemPrompt: 's', userMessage: 'u' });
     expect(result).toBe('안');
@@ -171,7 +171,7 @@ describe('callClaude', () => {
     (spawn as ReturnType<typeof vi.fn>).mockReturnValue({
       stdout: { on: vi.fn() },
       stderr: { on: vi.fn() },
-      on: (e: string, cb: any) => { if (e === 'close') cb(null, 'SIGTERM'); },
+      on: (e: string, cb: (...args: unknown[]) => void) => { if (e === 'close') cb(null, 'SIGTERM'); },
     });
     await expect(callClaude({ systemPrompt: 'sys', userMessage: 'hi' })).rejects.toThrow('signal SIGTERM');
   });

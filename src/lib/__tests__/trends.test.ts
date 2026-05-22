@@ -26,7 +26,7 @@ const VALID_CANDIDATE_2 = {
 };
 
 // Empty signals — bypasses ALL external fetch calls (daily_trends + niche-specific aggregators)
-const NO_SIGNALS = { daily_trends: [] as any[], realestate: [] as any[], wellness: [] as any[], travel: [] as any[] };
+const NO_SIGNALS = { daily_trends: [] as unknown[], realestate: [] as unknown[], wellness: [] as unknown[], travel: [] as unknown[] };
 
 describe('pickQueue', () => {
   beforeEach(() => {
@@ -217,7 +217,7 @@ describe('pickQueue', () => {
 
     const callArgs = vi.mocked(callClaude).mock.calls[0][0];
     const parsed = JSON.parse(callArgs.userMessage);
-    expect(parsed.daily_trends_kr.some((t: any) => t.keyword === '부산 여행')).toBe(true);
+    expect(parsed.daily_trends_kr.some((t: { keyword: string }) => t.keyword === '부산 여행')).toBe(true);
   });
 
   // Test 13: callClaude throws → propagates

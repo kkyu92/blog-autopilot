@@ -473,8 +473,10 @@ describe('auto-publish.ts integration (7 시나리오)', () => {
     // publishScheduled가 modified_html을 받아야 함 (원본 아닌)
     expect(bloggerPublish).toHaveBeenCalledTimes(1);
     const publishedPost = vi.mocked(bloggerPublish).mock.calls[0][1];
-    expect(publishedPost.content).toBe(modifiedHtml);
+    // d4418db: JSON-LD schema 자동 inject — modifiedHtml 본문 포함 + JSON-LD 추가
+    expect(publishedPost.content).toContain(modifiedHtml);
     expect(publishedPost.content).toContain('⚠️ 면책');
+    expect(publishedPost.content).toContain('application/ld+json');
   });
 
   it('Scenario 7: batch slug 충돌 → -2 suffix, 두 글 모두 published', async () => {
