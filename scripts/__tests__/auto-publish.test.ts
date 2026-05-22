@@ -12,6 +12,9 @@ vi.mock('../../src/lib/healthcheck', () => ({
 vi.mock('../../src/lib/trends', () => ({
   pickQueue: vi.fn(),
 }));
+vi.mock('../../src/lib/fixed-topics', () => ({
+  getFixedTopicKeyword: vi.fn(async () => null),
+}));
 vi.mock('../../src/lib/dedup', () => ({
   checkAndResolve: vi.fn(),
 }));
