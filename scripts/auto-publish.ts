@@ -14,6 +14,7 @@ import { dirname, join } from 'node:path';
 import { execFileSync, execSync } from 'node:child_process';
 import { runAll } from '../src/lib/healthcheck';
 import { pickQueue, type KeywordCandidate } from '../src/lib/trends';
+import { getFixedTopicKeyword } from '../src/lib/fixed-topics';
 import { checkAndResolve, type DedupResult } from '../src/lib/dedup';
 import { getDb } from '../src/lib/db';
 import { callClaude, getClaudeCallStats } from '../src/lib/llm';
@@ -147,6 +148,17 @@ async function pickAllQueues(niches: Niche[], slotCount: number): Promise<NicheQ
       console.warn(`[auto-publish] WARN ${niche} queue empty, skipping niche`);
       continue;
     }
+
+    // 고정 주제 슬롯 (slot 1): AS=인기 청약 공고, TS=인기 국내 축제, HS=숙면 variant
+    const fixedKeyword = await getFixedTopicKeyword(niche).catch((err) => {
+      console.warn(`[fixed-topics] ${niche} failed: ${err instanceof Error ? err.message : String(err)}`);
+      return null;
+    });
+    if (fixedKeyword) {
+      keywords.unshift(fixedKeyword);
+      console.log(`[auto-publish] queue ${niche}: fixed topic prepended → ${fixedKeyword.keyword}`);
+    }
+
     queues.push({ niche, keywords });
   }
   return queues;
