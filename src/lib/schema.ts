@@ -80,6 +80,38 @@ export const gscMetrics = sqliteTable(
 export type GscMetric = typeof gscMetrics.$inferSelect;
 export type NewGscMetric = typeof gscMetrics.$inferInsert;
 
+// GA4 daily page metrics — pageviews/세션/체류시간/이탈률 누적.
+// Phase 3 (monetization closed loop — docs/roadmap-gsc-analytics.md).
+// avg_session_duration_sec / bounce_rate / engagement_rate 는 integer 저장 (×100 / ×10000 / ×10000).
+export const pageMetrics = sqliteTable(
+  "page_metrics",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    date: text("date").notNull(), // YYYY-MM-DD (KST)
+    blog: text("blog", { enum: ["AS", "HS", "TS"] }).notNull(),
+    pagePath: text("page_path").notNull(), // 정규화 path
+    pageviews: integer("pageviews").notNull().default(0),
+    sessions: integer("sessions").notNull().default(0),
+    avgSessionDurationSec: integer("avg_session_duration_sec").notNull().default(0), // ×100 (예: 12.34초 = 1234)
+    bounceRate: integer("bounce_rate").notNull().default(0), // ×10000 (예: 65.23% = 6523)
+    engagementRate: integer("engagement_rate").notNull().default(0), // ×10000
+    fetchedAt: text("fetched_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+  },
+  (table) => [
+    uniqueIndex("idx_pm_date_blog_page").on(
+      table.date,
+      table.blog,
+      table.pagePath,
+    ),
+    index("idx_pm_blog_date").on(table.blog, table.date),
+  ],
+);
+
+export type PageMetric = typeof pageMetrics.$inferSelect;
+export type NewPageMetric = typeof pageMetrics.$inferInsert;
+
 export type Niche = "HS" | "TS" | "AS";
 export type Platform =
   | "wordpress_ws"

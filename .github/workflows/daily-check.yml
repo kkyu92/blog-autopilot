@@ -41,3 +41,13 @@ jobs:
           GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
           DATABASE_PATH: ${{ secrets.DATABASE_PATH }}
         run: node scripts/gsc-fetch.mjs --days=1
+
+      - name: GA4 daily fetch (Phase 3 — monetization closed loop)
+        continue-on-error: true  # GA4 fetch fail 해도 daily-check 결과 보존
+        env:
+          GA4_PROPERTY_ID_APT: ${{ secrets.GA4_PROPERTY_ID_APT }}
+          GA4_PROPERTY_ID_HEALTH: ${{ secrets.GA4_PROPERTY_ID_HEALTH }}
+          GA4_PROPERTY_ID_TRIP: ${{ secrets.GA4_PROPERTY_ID_TRIP }}
+          GA_SERVICE_ACCOUNT_KEY_PATH: ${{ secrets.GA_SERVICE_ACCOUNT_KEY_PATH }}
+          DATABASE_PATH: ${{ secrets.DATABASE_PATH }}
+        run: node scripts/analytics-fetch.mjs --days=1
