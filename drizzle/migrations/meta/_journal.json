@@ -15,6 +15,13 @@
       "when": 1777144309766,
       "tag": "0001_pr5_schema_boost",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1779413817842,
+      "tag": "0002_elite_lila_cheney",
+      "breakpoints": true
     }
   ]
 }

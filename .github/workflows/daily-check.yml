@@ -32,3 +32,12 @@ jobs:
           DATABASE_PATH: ${{ secrets.DATABASE_PATH }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: pnpm tsx scripts/daily-check.ts
+
+      - name: GSC daily fetch (Phase 2 — monetization closed loop)
+        continue-on-error: true  # GSC fetch fail 해도 daily-check 결과 보존
+        env:
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
+          DATABASE_PATH: ${{ secrets.DATABASE_PATH }}
+        run: node scripts/gsc-fetch.mjs --days=1

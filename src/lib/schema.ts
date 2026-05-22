@@ -46,6 +46,40 @@ export const publishedPosts = sqliteTable(
 export type PublishedPost = typeof publishedPosts.$inferSelect;
 export type NewPublishedPost = typeof publishedPosts.$inferInsert;
 
+// GSC daily metrics — 매일 어제 데이터 누적. 검색 쿼리/페이지 별 metrics.
+// 무한 성장 monetization closed loop Phase 2 (docs/roadmap-gsc-analytics.md).
+// ctr / position 은 integer 저장 (×10000 / ×100) — drizzle sqlite-core real 미지원, float precision 보존.
+export const gscMetrics = sqliteTable(
+  "gsc_metrics",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    date: text("date").notNull(), // YYYY-MM-DD (KST)
+    blog: text("blog", { enum: ["AS", "HS", "TS"] }).notNull(),
+    page: text("page").notNull(), // 페이지 URL (path only, 정규화)
+    query: text("query").notNull().default(""), // 검색 쿼리 ("" = page 합계)
+    impressions: integer("impressions").notNull().default(0),
+    clicks: integer("clicks").notNull().default(0),
+    ctr: integer("ctr").notNull().default(0), // ×10000 (예: 5.23% = 523)
+    position: integer("position").notNull().default(0), // ×100 (예: 6.18 = 618)
+    fetchedAt: text("fetched_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+  },
+  (table) => [
+    uniqueIndex("idx_gsc_date_blog_page_query").on(
+      table.date,
+      table.blog,
+      table.page,
+      table.query,
+    ),
+    index("idx_gsc_blog_date").on(table.blog, table.date),
+    index("idx_gsc_blog_query").on(table.blog, table.query),
+  ],
+);
+
+export type GscMetric = typeof gscMetrics.$inferSelect;
+export type NewGscMetric = typeof gscMetrics.$inferInsert;
+
 export type Niche = "HS" | "TS" | "AS";
 export type Platform =
   | "wordpress_ws"
