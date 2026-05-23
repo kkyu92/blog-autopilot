@@ -26,6 +26,30 @@ Your home directory is $AGENT_HOME. Everything personal to you lives there.
 - **금지: outdated 연도 표기** — system prompt 의 [CURRENT CONTEXT] "현재 연도" 보다 이전 연도는 학습 데이터 cutoff/정책 발표 연도라도 title 에 절대 표기 금지. 본문에서 "2025년 발표 정책" 처럼 사실 인용은 OK, 단 title 에는 안 됨.
 - **현재 연도 확인**: 항상 system prompt 의 [CURRENT CONTEXT] 섹션 "현재 연도" 사용. 학습 데이터 추정 금지.
 
+### 1-A. AEO (Answer Engine Optimization) 구조 규칙
+
+AI Overviews · ChatGPT · Perplexity 등 AI 검색 엔진이 콘텐츠를 인용할 때 추출하는 패턴을 의도적으로 설계한다. SEO (구글 크롤러) + AEO (AI 검색 엔진) 동시 최적화.
+
+#### 핵심 원칙 3가지
+
+1. **직접 답변 첫 문단 (Answer First)**: 도입부 훅 직후 첫 본문 단락은 **타겟 키워드 질문에 대한 2~3문장 직접 답변**으로 시작한다. "X는 Y입니다. 이유는 Z이기 때문입니다." 형식. AI 검색 엔진이 이 단락을 우선 추출.
+2. **각 H2 섹션 첫 문장 = 소결론**: H2 섹션 첫 문장을 해당 소주제의 핵심 결론으로 시작한다. "숙면을 위한 가장 효과적인 방법은 취침 전 1시간 스크린 차단입니다."처럼 바로 답변.
+3. **FAQ 3개 이상 필수 + 품질 기준**: `faq_schema` 배열에 실제 검색자가 궁금해하는 질문 **최소 3개**. 각 answer는 1~3문장 직접 답변 (긴 설명 X). AI 검색 엔진은 FAQPage schema를 직접 인용 소스로 활용.
+
+#### Answer Box HTML 블록 (도입부 직후 삽입 — 옵션, 핵심 정보 1개 발견 시)
+
+아래 조건 중 1개 해당 시 도입부(첫 본문 단락) 아래에 삽입한다:
+- 키워드가 "X는 언제/어디서/얼마나/어떻게" 형식의 직접 질문형
+- 청약 일정, 정책 시행일, 가격, 기간 등 단일 핵심 수치가 존재
+- 검색자가 1문장으로 알고 싶은 핵심 답변이 명확한 경우
+
+```html
+<div style="margin:24px 0;padding:16px 20px;background:#EBF5FF;border-radius:8px;border-left:4px solid #4285F4;">
+  <p style="margin:0 0 4px 0;font-size:13px;font-weight:600;color:#4285F4;letter-spacing:0.03em;">핵심 답변</p>
+  <p style="margin:0;font-size:16px;font-weight:600;color:#1A1A1A;line-height:1.7;">답변 텍스트 (1~2문장, 구체적 수치 포함)</p>
+</div>
+```
+
 ### 2. 콘텐츠 유형별 작성 템플릿 적용
 - **정보형** (What is X): 정의 → 상세 설명 → 실용 팁 → FAQ
 - **How-to형**: 단계별 가이드 (번호 매기기) → 주의사항 → 팁
@@ -132,6 +156,7 @@ Your home directory is $AGENT_HOME. Everything personal to you lives there.
 10. **태그 (labels)**: `labels` 배열에 타겟 키워드 + 관련 키워드를 한국어 태그로 3~5개 포함한다.
 11. **카테고리 균형**: 한 카테고리가 전체의 30% 초과 금지.
 12. **품질 우선**: 스팸성 대량 포스팅 지양, 색인 품질과 체류 시간 우선.
+13. **AEO FAQ 최소 3개**: `faq_schema` 배열에 질문·답변 쌍 **최소 3개** 필수. 각 answer는 1~3문장 직접 답변. AI 검색 엔진 인용 소스로 활용되므로 구체적 수치·날짜·이유 포함 권장. 빈 배열 또는 2개 이하 금지.
 
 ## Pipeline Position
 

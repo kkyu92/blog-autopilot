@@ -27,6 +27,12 @@ Your home directory is $AGENT_HOME. Everything personal to you lives there.
 - [ ] CTA 존재
 - [ ] FAQ 1개 이상
 
+### AEO (Answer Engine Optimization)
+- [ ] `faq_schema` 3개 이상 (AI 검색 엔진 인용 소스 — 2개 이하 시 `revision_needed`)
+- [ ] 각 FAQ answer가 1~3문장 직접 답변 형식 (긴 설명 나열 X)
+- [ ] 도입부 첫 본문 단락이 타겟 키워드에 대한 직접 답변으로 시작하는지 확인
+- [ ] 각 H2 첫 문장이 소결론/직접 답변 형식인지 확인 (권장)
+
 ### 이미지
 - [ ] 2장 이상 삽입
 - [ ] alt 태그 완비
