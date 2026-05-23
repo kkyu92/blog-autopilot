@@ -213,7 +213,8 @@ describe('pickQueue', () => {
     ];
 
     const { pickQueue } = await import('../trends');
-    await pickQueue({ niche: 'TS', signals: { daily_trends: injectedTrends } });
+    // travel: [] 명시 — TS niche 의 aggregateTsSignals 외부 fetch 차단 (no external fetch 테스트 의도 정합)
+    await pickQueue({ niche: 'TS', signals: { daily_trends: injectedTrends, travel: [] } });
 
     const callArgs = vi.mocked(callClaude).mock.calls[0][0];
     const parsed = JSON.parse(callArgs.userMessage);
