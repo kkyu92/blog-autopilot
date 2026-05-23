@@ -76,9 +76,6 @@ async function gscSitemaps(accessToken, siteUrl) {
   return res.json();
 }
 
-function pad(d) { return String(d).padStart(2, "0"); }
-function toIsoDate(d) { return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`; }
-
 async function main() {
   const accessToken = await refreshAccessToken();
 

@@ -177,7 +177,6 @@ async function main() {
   console.log(`mode: ${DRY_RUN ? 'dry-run' : 'apply'}`);
   validateEnv();
 
-  const accessToken = DRY_RUN ? null : await getBloggerAccessToken();
   const db = DRY_RUN ? null : getDb();
 
   const log = {

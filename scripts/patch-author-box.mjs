@@ -69,22 +69,6 @@ function sleep(ms) {
   return new Promise(r => setTimeout(r, ms));
 }
 
-async function getAccessToken() {
-  const res = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      refresh_token: REFRESH_TOKEN,
-      client_id: CLIENT_ID,
-      client_secret: CLIENT_SECRET,
-      grant_type: 'refresh_token',
-    }),
-  });
-  const data = await res.json();
-  if (data.error) throw new Error(`Token refresh failed: ${JSON.stringify(data)}`);
-  return data.access_token;
-}
-
 // 만료 여유 30초
 function makeTokenManager() {
   let token = null;
