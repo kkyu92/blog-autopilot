@@ -557,6 +557,7 @@ async function processSlot(
   // writeAndReview 내부에서 fetchForSlots + injectImages 후 editor.review 호출.
   let draft: WriterDraft;
   let imageResults: ImageResult[];
+  let editorScore: number | null = null;
   try {
     const out = await writeAndReview(
       niche,
@@ -565,6 +566,7 @@ async function processSlot(
     );
     draft = out.draft;
     imageResults = out.images;
+    editorScore = out.review.score ?? null;
   } catch (err) {
     return {
       niche,
@@ -630,6 +632,7 @@ async function processSlot(
       externalUrl: pubRecord.externalUrl,
       publishedAt: new Date().toISOString(),
       scheduledSlot: scheduledFor,
+      qualityScore: editorScore,
       status: 'published',
     });
   } catch (err) {
