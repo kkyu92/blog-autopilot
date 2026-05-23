@@ -29,67 +29,14 @@ import {
   type SemanticDedupCandidate,
 } from '../src/lib/semantic-dedup';
 import { buildTransactionContext } from '../src/lib/molit';
+import { pickSlotTime, assignSlug, toIsoUtc, errMessage } from './lib/slot-utils';
+import { injectImages } from './lib/html-utils';
 
 const PROMPTS_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'prompts', 'agents');
 const WRITER_PROMPT = readFileSync(join(PROMPTS_DIR, 'content-writer.md'), 'utf8');
 const REQUIRED_DRAFT_FIELDS = ['title', 'slug', 'meta_description', 'content_html', 'word_count'] as const;
-// Note: 슬롯은 sequential pick (테스트 결정성). 모든 niche가 동일하게 09:00→11:00→13:00 순서로 채움 —
-// niche 간 wall-clock stagger 없음. H7 publisher는 동시 호출 가능성 인지 필요.
-const PUBLISH_HOURS_KST = ['09:00', '11:00', '13:00', '15:00', '17:00', '19:00'] as const;
-
-function pickSlotTime(used: Set<string>): string {
-  const available = PUBLISH_HOURS_KST.filter((h) => !used.has(h));
-  if (available.length === 0) {
-    throw new Error('all_slots_used');
-  }
-  // sequential pick (deterministic for tests; niche당 3슬롯이라 충돌 가능성 낮음)
-  const picked = available[0];
-  used.add(picked); // mutate internally for symmetry with assignSlug
-  return picked;
-}
-
-function assignSlug(rawSlug: string, usedSlugs: Set<string>): string {
-  if (!usedSlugs.has(rawSlug)) {
-    usedSlugs.add(rawSlug);
-    return rawSlug;
-  }
-  for (let i = 2; i <= 99; i++) {
-    const candidate = `${rawSlug}-${i}`;
-    if (!usedSlugs.has(candidate)) {
-      usedSlugs.add(candidate);
-      return candidate;
-    }
-  }
-  throw new Error('slug_exhausted');
-}
-
-// 'HH:MM' KST → next available UTC ISO instant.
-// Example: baseDate=2026-04-26 02:00 UTC (= 11:00 KST), slotTimeKst='13:00'
-//   → 2026-04-26 04:00 UTC (= 13:00 KST today, no rollover)
-// 'HH:MM' KST → 오늘 KST 날짜의 그 시각 (UTC ISO). 키워드 신선도 보장: 트렌드는
-// 그날 기준이라 발행도 같은 날(KST). cron(KST 01:17) 발화 시 모든 slot(09~19시)이 미래라 정상.
-// manual dispatch에서 slot 시간이 이미 지났으면 그대로 과거 시간 ISO 반환 (publisher가
-// 처리; WordPress는 status='future'+과거date에 대해 보통 immediate publish로 변환).
-//
-// Example: baseDate=2026-04-27 16:17 UTC (= 4/27 KST 01:17 cron 발화), slotTimeKst='13:00'
-//   → 2026-04-27 04:00 UTC (= 4/27 KST 13:00 today). 같은 날.
-function toIsoUtc(slotTimeKst: string, baseDate: Date = new Date()): string {
-  const [hh, mm] = slotTimeKst.split(':').map(Number);
-  // baseDate를 KST 날짜로 변환 후 그날의 HH:MM 슬롯 시각 만들기.
-  const kstNow = new Date(baseDate.getTime() + 9 * 60 * 60 * 1000); // UTC + 9h = KST clock
-  const yyyy = kstNow.getUTCFullYear();
-  const mo = kstNow.getUTCMonth();
-  const dd = kstNow.getUTCDate();
-  // 오늘 KST 날짜의 HH:MM → UTC: KST HH:MM = UTC HH-9:MM (전날 00시 ~ 09시 사이는 음수 → setUTCHours 정규화)
-  const slot = new Date(Date.UTC(yyyy, mo, dd, hh - 9, mm, 0, 0));
-  return slot.toISOString();
-}
-
-function errMessage(err: unknown): string {
-  if (err instanceof Error) return err.message;
-  if (typeof err === 'string') return err;
-  try { return JSON.stringify(err); } catch { return String(err); }
-}
+// PUBLISH_HOURS_KST, pickSlotTime, assignSlug, toIsoUtc, errMessage → ./lib/slot-utils
+// escAttr, buildImageFigure, injectImages → ./lib/html-utils
 
 type Niche = 'HS' | 'TS' | 'AS';
 type Mode = 'normal' | 'healthcheck-only';
@@ -357,64 +304,7 @@ async function writeAndReview(
   throw new Error(`editor_reject_x2 (last score=${lastReview?.score ?? '?'})`);
 }
 
-// HTML attribute escaper. image_url은 third-party JSON (Pexels/Pixabay), alt_text는 LLM 출력 —
-// 둘 다 신뢰 불가. 한글 따옴표/꺾쇠 등으로 attribute injection 또는 broken HTML 방지.
-function escAttr(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/"/g, '&quot;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-}
-
-// content-writer.md spec: HTML uses `<!-- IMAGE_SLOT_N -->` comment markers.
-// image_slots[].slot_id is the literal string "IMAGE_SLOT_N" (e.g., "IMAGE_SLOT_1").
-// We replace the entire HTML comment with a real <img> tag.
-// Editor persona가 요구하는 표준 image figure (editor.md 검수 기준):
-// loading="lazy" + border-radius:8px + max-width:100% + width:100% + display:block + figcaption.
-// 단순 <img> 태그면 매번 revision_needed reject 됨 (운영 중 발견).
-function buildImageFigure(r: ImageResult): string {
-  const credit =
-    r.source === 'placeholder'
-      ? 'Placeholder'
-      : r.photographer
-        ? `${r.source.charAt(0).toUpperCase() + r.source.slice(1)} · ${r.photographer}`
-        : r.source.charAt(0).toUpperCase() + r.source.slice(1);
-  return (
-    `<figure style="margin:24px 0;">` +
-    `<img src="${escAttr(r.image_url)}" alt="${escAttr(r.alt_text)}" loading="lazy" ` +
-    `style="border-radius:8px;max-width:100%;width:100%;display:block;" />` +
-    `<figcaption style="font-size:13px;color:#888888;text-align:center;margin-top:8px;">` +
-    `📷 Photo: ${escAttr(credit)}` +
-    `</figcaption></figure>`
-  );
-}
-
-function injectImages(html: string, results: ImageResult[]): string {
-  let out = html;
-  const matched = new Set<string>();
-  for (const r of results) {
-    const marker = `<!-- ${r.slot_id} -->`;
-    if (out.includes(marker)) {
-      matched.add(r.slot_id);
-    }
-    out = out.split(marker).join(buildImageFigure(r));
-  }
-  // Writer가 직접 만들어 둔 raw <img> 태그가 있을 수 있음 (editor revision attempt에서 LLM이 placeholder 옆에
-  // 임의 inject). 이 경우 IMAGE_SLOT placeholder 옆 raw <img>는 위 split 후 stray로 남음. 운영 안정화 후
-  // 별도 정리 (now: 단순 stray marker 경고만).
-  const unmatched = results.filter((r) => !matched.has(r.slot_id));
-  if (unmatched.length > 0) {
-    console.warn(
-      `[injectImages] unmatched results: ${unmatched.map((r) => r.slot_id).join(',')}`,
-    );
-  }
-  const stray = out.match(/<!-- IMAGE_SLOT_\d+ -->/g);
-  if (stray) {
-    console.warn(`[injectImages] stray markers in published HTML: ${stray.join(',')}`);
-  }
-  return out;
-}
+// escAttr, buildImageFigure, injectImages → ./lib/html-utils (imported at top)
 
 interface PublishedRecord {
   externalId: string;
