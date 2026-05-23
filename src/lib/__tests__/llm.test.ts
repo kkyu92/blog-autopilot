@@ -165,6 +165,45 @@ describe('callClaude', () => {
     expect(argv[pIdx + 1]).not.toContain('---');
   });
 
+  it('5/23 박제: exit 1 + empty stderr → 60s sleep 후 1회 retry → 두 번째 attempt 성공 시 정상 반환', async () => {
+    vi.useFakeTimers();
+    const { spawn } = await import('node:child_process');
+    const { callClaude } = await import('../llm');
+    let callIdx = 0;
+    (spawn as ReturnType<typeof vi.fn>).mockImplementation(() => {
+      callIdx++;
+      const exitCode = callIdx === 1 ? 1 : 0;
+      const stdout = callIdx === 1 ? '' : 'recovered';
+      return {
+        stdout: { on: (e: string, cb: (data: Buffer) => void) => { if (e === 'data') cb(Buffer.from(stdout)); } },
+        stderr: { on: vi.fn() }, // empty stderr
+        on: (e: string, cb: (code: number) => void) => { if (e === 'close') cb(exitCode); },
+      };
+    });
+    const p = callClaude({ systemPrompt: 'sys', userMessage: 'hi' });
+    await vi.advanceTimersByTimeAsync(60_500);
+    const result = await p;
+    expect(result).toBe('recovered');
+    expect(callIdx).toBe(2);
+    vi.useRealTimers();
+  });
+
+  it('5/23 박제: exit 1 + non-empty stderr → 즉시 throw (retry 없음)', async () => {
+    const { spawn } = await import('node:child_process');
+    const { callClaude } = await import('../llm');
+    let callIdx = 0;
+    (spawn as ReturnType<typeof vi.fn>).mockImplementation(() => {
+      callIdx++;
+      return {
+        stdout: { on: vi.fn() },
+        stderr: { on: (e: string, cb: (data: Buffer) => void) => { if (e === 'data') cb(Buffer.from('real error')); } },
+        on: (e: string, cb: (code: number) => void) => { if (e === 'close') cb(1); },
+      };
+    });
+    await expect(callClaude({ systemPrompt: 'sys', userMessage: 'hi' })).rejects.toThrow('real error');
+    expect(callIdx).toBe(1);
+  });
+
   it('signal kill → error mentions signal name', async () => {
     const { spawn } = await import('node:child_process');
     const { callClaude } = await import('../llm');

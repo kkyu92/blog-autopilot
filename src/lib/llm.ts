@@ -39,6 +39,9 @@ const PROGRESS_LOG_INTERVAL_MS = 60_000;
 // "spawn claude ENOENT", "spawn Unknown system error -8". 호출 누적 후 OS-level transient.
 const SPAWN_RETRY_DELAY_MS = 5_000;
 const SPAWN_TRANSIENT_PATTERN = /\b(ENOENT|EFAULT|EIO|EAGAIN|EBADF|EMFILE|ENFILE)\b|Unknown system error|spawn [a-z]+ failed/i;
+// 5/23 박제: exit 1 + empty stderr = Sonnet 한도 / 일시 CLI 결함 패턴 (project_sonnet_limit_5_15.md).
+// 5/23 cron 14/15 마지막 슬롯 1건 fail (AS 매입임대) RC. 60s sleep 후 1회 retry.
+const EXIT1_EMPTY_RETRY_DELAY_MS = 60_000;
 // F1'-a: instrumentation. callClaude 누적 호출 카운트 + 시각 추적.
 let _claudeCallCount = 0;
 let _claudeFirstCallAt: number | null = null;
@@ -202,6 +205,7 @@ export async function callClaude(opts: CallClaudeOptions): Promise<string> {
 
   const maxJsonAttempts = opts.expectJson ? 1 + (opts.jsonRetries ?? 1) : 1;
   let lastErr: Error | null = null;
+  let exit1EmptyRetried = false;
 
   for (let attempt = 1; attempt <= maxJsonAttempts; attempt++) {
     // F2-A 강화: attempt 2+에서는 system prompt에 JSON_RETRY_GUARD 추가 주입.
@@ -209,7 +213,18 @@ export async function callClaude(opts: CallClaudeOptions): Promise<string> {
     const attemptOpts = attempt === 1
       ? opts
       : { ...opts, systemPrompt: opts.systemPrompt + JSON_RETRY_GUARD };
-    const { stdout, stderr, code, signal } = await spawnClaudeWithRetry(attemptOpts);
+    let { stdout, stderr, code, signal } = await spawnClaudeWithRetry(attemptOpts);
+    // 5/23 박제: exit 1 + empty stderr = Sonnet 한도 / 일시 CLI 결함 (project_sonnet_limit_5_15.md).
+    // SPAWN_TRANSIENT_PATTERN 비매칭이라 spawnClaudeWithRetry 에선 catch 안 됨 → 여기서 1회 retry.
+    // 신호 종료 (code === null + signal !== null) 는 정상 kill 이라 제외 — typeof code === 'number' 로 분리.
+    if (typeof code === 'number' && code !== 0 && stderr.trim() === '' && !exit1EmptyRetried) {
+      exit1EmptyRetried = true;
+      console.warn(
+        `[llm] exit ${code ?? `signal ${signal}`} with empty stderr (한도/일시 결함 의심) — ${EXIT1_EMPTY_RETRY_DELAY_MS / 1000}s sleep 후 1회 retry`,
+      );
+      await new Promise((r) => setTimeout(r, EXIT1_EMPTY_RETRY_DELAY_MS));
+      ({ stdout, stderr, code, signal } = await spawnClaudeWithRetry(attemptOpts));
+    }
     if (code !== 0) {
       throw new Error(`claude CLI exit ${code ?? `signal ${signal}`}: ${stderr}`);
     }
