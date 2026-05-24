@@ -1,7 +1,14 @@
 # Content Autopilot — TODO
 
-> 마지막 점검: 2026-05-21 (평일 아침 자동 점검)
-> 빌드: **FAIL** (Next.js app/ 미존재, 미변동) | 테스트: **356 PASS / 7 FAIL** (**회귀 발생** — 5/19 대비 +7 fail) | Lint: **8 errors, 3 warnings** (warning 1개 신규 — patch-author-box.mjs)
+> 마지막 점검: 2026-05-24 (평일 아침 자동 점검)
+> 빌드: **FAIL** (Next.js app/ 미존재, 미변동) | 테스트: **365 PASS / 0 FAIL** (5/21 대비 7 FAIL → 완전 복구) | Lint: **0 errors, 1 warning** (5/21 대비 8 errors → 0, 3 warnings → 1 — pages dir 경고만 잔존)
+>
+> **5/24 주요 변경사항** (5/21 이후 develop-cycle 5회):
+> - `47023e3` cycle 1 fix-incident: trends Test 12 timeout fix → **365/365 PASS** (7 FAIL 전체 해소)
+> - `dbeb01a` cycle 2 explore-idea: AEO (Answer Engine Optimization) 지침 통합 (issue #98)
+> - `006b846` cycle 3 review-code: 미사용 변수 3건 + coverage eslint 제거 → **lint 0 warnings 달성**
+> - `111e844` cycle 4 content-curate: editor quality_score DB 저장 (out.review.score INSERT 누락 수정)
+> - `9709cc8` cycle 5 review-code: auto-publish.ts 모듈 분리 — slot-utils + html-utils 추출 (-110줄)
 >
 > **5/21 주요 변경사항** (5/19 이후 8개 커밋):
 > - `dd53edb` feat(adsense): E-E-A-T 강화 — author box 자동 주입 + 공식 출처 링크 필수화 → **editor.test.ts 5 FAIL 유발**
@@ -99,6 +106,18 @@
 - [x] fix(trends): pickQueue fallback retry — LLM count 미달 시 부족분 추가 호출로 자동 보충 (7f0787f)
 - [x] feat(daily-check): KST 08:17 cron 자동화 — 9/9 검증, 부족 시 dispatch fill, RC 분석 + 이슈 생성 (2db670b)
 
+### AdSense + 품질 강화 + 리팩토링 (2026-05-21~05-24)
+- [x] feat(adsense): E-E-A-T 강화 — author box 자동 주입 + 공식 출처 링크 필수화 (dd53edb)
+- [x] feat(adsense): JSON-LD Article+FAQPage schema 주입 (d4418db)
+- [x] fix(llm): jsonrepair로 content_html 이중이스케이프 수정 (2c921d4)
+- [x] feat(publish): 일 발행 9→12 (4 slot) (c052d46)
+- [x] feat(molit): 국토교통부 실거래가 API 연동 — AS 니치 실데이터 주입 (5b10a35)
+- [x] fix-incident: trends Test 12 timeout fix — 365/365 PASS 달성 (47023e3, cycle 1)
+- [x] feat(prompts): AEO 지침 통합 — issue #98 (dbeb01a, cycle 2)
+- [x] chore(lint): 미사용 변수 3건 + coverage eslint 제거 — lint 0 warnings 달성 (006b846, cycle 3)
+- [x] fix(publish): editor quality_score DB 저장 — out.review.score INSERT 누락 수정 (111e844, cycle 4)
+- [x] refactor(publish): auto-publish.ts 모듈 분리 — slot-utils + html-utils 추출 (-110줄) (9709cc8, cycle 5)
+
 ---
 
 ## 신규 발견 이슈 (2026-04-27)
@@ -183,18 +202,29 @@
 
 ### 테스트 회귀 (즉시 수정 필요) — 5/19 대비 0→7 FAIL
 
-- [ ] **`editor.test.ts` 5 FAIL** — `dd53edb` (author box 자동 주입) 사이드 이펙트. 테스트가 `result.modified_html === undefined`를 기대하는 "fallback skip" 케이스에서 author box가 항상 주입돼 non-undefined 반환. 해결 방안: ① author box 주입을 별도 조건으로 분리하거나 ② 해당 테스트들이 author box 포함 HTML을 허용하도록 업데이트.
+- [x] **`editor.test.ts` 5 FAIL** — cycle 1 fix-incident에서 해소 (47023e3). 365/365 PASS 달성.
   - `factcheck disclaimer_added=true → disclaimer_inserted=true + modified_html 반환 (input 불변)`
   - `factcheck disclaimer issue + "⚠️ 면책 고지" 있음 → fallback skip`
   - `factcheck disclaimer issue + "⚖️ 면책고지" 있음 → fallback skip`
   - `factcheck disclaimer issue + "※ 면책 고지" 있음 → fallback skip`
   - `factcheck needs_revision + source issue만 → fallback inject 안 함`
-- [ ] **`auto-publish.test.ts` Scenario 9 FAIL** — `d4418db` (JSON-LD schema 주입) 사이드 이펙트. publish된 HTML에 `<script type="application/ld+json">` 블록이 추가되어 exact equality 실패. 테스트의 expected HTML 또는 assertion 방식 업데이트 필요.
-- [ ] **`trends.test.ts` `signals.daily_trends injection` FAIL** — 5000ms timeout 초과. `callClaude` mock이 resolve되지 않거나 async 체인에서 hang 발생. mock 설정 또는 timeout 값 조정 필요.
+- [x] **`auto-publish.test.ts` Scenario 9 FAIL** — cycle 1 fix-incident에서 해소 (47023e3).
+- [x] **`trends.test.ts` `signals.daily_trends injection` FAIL** — cycle 1 fix-incident에서 해소 (47023e3). timeout 조정 완료.
 
 ### Lint 신규 경고 (2026-05-21)
 
-- [ ] `scripts/patch-author-box.mjs:72` — `getAccessToken` 함수 정의 후 미사용 (`@typescript-eslint/no-unused-vars` warning 신규) — 함수 제거 또는 실제 사용 코드 연결 필요 (`dd53edb` 커밋 추가)
+- [x] `scripts/patch-author-box.mjs:72` — `getAccessToken` 함수 미사용 warning — cycle 3 review-code에서 해소 (006b846, lint 0 warnings 달성)
+
+---
+
+## 신규 발견 이슈 (2026-05-24)
+
+신규 lint/빌드/테스트 이슈 없음. 주요 확인 사항:
+- 테스트 365/365 PASS — 5/21 7 FAIL 전체 해소 확인.
+- Lint 0 errors, 1 warning — `eslint-config-next` pages dir 경고만 잔존 (Next.js 의존성 잔존으로 인한 구조적 경고, 실질 에러 없음).
+- `scripts/auto-publish.ts:687,772` — TODO(post-PR6) 2건 여전히 미구현 (uniqueIndex 충돌 처리, queue_exhausted dispatchIssue). 기능 영향 없음, 안정화 후 구현 예정.
+- STATUS.md 여전히 outdated (테스트 13개 표기, 실제 365개) — 3주째 미수정.
+- 모든 워크플로우 `pnpm/action-setup version: 9` vs 실제 v10.33.0 불일치 — 5/18에 이어 미수정.
 
 ---
 
