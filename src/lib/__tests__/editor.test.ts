@@ -561,4 +561,27 @@ describe('editor.review', () => {
     // throw 안 하고 revision_needed로 fallback (writeAndReview attempt 2 retry 유도)
     expect(result.verdict).toBe('revision_needed');
   });
+
+  // 5/26 cron 26413387928 AS 청약 가점 evidence: editor LLM 이 review 응답을 array 로 반환
+  // (raw keys: 0,1,2,3,4) → inferStatus 모든 분기 miss → throw 로 슬롯 영구 fail.
+  // Fix: array 감지 시 revision_needed fallback 으로 attempt 2 retry 유도.
+  it('LLM array response drift → revision_needed (throw 안 함)', async () => {
+    const { callClaude } = await import('../llm');
+    const { factcheck } = await import('../factcheck');
+    vi.mocked(callClaude).mockResolvedValue(
+      JSON.stringify([
+        { note: 'review item 1' },
+        { note: 'review item 2' },
+        { note: 'review item 3' },
+        { note: 'review item 4' },
+        { note: 'review item 5' },
+      ]),
+    );
+    vi.mocked(factcheck).mockResolvedValue({ verdict: 'pass' });
+
+    const { review } = await import('../editor');
+    const result = await review({ draft: validDraft(), niche: 'AS' });
+
+    expect(result.verdict).toBe('revision_needed');
+  });
 });

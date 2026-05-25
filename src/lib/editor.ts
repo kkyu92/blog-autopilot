@@ -183,6 +183,10 @@ export async function review(input: EditorReviewInput): Promise<EditorReviewResu
   // Persona schema는 'status' = 'approved'|'revision_needed' 이지만 LLM이 verdict/approved/quality_score만
   // 반환하는 drift 케이스 대응 (운영 중 발견). 다양한 키 fallback.
   const inferStatus = (p: Record<string, unknown>): 'approved' | 'revision_needed' => {
+    // 5/26 cron 26413387928 AS 청약 가점 evidence: editor LLM 이 review 응답을 array 로 반환 (raw keys: 0,1,2,3,4) drift.
+    // 모든 status/verdict/score 분기 miss → throw 로 슬롯 영구 fail. CHUNK_PATTERN 처리와 동일하게
+    // revision_needed 로 fallback 해서 writeAndReview attempt 2 retry 유도.
+    if (Array.isArray(p)) return 'revision_needed';
     if (p.status === 'approved' || p.status === 'revision_needed') return p.status;
     if (p.verdict === 'approved' || p.verdict === 'pass') return 'approved';
     if (p.verdict === 'revision_needed' || p.verdict === 'fail') return 'revision_needed';
