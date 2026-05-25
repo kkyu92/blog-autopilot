@@ -243,7 +243,15 @@ async function writeAndReview(
         lastFeedback = feedback;
         continue;
       }
-      // attempt 2 also missing → permanent fail (existing behavior)
+      // attempt 2 schema fail — but attempt 1 had a soft-pass-able draft? salvage it.
+      // 5/25 evidence: TS 가고시마 attempt 1 = schema OK + editor revision_needed score=79 (>= SOFT_PASS_THRESHOLD),
+      // attempt 2 = writer LLM drift (5 fields missing) → throw 가 soft-pass fallback 앞에서 발생해 영구 실패.
+      if (lastDraft && lastReview && lastReview.score >= SOFT_PASS_THRESHOLD) {
+        console.log(
+          `[${niche}] writer attempt 2 schema fail but attempt 1 soft-pass-able (score=${lastReview.score}) — salvaging attempt 1 draft`,
+        );
+        return { draft: lastDraft, images: lastImages, review: lastReview };
+      }
       throw new Error(`writer: missing fields [${missingFields.join(',')}] (attempt 2/2 still missing)`);
     }
     if (parsed.keyword == null) {

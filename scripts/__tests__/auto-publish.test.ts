@@ -482,6 +482,96 @@ describe('auto-publish.ts integration (7 시나리오)', () => {
     expect(publishedPost.content).toContain('application/ld+json');
   });
 
+  it('Scenario 10 (5/25 RC): attempt 1 schema OK + revision_needed soft-pass-able + attempt 2 schema fail → salvage attempt 1', async () => {
+    // 5/25 TS 가고시마 evidence: attempt 1 = schema OK + editor revision_needed score=79 (≥ SOFT_PASS_THRESHOLD 70),
+    // attempt 2 = writer LLM drift (5 fields missing) → 기존 코드는 throw 가 soft-pass fallback 앞에서 발생해 영구 실패.
+    // Fix: attempt 2 schema fail 일 때 lastDraft + score≥70 면 attempt 1 draft 로 soft-pass salvage.
+    const { pickQueue } = await import('../../src/lib/trends');
+    const { checkAndResolve } = await import('../../src/lib/dedup');
+    const { callClaude } = await import('../../src/lib/llm');
+    const { review } = await import('../../src/lib/editor');
+    const { fetchForSlots } = await import('../../src/lib/images');
+    const { publishScheduled: bloggerPublish } = await import('../../src/lib/blogger');
+
+    vi.mocked(pickQueue).mockResolvedValue([mockCandidate({ keyword: '일본 가고시마 여행 코스' })]);
+    vi.mocked(checkAndResolve).mockResolvedValue({ action: 'pass', reason: '신규' });
+
+    // attempt 1: 정상 JSON (schema OK). attempt 2: title 누락 (schema fail).
+    const missingTitleJson = (() => {
+      const parsed = JSON.parse(mockDraftJson()) as Record<string, unknown>;
+      delete parsed.title;
+      return JSON.stringify(parsed);
+    })();
+    vi.mocked(callClaude)
+      .mockResolvedValueOnce(mockDraftJson({ slug: 'gagoshima-trip' }))
+      .mockResolvedValueOnce(missingTitleJson);
+
+    // attempt 1 review: revision_needed score=79 (soft-pass-able). attempt 2 는 review 호출 못 함 (writer schema fail).
+    vi.mocked(review).mockResolvedValueOnce({
+      verdict: 'revision_needed',
+      score: 79,
+      feedback: '3개 항목 수정 필요',
+    });
+    vi.mocked(fetchForSlots).mockResolvedValue(mockImageResults());
+    vi.mocked(bloggerPublish).mockResolvedValue({
+      externalId: 'bg-salvage',
+      externalUrl: 'https://ts.example.com/gagoshima-trip',
+      scheduledAt: '2026-05-25T00:00:00Z',
+    });
+
+    const { runMain } = await import('../auto-publish');
+    const code = await runMain(['node', 'auto-publish.ts', '--niche=TS', '--slot-count=1']);
+
+    expect(code).toBe(0);
+    expect(callClaude).toHaveBeenCalledTimes(2); // writer 2번 (attempt 1 + attempt 2)
+    expect(bloggerPublish).toHaveBeenCalledTimes(1); // attempt 1 draft 로 publish 성공
+
+    const rows = testDb.select().from(publishedPosts).all();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].status).toBe('published');
+    expect(rows[0].slug).toBe('gagoshima-trip');
+  });
+
+  it('Scenario 10b (5/25 RC guard): attempt 2 schema fail + attempt 1 score < SOFT_PASS_THRESHOLD → 영구 실패 유지', async () => {
+    // salvage 분기 가드: attempt 1 score 가 SOFT_PASS_THRESHOLD 미만이면 기존 동작 (throw → 폐기) 유지.
+    const { pickQueue } = await import('../../src/lib/trends');
+    const { checkAndResolve } = await import('../../src/lib/dedup');
+    const { callClaude } = await import('../../src/lib/llm');
+    const { review } = await import('../../src/lib/editor');
+    const { fetchForSlots } = await import('../../src/lib/images');
+    const { publishScheduled: bloggerPublish } = await import('../../src/lib/blogger');
+
+    vi.mocked(pickQueue).mockResolvedValue([mockCandidate()]);
+    vi.mocked(checkAndResolve).mockResolvedValue({ action: 'pass', reason: '신규' });
+
+    const missingTitleJson = (() => {
+      const parsed = JSON.parse(mockDraftJson()) as Record<string, unknown>;
+      delete parsed.title;
+      return JSON.stringify(parsed);
+    })();
+    vi.mocked(callClaude)
+      .mockResolvedValueOnce(mockDraftJson())
+      .mockResolvedValueOnce(missingTitleJson);
+
+    // attempt 1 review score=60 (< 70 SOFT_PASS_THRESHOLD)
+    vi.mocked(review).mockResolvedValueOnce({
+      verdict: 'revision_needed',
+      score: 60,
+      feedback: '품질 미달',
+    });
+    vi.mocked(fetchForSlots).mockResolvedValue(mockImageResults());
+
+    const { runMain } = await import('../auto-publish');
+    const code = await runMain(['node', 'auto-publish.ts', '--niche=HS', '--slot-count=1']);
+
+    expect(code).toBe(1); // 100% discard → exit 1 (의도된 동작)
+    expect(bloggerPublish).not.toHaveBeenCalled(); // publish 안 함
+
+    // recordFailure pre-draft path: writer threw before draft escaped → no DB row (Scenario 3 와 동일).
+    const rows = testDb.select().from(publishedPosts).all();
+    expect(rows).toHaveLength(0);
+  });
+
   it('Scenario 7: batch slug 충돌 → -2 suffix, 두 글 모두 published', async () => {
     const { pickQueue } = await import('../../src/lib/trends');
     const { checkAndResolve } = await import('../../src/lib/dedup');
