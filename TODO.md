@@ -1,7 +1,17 @@
 # Content Autopilot — TODO
 
-> 마지막 점검: 2026-05-24 (평일 아침 자동 점검)
-> 빌드: **FAIL** (Next.js app/ 미존재, 미변동) | 테스트: **365 PASS / 0 FAIL** (5/21 대비 7 FAIL → 완전 복구) | Lint: **0 errors, 1 warning** (5/21 대비 8 errors → 0, 3 warnings → 1 — pages dir 경고만 잔존)
+> 마지막 점검: 2026-05-26 (develop-cycle-blog cycle 7 publish-incident spot-check)
+> 빌드: **FAIL** (Next.js app/ 미존재, 미변동) | 테스트: **368 PASS / 0 FAIL** (5/24 365 → +3: editor array drift + writer salvage 테스트 추가) | Lint: **0 errors, 1 warning** (pages dir 경고만)
+>
+> **5/26 주요 변경사항** (5/24 이후 cycles 6-7):
+> - `1b2bc06` fix(publish): attempt 2 schema fail 시 attempt 1 soft-pass salvage (5/25 TS 가고시마 RC)
+> - `1991f16` policy: cycle 6 retro — worker-incident-triage SUCCESS — 이슈 13건 → 0건
+> - `485634d` fix(ci): issue-agent OAuth→ANTHROPIC_API_KEY 전환
+> - `a887598` fix(editor): inferStatus array 응답 drift → revision_needed fallback (5/26 cron 1 fail RC)
+> - `91ae837` fix(ci): issue-agent self-hosted + claude CLI 직접 실행 (Max 구독 활용)
+> - **5/26 품질 spot-check**: 최근 15건 quality_score 85-93 (avg ~89). failure 0건. 총 누적 **370건**.
+> - **5/25 cron 1 fail → 수동 backfill 완료**: AS 청약 가점 계산 editor array drift → fix + dispatch 재발행.
+> - **다음 cron 검증 대기**: 5/27 KST 02:57 자연 cron — array drift fix 첫 운영 검증 예정.
 >
 > **5/24 주요 변경사항** (5/21 이후 develop-cycle 5회):
 > - `47023e3` cycle 1 fix-incident: trends Test 12 timeout fix → **365/365 PASS** (7 FAIL 전체 해소)
