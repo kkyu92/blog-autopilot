@@ -1,7 +1,7 @@
 # Content Autopilot — TODO
 
-> 마지막 점검: 2026-05-26 (평일 아침 자동 점검)
-> 빌드: **FAIL** (Next.js app/ 미존재, 미변동) | 테스트: **368 PASS / 0 FAIL** (5/24 365 → +3: editor array drift + writer salvage 테스트 추가) | Lint: **0 errors, 1 warning** (pages dir 경고만)
+> 마지막 점검: 2026-05-27 (평일 아침 자동 점검)
+> 빌드: **FAIL** (Next.js app/ 미존재, 미변동) | 테스트: **368 PASS / 0 FAIL** (전회 동일) | Lint: **0 errors, 1 warning** (pages dir 경고만)
 >
 > **5/26 주요 변경사항** (5/24 이후 cycles 6-7):
 > - `1b2bc06` fix(publish): attempt 2 schema fail 시 attempt 1 soft-pass salvage (5/25 TS 가고시마 RC)
@@ -224,6 +224,16 @@
 ### Lint 신규 경고 (2026-05-21)
 
 - [x] `scripts/patch-author-box.mjs:72` — `getAccessToken` 함수 미사용 warning — cycle 3 review-code에서 해소 (006b846, lint 0 warnings 달성)
+
+---
+
+## 신규 발견 이슈 (2026-05-27 아침 자동 점검)
+
+신규 lint/빌드/테스트 이슈 없음. 상태 전회(2026-05-26)와 동일:
+- 테스트 368/368 PASS — 0 FAIL.
+- Lint 0 errors, 1 warning — `eslint-config-next` pages dir 경고만 잔존.
+- Build FAIL — Next.js app/ 미존재 (CLI 전환 후 구조적 문제, 실질 영향 없음).
+- pnpm install 정상 (793 packages, lockfile up to date).
 
 ---
 
