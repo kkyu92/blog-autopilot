@@ -247,6 +247,32 @@ chain 결과를 CLAUDE.md 자연 prefix (`feat / fix / chore / docs / test`) 따
 
 dispatch 채널 commit (cycle-retro / lesson / meta-pattern / chain-evolution) 은 main 직접 commit (PR X) — `submit-lesson.yml` 이 main push 자동 dispatch (workflow trigger `branches: [main]`). PR review 절차 불필요.
 
+### commit body `from-hub:` 컨벤션 (Pull 3+4 evidence, 2026-05-28 박제)
+
+본 commit 의 결정/행동이 허브 정보 (hub-dispatch issue / hub wiki entry / hub memory feedback) 수신 결과면 commit body 안 `from-hub:` 라인 의무. 양방향 무한성장 비전의 Pull 4단계 측정 (전체 spec: hub wiki entry `harness-engineering/hub-pull-evidence-tracking-from-hub-convention`).
+
+**의무 발화 시점**:
+- 진단 단계 open hub-dispatch issue 처리 시 → `from-hub: issue #N`
+- chain 시퀀스 안 hub wiki search 매칭 후 결정 변경 시 → `from-hub: wiki/<slug>`
+- hub memory feedback 따른 결정 시 → `from-hub: memory/<slug>`
+- cross-update-shadow workflow 자동 수신 → `from-hub: cross-update-shadow`
+
+**예시**:
+```
+fix(editor): inferStatus 응답 형식 mismatch
+
+subtype: publish-incident
+cycle: 8
+from-hub: wiki/harness-engineering/llm-output-array-fallback-pattern
+
+hub wiki 의 array drift fallback 패턴 참조 → 본 cycle editor 응답도 동일 패턴 적용.
+...
+```
+
+멀티 source 시 다중 `from-hub:` 라인 가능. 자율 발화 X 영역 (자연 결정) 면 라인 박제 X = 자연 누락.
+
+**측정**: 허브 측 `pnpm tsx scripts/measure-pull-evidence.mjs` 로 7/30일 측정. baseline target = ≥ 30% (cycle 당 0.3+ from-hub).
+
 ## 사이클 단계 4 — 회고
 
 ### cycle_state JSON write
