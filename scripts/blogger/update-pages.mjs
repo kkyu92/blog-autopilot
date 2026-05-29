@@ -80,6 +80,39 @@ async function updatePage(accessToken, pageId, title, content) {
   return await res.json();
 }
 
+async function insertPage(accessToken, title, content) {
+  // POST 는 DRAFT 로 생성. 이후 publish API 로 LIVE 전환.
+  const url = `https://www.googleapis.com/blogger/v3/blogs/${BLOG_ID}/pages`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      kind: "blogger#page",
+      title,
+      content,
+    }),
+  });
+  if (!res.ok) {
+    throw new Error(`insert page "${title}" fail: ${res.status} ${await res.text()}`);
+  }
+  return await res.json();
+}
+
+async function publishPage(accessToken, pageId) {
+  const url = `https://www.googleapis.com/blogger/v3/blogs/${BLOG_ID}/pages/${pageId}/publish`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok) {
+    throw new Error(`publish page ${pageId} fail: ${res.status} ${await res.text()}`);
+  }
+  return await res.json();
+}
+
 function stripCommentsAndTrim(html) {
   // <!-- ... --> 제거 (공개 페이지에 메타 정보 노출 방지)
   return html.replace(/<!--[\s\S]*?-->\s*/g, "").trim();
@@ -99,24 +132,48 @@ function stripCommentsAndTrim(html) {
   const summary = [];
 
   for (const target of TARGETS) {
-    const match = pages.find((p) => target.matchTitleAny.some((t) => (p.title || "").includes(t)));
-    if (!match) {
-      console.warn(`[skip] no page matched any of ${JSON.stringify(target.matchTitleAny)}`);
-      summary.push({ target: target.newTitle, status: "MISS" });
-      continue;
-    }
-
     const filePath = path.join(REPO_ROOT, target.file);
     const rawHtml = fs.readFileSync(filePath, "utf-8");
     const cleanHtml = stripCommentsAndTrim(rawHtml);
+    const match = pages.find((p) => target.matchTitleAny.some((t) => (p.title || "").includes(t)));
 
-    console.log(`\n[plan] page id=${match.id}`);
+    if (!match) {
+      // 5/29 AdSense reject family: Privacy/Contact 누락 → AdSense reviewer 가 "신뢰성 부족" 으로 reject.
+      // INSERT + PUBLISH 로 자동 보강. status=draft 로 생성된 신규 페이지를 publish API 로 LIVE 전환.
+      console.log(`\n[plan] INSERT new page "${target.newTitle}"`);
+      console.log(`       new content: ${cleanHtml.length} chars from ${target.file}`);
+
+      if (!APPLY) {
+        summary.push({ target: target.newTitle, status: "DRY-INSERT" });
+        continue;
+      }
+
+      try {
+        const created = await insertPage(token, target.newTitle, cleanHtml);
+        console.log(`       ✓ INSERT 성공 — id=${created.id} status=${created.status || "DRAFT"}`);
+        let finalUrl = created.url;
+        let finalStatus = created.status || "DRAFT";
+        if (finalStatus !== "LIVE") {
+          const published = await publishPage(token, created.id);
+          finalUrl = published.url || finalUrl;
+          finalStatus = published.status || "LIVE";
+          console.log(`       ✓ PUBLISH 성공 — url=${finalUrl} status=${finalStatus}`);
+        }
+        summary.push({ target: target.newTitle, status: "INSERTED", id: created.id, url: finalUrl });
+      } catch (e) {
+        console.error(`       ✗ INSERT/PUBLISH 실패: ${e.message}`);
+        summary.push({ target: target.newTitle, status: "FAIL-INSERT", error: e.message });
+      }
+      continue;
+    }
+
+    console.log(`\n[plan] UPDATE page id=${match.id}`);
     console.log(`       current title: "${match.title}"`);
     console.log(`       new     title: "${target.newTitle}"`);
     console.log(`       new content: ${cleanHtml.length} chars from ${target.file}`);
 
     if (!APPLY) {
-      summary.push({ target: target.newTitle, status: "DRY", id: match.id });
+      summary.push({ target: target.newTitle, status: "DRY-UPDATE", id: match.id });
       continue;
     }
 
