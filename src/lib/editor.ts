@@ -81,6 +81,10 @@ export interface EditorReviewResult {
   disclaimer_inserted?: boolean; // signals caller to update draft.content_html
   author_box_inserted?: boolean;
   modified_html?: string;        // returned separately — caller decides to apply
+  // 5/29 AdSense reject family ("가치 있는 인벤토리 부족"): factcheck severity='critical' 이슈 수.
+  // >0 면 writeAndReview soft-pass / salvage 차단 — AI slop 출처 부실 패턴이 attempt 2 도 못 고치면
+  // 발행 자체를 막아 AdSense reviewer 노출 차단. 0 이면 기존 soft-warn 정책 그대로.
+  factcheck_critical_count?: number;
   final_html?: string;           // from LLM persona output, present when LLM approves (status='approved')
   final_meta?: {                 // from LLM persona output, present when LLM approves
     title: string;
@@ -117,6 +121,7 @@ export async function review(input: EditorReviewInput): Promise<EditorReviewResu
   let authorBoxInserted = false;
   let disclaimerInserted = false;
   let modifiedHtml: string | undefined;
+  let factcheckCriticalDescriptions: string[] = [];
 
   {
     const injected = injectAuthorBox(draft.content_html, niche);
@@ -147,6 +152,16 @@ export async function review(input: EditorReviewInput): Promise<EditorReviewResu
     if (fc.verdict === 'needs_revision') {
       const fcDescriptions = fc.issues?.map((i) => i.description).join('; ') ?? 'factcheck 실패';
       console.warn(`[editor] factcheck soft-warn for ${niche} (no hard reject): ${fcDescriptions}`);
+      // 5/29 AdSense reject family: critical 이슈 (출처 전무/URL 미제공/발화자 미명시/URL-데이터 불일치 등)
+      // 는 별도 escalation. writeAndReview soft-pass/salvage 차단 신호로 누적.
+      factcheckCriticalDescriptions = (fc.issues ?? [])
+        .filter((i) => i.severity === 'critical')
+        .map((i) => i.description);
+      if (factcheckCriticalDescriptions.length > 0) {
+        console.warn(
+          `[editor] factcheck CRITICAL for ${niche} (count=${factcheckCriticalDescriptions.length}): ${factcheckCriticalDescriptions.join('; ')}`,
+        );
+      }
     }
     // Disclaimer injection: base off modifiedHtml (contains author box) if present, else draft.content_html
     const baseForDisclaimer = modifiedHtml ?? draft.content_html;
@@ -220,6 +235,8 @@ export async function review(input: EditorReviewInput): Promise<EditorReviewResu
   const status = inferStatus(parsed);
 
   const llmRevisionNeeded = status === 'revision_needed';
+  const factcheckCriticalCount = factcheckCriticalDescriptions.length;
+  const factcheckCriticalNeeded = factcheckCriticalCount > 0;
   const score = parsed.quality_score ?? parsed.score ?? (llmRevisionNeeded ? 60 : 85);
   const llmFeedback = parsed.revision_notes ?? '';
 
@@ -227,11 +244,17 @@ export async function review(input: EditorReviewInput): Promise<EditorReviewResu
     ...(authorBoxInserted && { author_box_inserted: true }),
     ...(disclaimerInserted && { disclaimer_inserted: true }),
     ...(modifiedHtml !== undefined && { modified_html: modifiedHtml }),
+    ...(factcheckCriticalCount > 0 && { factcheck_critical_count: factcheckCriticalCount }),
   };
 
   // Combine all failure signals
-  if (issues.length > 0 || llmRevisionNeeded) {
+  if (issues.length > 0 || llmRevisionNeeded || factcheckCriticalNeeded) {
     const feedbackParts = [...issues];
+    if (factcheckCriticalNeeded) {
+      feedbackParts.unshift(
+        `[CRITICAL FACTCHECK] ${factcheckCriticalDescriptions.join('; ')}`,
+      );
+    }
     if (llmFeedback) feedbackParts.push(llmFeedback);
 
     return {

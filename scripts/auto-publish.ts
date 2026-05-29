@@ -246,7 +246,14 @@ async function writeAndReview(
       // attempt 2 schema fail — but attempt 1 had a soft-pass-able draft? salvage it.
       // 5/25 evidence: TS 가고시마 attempt 1 = schema OK + editor revision_needed score=79 (>= SOFT_PASS_THRESHOLD),
       // attempt 2 = writer LLM drift (5 fields missing) → throw 가 soft-pass fallback 앞에서 발생해 영구 실패.
+      // 5/29 추가: factcheck CRITICAL 이슈 (출처 전무/URL 미제공/발화자 미명시/URL-데이터 불일치 등)
+      // 가 attempt 1 에 남아있으면 salvage X — AdSense reviewer 노출 차단 우선.
       if (lastDraft && lastReview && lastReview.score >= SOFT_PASS_THRESHOLD) {
+        if ((lastReview.factcheck_critical_count ?? 0) > 0) {
+          throw new Error(
+            `editor_reject_factcheck_critical (attempt 1 score=${lastReview.score}, critical=${lastReview.factcheck_critical_count}, attempt 2 schema fail)`,
+          );
+        }
         console.log(
           `[${niche}] writer attempt 2 schema fail but attempt 1 soft-pass-able (score=${lastReview.score}) — salvaging attempt 1 draft`,
         );
@@ -302,7 +309,14 @@ async function writeAndReview(
   }
 
   // attempt 2 모두 revision_needed지만 콘텐츠 품질 점수가 합격선 이상이면 soft-pass로 발행
+  // 5/29 추가: factcheck CRITICAL 이슈 (출처 전무/URL 미제공/발화자 미명시/URL-데이터 불일치 등)
+  // 가 attempt 2 까지 못 풀리면 soft-pass X — AdSense "가치 있는 인벤토리 부족" reject family 차단.
   if (lastReview && lastDraft && lastReview.score >= SOFT_PASS_THRESHOLD) {
+    if ((lastReview.factcheck_critical_count ?? 0) > 0) {
+      throw new Error(
+        `editor_reject_factcheck_critical (last score=${lastReview.score}, critical=${lastReview.factcheck_critical_count})`,
+      );
+    }
     console.log(
       `[${niche}] writer attempt 2 soft-pass (score=${lastReview.score} >= ${SOFT_PASS_THRESHOLD}) — accepting microconsistency issues, publishing as-is`,
     );

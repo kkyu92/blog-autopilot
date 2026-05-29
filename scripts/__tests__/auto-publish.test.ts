@@ -572,6 +572,111 @@ describe('auto-publish.ts integration (7 시나리오)', () => {
     expect(rows).toHaveLength(0);
   });
 
+  // 5/29 AdSense reject family: factcheck CRITICAL 차단 시나리오
+  it('Scenario 11 (5/29 AdSense): attempt 2 모두 revision_needed + score≥70 + factcheck_critical_count>0 → soft-pass 차단, throw editor_reject_factcheck_critical', async () => {
+    const { pickQueue } = await import('../../src/lib/trends');
+    const { checkAndResolve } = await import('../../src/lib/dedup');
+    const { callClaude } = await import('../../src/lib/llm');
+    const { review } = await import('../../src/lib/editor');
+    const { fetchForSlots } = await import('../../src/lib/images');
+    const { publishScheduled: bloggerPublish } = await import('../../src/lib/blogger');
+
+    vi.mocked(pickQueue).mockResolvedValue([mockCandidate({ keyword: '미분양 아파트' })]);
+    vi.mocked(checkAndResolve).mockResolvedValue({ action: 'pass', reason: '신규' });
+
+    // writer attempt 1 + 2 둘 다 schema OK 정상 JSON
+    vi.mocked(callClaude)
+      .mockResolvedValueOnce(mockDraftJson({ slug: 'misbunyang-1' }))
+      .mockResolvedValueOnce(mockDraftJson({ slug: 'misbunyang-1' }));
+
+    // review 두 번 모두 revision_needed score=82 (≥70 SOFT_PASS) + factcheck_critical_count=3
+    vi.mocked(review).mockResolvedValue({
+      verdict: 'revision_needed',
+      score: 82,
+      feedback: '[CRITICAL FACTCHECK] 구체적 출처 전무; URL 미제공; 발화자 미명시',
+      factcheck_critical_count: 3,
+    });
+    vi.mocked(fetchForSlots).mockResolvedValue(mockImageResults());
+
+    const { runMain } = await import('../auto-publish');
+    const code = await runMain(['node', 'auto-publish.ts', '--niche=AS', '--slot-count=1']);
+
+    expect(code).toBe(1); // 100% discard
+    expect(bloggerPublish).not.toHaveBeenCalled(); // soft-pass 차단됨
+
+    // recordFailure pre-draft path: writeAndReview throw 가 draft 반환 전에 발생 → no DB row
+    // (Scenario 3/10b 와 동일 패턴). failure dispatch 는 GH_TOKEN 없어서 test 환경 skip.
+    const rows = testDb.select().from(publishedPosts).all();
+    expect(rows).toHaveLength(0);
+  });
+
+  it('Scenario 11b (5/29 AdSense guard): attempt 2 schema fail + attempt 1 score≥70 + factcheck_critical_count>0 → salvage 차단', async () => {
+    const { pickQueue } = await import('../../src/lib/trends');
+    const { checkAndResolve } = await import('../../src/lib/dedup');
+    const { callClaude } = await import('../../src/lib/llm');
+    const { review } = await import('../../src/lib/editor');
+    const { fetchForSlots } = await import('../../src/lib/images');
+    const { publishScheduled: bloggerPublish } = await import('../../src/lib/blogger');
+
+    vi.mocked(pickQueue).mockResolvedValue([mockCandidate({ keyword: 'AS 분양' })]);
+    vi.mocked(checkAndResolve).mockResolvedValue({ action: 'pass', reason: '신규' });
+
+    const missingTitleJson = (() => {
+      const parsed = JSON.parse(mockDraftJson()) as Record<string, unknown>;
+      delete parsed.title;
+      return JSON.stringify(parsed);
+    })();
+    vi.mocked(callClaude)
+      .mockResolvedValueOnce(mockDraftJson({ slug: 'as-salvage-block' }))
+      .mockResolvedValueOnce(missingTitleJson);
+
+    // attempt 1 review: soft-pass-able score=82 지만 critical_count=2 → salvage 차단
+    vi.mocked(review).mockResolvedValueOnce({
+      verdict: 'revision_needed',
+      score: 82,
+      feedback: '[CRITICAL FACTCHECK] 구체적 출처 전무; URL-데이터 불일치',
+      factcheck_critical_count: 2,
+    });
+    vi.mocked(fetchForSlots).mockResolvedValue(mockImageResults());
+
+    const { runMain } = await import('../auto-publish');
+    const code = await runMain(['node', 'auto-publish.ts', '--niche=AS', '--slot-count=1']);
+
+    expect(code).toBe(1);
+    expect(bloggerPublish).not.toHaveBeenCalled();
+  });
+
+  it('Scenario 11c (5/29 AdSense baseline): factcheck_critical_count=0 + score≥70 → 기존 soft-pass 정책 유지', async () => {
+    const { pickQueue } = await import('../../src/lib/trends');
+    const { checkAndResolve } = await import('../../src/lib/dedup');
+    const { callClaude } = await import('../../src/lib/llm');
+    const { review } = await import('../../src/lib/editor');
+    const { fetchForSlots } = await import('../../src/lib/images');
+    const { publishScheduled: bloggerPublish } = await import('../../src/lib/blogger');
+
+    vi.mocked(pickQueue).mockResolvedValue([mockCandidate({ keyword: 'baseline kw' })]);
+    vi.mocked(checkAndResolve).mockResolvedValue({ action: 'pass', reason: '신규' });
+    vi.mocked(callClaude).mockResolvedValue(mockDraftJson({ slug: 'baseline-softpass' }));
+    vi.mocked(review).mockResolvedValue({
+      verdict: 'revision_needed',
+      score: 75,
+      feedback: '마이크로 스타일 권고',
+      // factcheck_critical_count 미설정 = 0 으로 처리
+    });
+    vi.mocked(fetchForSlots).mockResolvedValue(mockImageResults());
+    vi.mocked(bloggerPublish).mockResolvedValue({
+      externalId: 'bg-baseline',
+      externalUrl: 'https://ws.example.com/baseline',
+      scheduledAt: '2026-05-29T00:00:00Z',
+    });
+
+    const { runMain } = await import('../auto-publish');
+    const code = await runMain(['node', 'auto-publish.ts', '--niche=HS', '--slot-count=1']);
+
+    expect(code).toBe(0); // soft-pass 발행됨
+    expect(bloggerPublish).toHaveBeenCalledTimes(1);
+  });
+
   it('Scenario 7: batch slug 충돌 → -2 suffix, 두 글 모두 published', async () => {
     const { pickQueue } = await import('../../src/lib/trends');
     const { checkAndResolve } = await import('../../src/lib/dedup');

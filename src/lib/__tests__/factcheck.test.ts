@@ -247,4 +247,59 @@ describe('factcheck', () => {
     expect(parsed.keyword).toBe(inputDraft.keyword);
     expect(parsed.content_html).toBe(inputDraft.content_html);
   });
+
+  // 5/29 AdSense reject family: severity classification
+  it('source 이슈 — critical 키워드 (출처 전무/URL 미제공/URL-데이터 불일치/발화자 미명시 등) 자동 라벨링', async () => {
+    const { callClaude } = await import('../llm');
+    vi.mocked(callClaude).mockResolvedValue(
+      JSON.stringify({
+        verdict: 'needs_revision',
+        issues: [
+          { type: 'source', description: '"10~15% 할인 사례 다수 확인" — 구체적 출처 전무.', suggested_fix: 'URL 추가' },
+          { type: 'source', description: 'DART 확인 권고 시 URL 미제공.', suggested_fix: 'URL 추가' },
+          { type: 'source', description: 'rt.molit.go.kr 사용. URL-데이터 불일치.', suggested_fix: 'stat.molit.go.kr 사용' },
+          { type: 'source', description: '블록쿼트 발화자·소속·출처 전혀 없음.', suggested_fix: '출처 명시' },
+          { type: 'source', description: '통계 인용 일부 누락 — minor.', suggested_fix: '보강' },
+          { type: 'recency', description: '2024 정책 언급', suggested_fix: '2026 업데이트' },
+        ],
+      }),
+    );
+
+    const { factcheck } = await import('../factcheck');
+    const result = await factcheck({
+      niche: 'AS',
+      draft: { content_html: '<p>x</p>', title: 't', keyword: 'k' },
+    });
+
+    const critical = result.issues!.filter((i) => i.severity === 'critical');
+    expect(critical).toHaveLength(4);
+    expect(critical.map((i) => i.description).join(' | ')).toMatch(/출처 전무/);
+    expect(critical.map((i) => i.description).join(' | ')).toMatch(/URL 미제공/);
+    expect(critical.map((i) => i.description).join(' | ')).toMatch(/URL-데이터 불일치/);
+    expect(critical.map((i) => i.description).join(' | ')).toMatch(/출처 전혀 없/);
+
+    const warn = result.issues!.filter((i) => i.severity === 'warn');
+    expect(warn.length).toBe(2); // minor source + recency
+  });
+
+  it('LLM이 severity 명시 시 그대로 보존 (override X)', async () => {
+    const { callClaude } = await import('../llm');
+    vi.mocked(callClaude).mockResolvedValue(
+      JSON.stringify({
+        verdict: 'needs_revision',
+        issues: [
+          // LLM 이 일반 source 인데 critical 으로 직접 라벨링 시 그대로 유지
+          { type: 'source', description: '일반 보강 권고', suggested_fix: 'x', severity: 'critical' },
+        ],
+      }),
+    );
+
+    const { factcheck } = await import('../factcheck');
+    const result = await factcheck({
+      niche: 'HS',
+      draft: { content_html: '<p>x</p>', title: 't', keyword: 'k' },
+    });
+
+    expect(result.issues![0].severity).toBe('critical');
+  });
 });

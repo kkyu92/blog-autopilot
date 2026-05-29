@@ -171,7 +171,8 @@ describe('editor.review', () => {
     vi.mocked(factcheck).mockResolvedValue({
       verdict: 'needs_revision',
       issues: [
-        { type: 'source' as const, description: '출처 없음', suggested_fix: '출처 추가 필요' },
+        // non-critical (severity='warn') — 출처 보강 권고 류는 LLM approved 시 soft-warn 유지
+        { type: 'source' as const, description: '통계 보강 권고 (minor)', suggested_fix: '추가 출처 보강', severity: 'warn' as const },
       ],
     });
 
@@ -180,6 +181,63 @@ describe('editor.review', () => {
 
     // 새 정책: factcheck needs_revision은 hard reject 안 함, LLM editor가 approved하면 pass
     expect(result.verdict).toBe('pass');
+  });
+
+  // 5/29 AdSense reject family — factcheck CRITICAL escalation
+  it('factcheck critical issue (severity=critical) → LLM approved 라도 verdict=revision_needed + factcheck_critical_count 전파', async () => {
+    const { callClaude } = await import('../llm');
+    const { factcheck } = await import('../factcheck');
+    vi.mocked(callClaude).mockResolvedValue(
+      JSON.stringify({
+        status: 'approved',
+        quality_score: 88,
+        final_html: '<p>polished</p>',
+        final_meta: { title: 't', meta_description: 'd', slug: 's', labels: ['l'] },
+      }),
+    );
+    vi.mocked(factcheck).mockResolvedValue({
+      verdict: 'needs_revision',
+      issues: [
+        { type: 'source' as const, description: '구체적 출처 전무', suggested_fix: 'URL 추가', severity: 'critical' as const },
+        { type: 'source' as const, description: 'URL-데이터 불일치', suggested_fix: '정확한 도메인 사용', severity: 'critical' as const },
+        { type: 'source' as const, description: '발화자 미명시', suggested_fix: '인용자 명시', severity: 'critical' as const },
+      ],
+    });
+
+    const { review } = await import('../editor');
+    const result = await review({ draft: validDraft(), niche: 'AS' });
+
+    expect(result.verdict).toBe('revision_needed');
+    expect(result.factcheck_critical_count).toBe(3);
+    expect(result.feedback).toContain('[CRITICAL FACTCHECK]');
+    expect(result.feedback).toContain('구체적 출처 전무');
+    expect(result.feedback).toContain('URL-데이터 불일치');
+    expect(result.feedback).toContain('발화자 미명시');
+  });
+
+  it('factcheck critical 0건 + LLM approved → verdict=pass + factcheck_critical_count 미설정', async () => {
+    const { callClaude } = await import('../llm');
+    const { factcheck } = await import('../factcheck');
+    vi.mocked(callClaude).mockResolvedValue(
+      JSON.stringify({
+        status: 'approved',
+        quality_score: 85,
+        final_html: '<p>polished</p>',
+        final_meta: { title: 't', meta_description: 'd', slug: 's', labels: ['l'] },
+      }),
+    );
+    vi.mocked(factcheck).mockResolvedValue({
+      verdict: 'needs_revision',
+      issues: [
+        { type: 'source' as const, description: '보강 권고 minor', suggested_fix: 'x', severity: 'warn' as const },
+      ],
+    });
+
+    const { review } = await import('../editor');
+    const result = await review({ draft: validDraft(), niche: 'HS' });
+
+    expect(result.verdict).toBe('pass');
+    expect(result.factcheck_critical_count).toBeUndefined();
   });
 
   // Test 8: factcheck disclaimer_added → editor returns modified_html + disclaimer_inserted=true (no input mutation)
