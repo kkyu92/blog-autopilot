@@ -86,7 +86,7 @@ function getBlogId(niche: string): string {
   return id;
 }
 
-async function getAccessToken(): Promise<string> {
+async function fetchAccessToken(): Promise<string> {
   const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
@@ -106,6 +106,23 @@ async function getAccessToken(): Promise<string> {
   if (!res.ok) throw new Error(`token refresh fail: ${res.status} ${await res.text()}`);
   const data = (await res.json()) as { access_token: string };
   return data.access_token;
+}
+
+// 5/29 evidence: 50-post run 의 21건째부터 fetch_fail 전부 발생 = 60분 만료.
+// [[feedback_long_running_batch_token_refresh]] 매뉴얼 inline refresh.
+// 50min 단위 강제 refresh (60min TTL 안전 margin).
+const TOKEN_TTL_MS = 50 * 60 * 1000;
+class TokenManager {
+  private token: string | null = null;
+  private fetchedAt = 0;
+  async get(): Promise<string> {
+    const now = Date.now();
+    if (this.token && now - this.fetchedAt < TOKEN_TTL_MS) return this.token;
+    this.token = await fetchAccessToken();
+    this.fetchedAt = now;
+    console.log(`[auth] access token (re)fetched at ${new Date(this.fetchedAt).toISOString()}`);
+    return this.token;
+  }
 }
 
 interface BloggerPost {
@@ -271,7 +288,7 @@ async function main(): Promise<void> {
   console.log(`[retro-edit] DB returned ${posts.length} posts (most recent first)`);
   if (posts.length === 0) return;
 
-  const token = await getAccessToken();
+  const tokenMgr = new TokenManager();
   const summary: Summary[] = [];
 
   for (let i = 0; i < posts.length; i++) {
@@ -281,6 +298,7 @@ async function main(): Promise<void> {
 
     let full: BloggerPost;
     try {
+      const token = await tokenMgr.get();
       full = await getPost(token, blogId, p.external_post_id);
     } catch (e) {
       const err = e instanceof Error ? e.message : String(e);
@@ -335,7 +353,8 @@ async function main(): Promise<void> {
     }
 
     try {
-      await patchPost(token, blogId, p.external_post_id, fixed.revised_html);
+      const tokenForPatch = await tokenMgr.get();
+      await patchPost(tokenForPatch, blogId, p.external_post_id, fixed.revised_html);
       console.log(`  ✓ PATCH 성공`);
       summary.push({
         postId: p.external_post_id,
