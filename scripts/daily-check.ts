@@ -1,14 +1,13 @@
 #!/usr/bin/env tsx
 // scripts/daily-check.ts
-// KST 07:17 cron — 오늘 12게시물 달성 검증. 부족 시 자동 보충 dispatch. RC 분석 + 리포트.
+// KST 07:17 cron — 오늘 12게시물 달성 검증. 부족 시 자동 보충 dispatch (fire-and-forget). RC 분석 + 리포트.
 //
 // flow:
 //   1. 오늘 KST cron run 찾기 (auto-publish.yml, started ~6h ago)
 //   2. DB count per niche
-//   3. 부족 시 dispatch fill (1 slot/niche, 최대 3회)
-//   4. 각 dispatch 완료 대기 (max 30min)
-//   5. RC pattern 분석 (cron fail 또는 fill fail 시)
-//   6. 결과 출력 + 이슈 생성 (불완전 시)
+//   3. 부족 시 dispatch fill (1 slot/niche, 최대 3회) — 대기 X (단일 self-hosted runner 점유 시 fill 들이 queue stuck → timeout deadlock)
+//   4. RC pattern 분석 (cron fail 시만; fill 은 익일 daily-check 에서 검증)
+//   5. 결과 출력 + 이슈 생성 (불완전 시)
 
 import { execSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
@@ -19,7 +18,6 @@ const NICHES = ['HS', 'TS', 'AS'] as const;
 const TARGET_PER_NICHE = 4;
 const TARGET_TOTAL = 12;
 const MAX_FILL_DISPATCHES = 3;
-const FILL_WAIT_MAX_MIN = 30;
 
 type Niche = (typeof NICHES)[number];
 
@@ -87,18 +85,6 @@ async function dispatchFill(niche: Niche): Promise<number> {
     `gh run list --workflow=auto-publish.yml --limit 1 --json databaseId,status,createdAt,conclusion`,
   );
   return runs[0].databaseId;
-}
-
-async function waitForRun(runId: number, maxMin: number): Promise<string> {
-  const deadline = Date.now() + maxMin * 60 * 1000;
-  while (Date.now() < deadline) {
-    const r = ghJson<{ status: string; conclusion: string }>(
-      `gh run view ${runId} --json status,conclusion`,
-    );
-    if (r.status === 'completed') return r.conclusion;
-    await sleep(30_000);
-  }
-  return 'timeout';
 }
 
 interface RcMatch {
@@ -195,9 +181,10 @@ async function main(): Promise<void> {
       }
       const runId = await dispatchFill(niche);
       dispatches++;
-      const conclusion = await waitForRun(runId, FILL_WAIT_MAX_MIN);
-      console.log(`[daily-check] fill ${niche} run=${runId} conclusion=${conclusion}`);
-      fillRuns.push({ niche, runId, conclusion });
+      console.log(
+        `[daily-check] fill ${niche} run=${runId} dispatched (fire-and-forget; executes after this workflow exits)`,
+      );
+      fillRuns.push({ niche, runId, conclusion: 'dispatched' });
     }
     if (dispatches >= MAX_FILL_DISPATCHES) break;
   }
@@ -208,15 +195,10 @@ async function main(): Promise<void> {
     `[daily-check] final counts: HS=${finalCounts.HS} TS=${finalCounts.TS} AS=${finalCounts.AS} total=${finalTotal}/${TARGET_TOTAL}`,
   );
 
-  // RC analysis: cron fail 또는 fill fail
+  // RC analysis: cron fail 만 (fill 은 fire-and-forget, 익일 daily-check 에서 검증)
   const rcSources: { source: string; rcs: RcMatch[] }[] = [];
   if (cronRun && cronRun.conclusion !== 'success') {
     rcSources.push({ source: `cron run ${cronRun.databaseId}`, rcs: analyzeFailureRc(cronRun.databaseId) });
-  }
-  for (const fr of fillRuns) {
-    if (fr.conclusion !== 'success') {
-      rcSources.push({ source: `fill ${fr.niche} run ${fr.runId}`, rcs: analyzeFailureRc(fr.runId) });
-    }
   }
 
   // Report
@@ -232,7 +214,7 @@ async function main(): Promise<void> {
     `- Initial: HS=${initialCounts.HS} TS=${initialCounts.TS} AS=${initialCounts.AS} (total ${initialTotal})`,
   );
   if (fillRuns.length > 0) {
-    lines.push('- Fill dispatches:');
+    lines.push('- Fill dispatches (fire-and-forget — execute after this workflow exits; 익일 daily-check 가 검증):');
     for (const fr of fillRuns) {
       lines.push(`  - ${fr.niche} run \`${fr.runId}\` → ${fr.conclusion}`);
     }
