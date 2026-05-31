@@ -124,10 +124,18 @@ function analyzeFailureRc(runId: number): RcMatch[] {
       hint: 'sonnet 한도 도달. workflow yml 에 BLOG_LLM_MODEL_OVERRIDE: opus 임시 추가 필요.',
     });
   }
-  if (/claude CLI exit 1:/i.test(log) && !/timeout/i.test(log)) {
+  const exit1Count = (log.match(/claude CLI exit 1:/gi) ?? []).length;
+  if (exit1Count > 0) {
     rcs.push({
       pattern: 'claude_cli_exit1',
-      hint: 'claude CLI 즉시 종료 (empty stderr). 보통 sonnet quota 또는 transient. retry 로 회복 가능.',
+      hint: `claude CLI 즉시 종료 (empty stderr) ×${exit1Count}. 보통 sonnet quota 또는 transient. retry 로 회복 가능.`,
+    });
+  }
+  const factcheckCount = (log.match(/editor_reject_factcheck_critical/gi) ?? []).length;
+  if (factcheckCount > 0) {
+    rcs.push({
+      pattern: 'editor_reject_factcheck_critical',
+      hint: `editor factcheck CRITICAL hard-reject ×${factcheckCount} (89a43bc 도입). 통계/금액/날짜 검증 미통과 — writer prompt 의 source citation 강화 필요.`,
     });
   }
   return rcs;
