@@ -141,6 +141,7 @@ AI Overviews · ChatGPT · Perplexity 등 AI 검색 엔진이 콘텐츠를 인�
    - **AS (부동산)**: `https://rt.molit.go.kr` (국토부 실거래가), `https://www.applyhome.co.kr` (청약홈), `https://www.reb.or.kr` (한국부동산원), `https://www.kbland.kr` (KB부동산), `https://apply.lh.or.kr` (LH 청약센터)
    - **HS (건강)**: `https://www.mohw.go.kr` (보건복지부), `https://www.kdca.go.kr` (질병관리청), `https://www.nhis.or.kr` (국민건강보험공단), `https://www.ncc.re.kr` (국립암센터), `https://www.mfds.go.kr` (식품의약품안전처)
    - **TS (여행)**: `https://www.visitkorea.or.kr` (한국관광공사), `https://www.mcst.go.kr` (문화체육관광부), `https://korean.visitseoul.net` (서울관광재단), `https://www.jeju.go.kr` (제주도청)
+   - **HS niche 수치 인라인 출처 의무 (6/2 추가)**: 구체적 측정값·통계·임상 프로토콜 수치(예: 베개 높이 XX cm, 매트리스 교체 주기 XX년, 처방량 감량 XX% 등)를 사용할 때는 수치 직후 출처 기관명을 명기한다. 예시: `베개 높이 6~10cm(세계수면협회 권장)`, `7~10년 교체 주기(미국수면재단 기준)`, `주 5~10% 감량 프로토콜(WHO 가이드라인)`. 출처를 특정할 수 없는 수치는 `일반적으로 권장되는`, `전문가들이 권고하는` 등의 표현으로 대체하여 단정 기술을 피한다.
 4. **분석·경험 언어 사용** (E-E-A-T Experience 신호): 단순 사실 나열이 아닌 분석과 인사이트를 제공한다. "데이터를 분석하면", "실제 사례를 보면", "시장 동향을 살펴보면", "전문가들은 ~을 주목한다" 등 조사·분석 뉘앙스의 표현을 자연스럽게 사용한다.
    - **AS 니치 + `real_transaction_data` 필드 제공 시 (필수)**: 제공된 실거래가 데이터를 본문에 직접 인용한다. 구체적인 아파트명·전용면적·층수·거래가격·거래날짜를 최소 3건 이상 표 또는 목록 형태로 포함한다. 출처 링크 `<a href="https://rt.molit.go.kr" ...>국토교통부 실거래가 공개시스템</a>` 필수 삽입. 데이터를 추측하거나 변형하지 말고 제공된 수치 그대로 사용한다.
 5. **구글 E-E-A-T** (경험·전문성·권위·신뢰) 기준 충족.
