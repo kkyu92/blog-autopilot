@@ -18,7 +18,6 @@ const HS_VARIANTS = [
   '깊은 수면 방해 요인',
   '불면증 숙면 개선',
   '취침 전 루틴 숙면',
-  '숙면 수면 환경 만들기',
 ];
 
 function todayHsVariant(): string {
