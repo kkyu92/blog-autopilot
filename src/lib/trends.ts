@@ -331,6 +331,8 @@ export async function pickQueue(opts: PickQueueOptions): Promise<KeywordCandidat
       'TS=여행/레저(국내·해외·숙소·항공·액티비티·여행팁·맛집·여행정보), ' +
       'AS=부동산/청약(청약·매매전세월세·정책·세금·인테리어·생활). ' +
       'daily_trends_kr 항목 중 niche 카테고리에 안 맞는 키워드(예: 스포츠·연예인·정치·해외주식)는 절대 포함하지 마라. ' +
+      'CRITICAL: niche_definition_yaml의 trend_hunter.excluded_topics.patterns 목록에 해당하는 주제는 ' +
+      '입력 뉴스(wellness_news·realestate_news·travel_news)나 daily_trends에 있어도 절대 후보로 선택하지 마라. ' +
       (opts.niche === 'AS' && realestate.length > 0
         ? 'AS niche: realestate_news 가 제공되었으면 그 안의 fresh title 들에서 키워드 후보를 우선 추출하라. ' +
           '각도(지역·정책·청약일정·세금·신혼부부·청년임대·재건축·신도시 등) 다양화 — 한 카테고리에 3개 이상 몰림 금지. ' +

@@ -110,3 +110,11 @@ trend_hunter:
     - google_trends_kr
     - naver_realtime_search
     - sns_topics
+  excluded_topics:
+    description: "AdSense 정책 위반·E-E-A-T 검증 불가 주제 — wellness_news·daily_trends에 있어도 키워드 후보 절대 선택 금지"
+    patterns:
+      - 마약류·마약·오피오이드·처방 마약 (narcotics, opioids, controlled substances)
+      - 약물 남용·의존·중독·탈출 (drug abuse, dependency, addiction, withdrawal)
+      - 자살·자해·극단적 선택 (suicide, self-harm, crisis intervention)
+      - 처방약 구체 복용법·용량·과다처방 조언 (specific dosing/prescription advice, overprescription)
+      - 낙태·임신중절 (abortion, pregnancy termination)
