@@ -225,6 +225,17 @@ export async function callClaude(opts: CallClaudeOptions): Promise<string> {
       await new Promise((r) => setTimeout(r, EXIT1_EMPTY_RETRY_DELAY_MS));
       ({ stdout, stderr, code, signal } = await spawnClaudeWithRetry(attemptOpts));
     }
+    // 6/3 박제: 60s retry 후에도 sonnet exit 1 empty stderr → sonnet 한도 도달 확정.
+    // cron run 26844251923 마지막 8 슬롯 연속 한도 fail (53% discard). opus 1회 폴백.
+    // sonnet vs opus 한도는 분리 — 양쪽 동시 도달 드묾. attempt 단위 폴백이라 누적 비용 최소.
+    if (
+      typeof code === 'number' && code !== 0 && stderr.trim() === '' &&
+      exit1EmptyRetried && resolvedModel === 'sonnet' && !opts.model
+    ) {
+      console.warn(`[llm] sonnet 한도 지속 — opus 1회 폴백 시도`);
+      const opusOpts = { ...attemptOpts, model: 'opus' as const };
+      ({ stdout, stderr, code, signal } = await spawnClaudeWithRetry(opusOpts));
+    }
     if (code !== 0) {
       throw new Error(`claude CLI exit ${code ?? `signal ${signal}`}: ${stderr}`);
     }
