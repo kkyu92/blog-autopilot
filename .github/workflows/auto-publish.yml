@@ -30,7 +30,7 @@ jobs:
     # cron 발동 시 inputs.runner는 빈 문자열 → 'home' fallback (paperclip 환경 재사용)
     # workflow_dispatch 시 사용자 선택 (home / office)
     runs-on: [self-hosted, "${{ inputs.runner || 'home' }}"]
-    timeout-minutes: 180  # 9 slots × ~18min/slot (4/27 자연 cron 측정 기준 — 90min은 부족, SIGKILL 유발). 향후 병렬화로 단축 검토
+    timeout-minutes: 240  # 9 slots × ~18min/slot = 162min baseline. 180min 도달 silent-fail N=3 재발 (#118 5/27 / #152 5/31 / #199 6/9, hub solution docs/solutions/blog-autopilot/2026-06-02 박제) → 240min 으로 마진 확보 (cycle 1072 hub closed-loop-design 항구화).
     steps:
       - uses: actions/checkout@v4
 
