@@ -138,6 +138,12 @@ function analyzeFailureRc(runId: number): RcMatch[] {
       hint: `editor factcheck CRITICAL hard-reject ×${factcheckCount} (89a43bc 도입). 통계/금액/날짜 검증 미통과 — writer prompt 의 source citation 강화 필요.`,
     });
   }
+  if (/The operation was canceled\./i.test(log)) {
+    rcs.push({
+      pattern: 'runner_job_canceled',
+      hint: 'Runner job 외부 취소 (GitHub Actions cancel or runner 재시작). LLM CLI hang 중 취소 多. fill dispatch 재실행으로 복구 가능.',
+    });
+  }
   return rcs;
 }
 
