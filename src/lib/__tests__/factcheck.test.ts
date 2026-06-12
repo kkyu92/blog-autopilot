@@ -302,4 +302,86 @@ describe('factcheck', () => {
 
     expect(result.issues![0].severity).toBe('critical');
   });
+
+  // consistency type tests
+  it('consistency 이슈 — 수치 모순 → critical 자동 라벨링', async () => {
+    const { callClaude } = await import('../llm');
+    vi.mocked(callClaude).mockResolvedValue(
+      JSON.stringify({
+        verdict: 'needs_revision',
+        issues: [
+          { type: 'consistency', description: '동일 지표(전세가율) 수치 모순: 62%와 70% 혼재.', suggested_fix: '단일 수치로 통일' },
+          { type: 'consistency', description: '같은 정책 시행일 날짜 모순: 2024-01과 2025-01 혼재.', suggested_fix: '정확한 날짜 확인 후 통일' },
+          { type: 'consistency', description: '그래프 설명 단락 간 모순: 상승 vs 하락 방향 불일치.', suggested_fix: '단락 간 방향 통일' },
+          { type: 'consistency', description: '비율 표현 미세 차이 (오타 가능성)', suggested_fix: '재검토' },
+        ],
+      }),
+    );
+
+    const { factcheck } = await import('../factcheck');
+    const result = await factcheck({
+      niche: 'AS',
+      draft: { content_html: '<p>x</p>', title: 't', keyword: 'k' },
+    });
+
+    const critical = result.issues!.filter((i) => i.severity === 'critical');
+    const warn = result.issues!.filter((i) => i.severity === 'warn');
+    // 수치 모순, 날짜 모순, 단락 간 모순 → critical (3개)
+    // 비율 차이 → warn (1개)
+    expect(critical.length).toBe(3);
+    expect(warn.length).toBe(1);
+    expect(critical.map((i) => i.description).join(' | ')).toMatch(/수치 모순/);
+    expect(critical.map((i) => i.description).join(' | ')).toMatch(/날짜 모순/);
+    expect(critical.map((i) => i.description).join(' | ')).toMatch(/단락 간 모순/);
+  });
+
+  it('consistency 이슈 — critical 패턴 없으면 warn', async () => {
+    const { callClaude } = await import('../llm');
+    vi.mocked(callClaude).mockResolvedValue(
+      JSON.stringify({
+        verdict: 'needs_revision',
+        issues: [
+          { type: 'consistency', description: '표현 일관성 미흡: 같은 용어를 두 가지 이름으로 사용.', suggested_fix: '통일 권고' },
+        ],
+      }),
+    );
+
+    const { factcheck } = await import('../factcheck');
+    const result = await factcheck({
+      niche: 'HS',
+      draft: { content_html: '<p>x</p>', title: 't', keyword: 'k' },
+    });
+
+    expect(result.issues![0].type).toBe('consistency');
+    expect(result.issues![0].severity).toBe('warn');
+  });
+
+  it('consistency + source 혼재 — 각각 severity 독립 판정', async () => {
+    const { callClaude } = await import('../llm');
+    vi.mocked(callClaude).mockResolvedValue(
+      JSON.stringify({
+        verdict: 'needs_revision',
+        issues: [
+          { type: 'source', description: '전체 출처 전무 — AI 생성 의심.', suggested_fix: 'URL 추가' },
+          { type: 'consistency', description: '동일 지표 내부 수치 불일치: 두 단락 수치 상이.', suggested_fix: '수치 통일' },
+          { type: 'recency', description: '2023년 정책 인용', suggested_fix: '현행 정책으로 교체' },
+        ],
+      }),
+    );
+
+    const { factcheck } = await import('../factcheck');
+    const result = await factcheck({
+      niche: 'AS',
+      draft: { content_html: '<p>x</p>', title: 't', keyword: 'k' },
+    });
+
+    const issues = result.issues!;
+    const sourceIssue = issues.find((i) => i.type === 'source')!;
+    const consistencyIssue = issues.find((i) => i.type === 'consistency')!;
+    const recencyIssue = issues.find((i) => i.type === 'recency')!;
+
+    expect(sourceIssue.severity).toBe('critical');       // 출처 전무 → critical
+    expect(consistencyIssue.severity).toBe('critical');  // 내부 수치 불일치 → critical
+    expect(recencyIssue.severity).toBe('warn');          // recency → always warn
+  });
 });

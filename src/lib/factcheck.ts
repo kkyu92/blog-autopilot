@@ -15,7 +15,7 @@ export interface FactCheckInput {
 }
 
 export interface FactCheckIssue {
-  type: 'source' | 'recency' | 'disclaimer' | 'forbidden';
+  type: 'source' | 'recency' | 'disclaimer' | 'forbidden' | 'consistency';
   description: string;
   suggested_fix: string;
   severity?: 'critical' | 'warn';
@@ -47,9 +47,26 @@ const CRITICAL_DESCRIPTION_PATTERNS: RegExp[] = [
   /발화자[·、,\s]*소속[·、,\s]*출처\s*전혀\s*없/,
 ];
 
+// 같은 지표·정책에 대해 본문 내 수치·날짜가 서로 모순되는 경우 (LLM hallucination 신호)
+const CRITICAL_CONSISTENCY_PATTERNS: RegExp[] = [
+  /수치\s*모순/,
+  /수치\s*불일치/,
+  /단락\s*간\s*모순/,
+  /내부\s*수치\s*불일치/,
+  /동일\s*지표[^.]*모순/,
+  /동일\s*정책[^.]*모순/,
+  /날짜\s*모순/,
+  /비율\s*모순/,
+];
+
 function classifySeverity(issue: FactCheckIssue): 'critical' | 'warn' {
-  if (issue.type !== 'source') return 'warn';
-  return CRITICAL_DESCRIPTION_PATTERNS.some((re) => re.test(issue.description)) ? 'critical' : 'warn';
+  if (issue.type === 'source') {
+    return CRITICAL_DESCRIPTION_PATTERNS.some((re) => re.test(issue.description)) ? 'critical' : 'warn';
+  }
+  if (issue.type === 'consistency') {
+    return CRITICAL_CONSISTENCY_PATTERNS.some((re) => re.test(issue.description)) ? 'critical' : 'warn';
+  }
+  return 'warn';
 }
 
 export async function factcheck(input: FactCheckInput): Promise<FactCheckResult> {
