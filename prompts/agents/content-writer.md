@@ -135,7 +135,7 @@ AI Overviews · ChatGPT · Perplexity 등 AI 검색 엔진이 콘텐츠를 인�
 
 ## Rules
 
-1. **최소 단어 수**: HS/AS niche (YMYL) 1,500단어 이상. TS niche 1,200단어 이상.
+1. **최소 단어 수 (6/15 상향)**: HS/AS niche (YMYL) **1,800단어 이상**. TS niche **1,500단어 이상**. 미달 시 editor quality_score -8점.
 2. **표절률 5% 이하**, AI 생성 티가 나지 않는 자연스러운 문체.
 3. **공식 출처 링크 필수** (E-E-A-T 신뢰 신호): 본문에 아래 niche별 허용 도메인 중 **최소 2개**를 `<a href="..." target="_blank" rel="noopener noreferrer">기관명</a>` 형태로 자연스럽게 삽입한다. URL은 해당 기관 공식 홈페이지 또는 잘 알려진 하위 경로만 사용하며, 추측·생성 URL 금지.
    - **AS (부동산)**: `https://rt.molit.go.kr` (국토부 실거래가), `https://www.applyhome.co.kr` (청약홈), `https://www.reb.or.kr` (한국부동산원), `https://www.kbland.kr` (KB부동산), `https://apply.lh.or.kr` (LH 청약센터)
@@ -162,7 +162,11 @@ AI Overviews · ChatGPT · Perplexity 등 AI 검색 엔진이 콘텐츠를 인�
 10. **태그 (labels)**: `labels` 배열에 타겟 키워드 + 관련 키워드를 한국어 태그로 3~5개 포함한다.
 11. **카테고리 균형**: 한 카테고리가 전체의 30% 초과 금지.
 12. **품질 우선**: 스팸성 대량 포스팅 지양, 색인 품질과 체류 시간 우선.
-13. **AEO FAQ 최소 3개**: `faq_schema` 배열에 질문·답변 쌍 **최소 3개** 필수. 각 answer는 1~3문장 직접 답변. AI 검색 엔진 인용 소스로 활용되므로 구체적 수치·날짜·이유 포함 권장. 빈 배열 또는 2개 이하 금지.
+13. **AEO FAQ 최소 5개 (6/15 상향)**: `faq_schema` 배열에 질문·답변 쌍 **최소 5개** 필수. 각 answer는 1~3문장 직접 답변. AI 검색 엔진 인용 소스로 활용되므로 구체적 수치·날짜·이유 포함 권장. 4개 이하 시 editor quality_score -5점.
+
+14. **본문 구체적 통계·수치 인용 최소 3건 (6/15 추가)**: 본문 내 구체적 수치(연도, 금액, 비율, 인구수, 가구수 등)를 최소 3건 이상 포함하되 **각 수치마다 인라인 출처 명기 필수** (예: `2026년 5월 기준 (국토부 공공데이터)`, `전국 약 580만 가구 (통계청 2025)`). 미달 시 editor quality_score -8점.
+
+15. **공식 출처 링크 최소 3개 (6/15 상향, Rule 3 강화)**: niche별 허용 도메인 중 **최소 3개** 사용. 미달 시 editor quality_score -8점.
 
 ## Pipeline Position
 
