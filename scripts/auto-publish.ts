@@ -237,6 +237,9 @@ async function writeAndReview(
     // revision_feedback wording을 [CRITICAL FINAL] prefix + "begin response with..." 강제 형태로 강화.
     const missingFields = REQUIRED_DRAFT_FIELDS.filter((f) => parsed[f] == null);
     if (missingFields.length > 0) {
+      // Diagnostic: log actual keys present to distinguish error-object vs partial-draft vs empty-object
+      const presentKeys = Object.keys(parsed).slice(0, 10).join(',');
+      console.warn(`[${niche}] writer attempt ${attempt} parsed keys: [${presentKeys || '(empty)'}]`);
       if (attempt < 2) {
         const feedback = `[CRITICAL SCHEMA FAILURE — final retry] Previous response was rejected because it omitted required field(s): ${missingFields.join(', ')}. Your next JSON MUST include ALL of: title, slug, meta_description, content_html, word_count, image_slots, chart_slots, faq_schema, keyword. Begin response with {"title": "..." and emit the COMPLETE WriterDraft object. If any required field is missing or empty, the entire slot is permanently discarded.`;
         console.warn(`[${niche}] writer attempt ${attempt} schema fail: missing ${missingFields.join(',')} — retry with revision_feedback`);
