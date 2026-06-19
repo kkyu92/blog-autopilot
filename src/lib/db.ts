@@ -21,16 +21,14 @@ export function getDb() {
     const sqlite = new Database(dbPath);
     sqlite.pragma("journal_mode = WAL");
     sqlite.pragma("foreign_keys = ON");
+    sqlite.pragma("busy_timeout = 5000"); // wait up to 5s on lock instead of failing immediately
+    sqlite.pragma("synchronous = NORMAL"); // safe durability trade-off for WAL mode
 
     _db = drizzle(sqlite, { schema });
 
     // 첫 호출 시 자동 마이그레이션 (drizzle-kit migrate idempotent)
     if (fs.existsSync(MIGRATIONS_DIR)) {
-      try {
-        migrate(_db, { migrationsFolder: MIGRATIONS_DIR });
-      } catch (err) {
-        console.error("[db] migrate failed:", (err as Error).message);
-      }
+      migrate(_db, { migrationsFolder: MIGRATIONS_DIR });
     }
   }
   return _db;
