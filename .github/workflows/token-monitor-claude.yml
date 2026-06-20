@@ -1,0 +1,85 @@
+name: Token Monitor — Claude CLI
+
+on:
+  schedule:
+    # 매일 KST 18:17 (UTC 09:17) — auto-publish 17분 미러링
+    - cron: '17 9 * * *'
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: [self-hosted, home]
+    timeout-minutes: 5
+    steps:
+      - name: Probe Claude CLI auth
+        env:
+          GH_TOKEN: ${{ secrets.PLAYBOOK_PAT }}
+        run: |
+          set -e
+
+          dispatch() {
+            local title="$1"
+            local body="$2"
+            local severity="$3"
+            local fingerprint="$4"
+            gh api repos/kkyu92/playbook/dispatches \
+              -f event_type=worker-incident \
+              -f "client_payload[source_repo]=${GITHUB_REPOSITORY}" \
+              -f "client_payload[title]=${title}" \
+              -f "client_payload[body]=${body}" \
+              -f "client_payload[type]=incident" \
+              -f "client_payload[severity]=${severity}" \
+              -f "client_payload[fingerprint]=${fingerprint}" \
+              -f "client_payload[environment]=production" \
+              -f "client_payload[run_url]=${RUN_URL}"
+          }
+
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          TODAY=$(date -u +%Y-%m-%d)
+
+          # claude --print 으로 실제 인증 테스트. --version 은 인증 불필요하므로 사용 불가.
+          if timeout 30 claude --print "ok" > /tmp/claude-probe.out 2> /tmp/claude-probe.err; then
+            echo "Claude CLI: ok"
+            cat /tmp/claude-probe.out
+            exit 0
+          fi
+
+          STDERR_SNIPPET=$(head -c 300 /tmp/claude-probe.err 2>/dev/null || echo "(no stderr)")
+          STDOUT_SNIPPET=$(head -c 300 /tmp/claude-probe.out 2>/dev/null || echo "(no stdout)")
+
+          dispatch \
+            "Claude CLI 인증 실패 — self-hosted runner healthcheck 불가" \
+            "claude --print 'ok' 실패. 다음 KST 01:17 cron 에서 healthcheck fail → 전체 publish skip 위험.
+
+          stderr: ${STDERR_SNIPPET}
+          stdout: ${STDOUT_SNIPPET}
+
+          조치:
+          1. home-mbp 터미널에서: claude logout && claude login (브라우저 재인증)
+          2. 재인증 후 workflow_dispatch 로 이 워크플로 재실행해 검증
+          Runbook: https://github.com/kkyu92/blog-autopilot/blob/main/docs/runbook/claude-cli-renewal.md
+
+          Run: ${RUN_URL}" \
+            "critical" \
+            "claude-cli-token-dead-${TODAY}"
+
+      - name: Notify playbook on workflow-level failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.PLAYBOOK_PAT }}
+          WORKFLOW_NAME: ${{ github.workflow }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -e
+          gh api repos/kkyu92/playbook/dispatches \
+            -f event_type=worker-error \
+            -f "client_payload[source_repo]=${GITHUB_REPOSITORY}" \
+            -f "client_payload[title]=${WORKFLOW_NAME} 워크플로 자체 실패" \
+            -f "client_payload[body]=Workflow: ${WORKFLOW_NAME}
+          Run: ${RUN_URL}
+          (self-hosted runner 오프라인 또는 probe step 예상치 못한 종료)" \
+            -f "client_payload[type]=error-log" \
+            -f "client_payload[severity]=error" \
+            -f "client_payload[fingerprint]=cron-token-monitor-claude-failure" \
+            -f "client_payload[environment]=production" \
+            -f "client_payload[run_url]=${RUN_URL}"
