@@ -5,6 +5,7 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
+  renameSync,
   statSync,
   unlinkSync,
 } from 'node:fs';
@@ -757,7 +758,13 @@ function writeSummary(results: SlotResult[]): { published: number; failed: numbe
   try {
     const logDir = join(homedir(), 'logs');
     mkdirSync(logDir, { recursive: true });
-    appendFileSync(join(logDir, 'blog-autopilot.log'), line + '\n');
+    const logPath = join(logDir, 'blog-autopilot.log');
+    try {
+      if (statSync(logPath).size > 1_048_576) {
+        renameSync(logPath, join(logDir, 'blog-autopilot.log.1'));
+      }
+    } catch { /* file may not exist yet */ }
+    appendFileSync(logPath, line + '\n');
   } catch (err) {
     console.warn('[summary] log write failed:', errMessage(err));
   }

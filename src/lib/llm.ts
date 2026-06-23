@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { jsonrepair } from 'jsonrepair';
@@ -93,11 +93,22 @@ export function extractJson(stdout: string): string {
   return s;
 }
 
+const LLM_DUMP_MAX = 10;
+
 function dumpBadOutput(stdout: string): string | null {
   try {
-    const dumpPath = join(homedir(), 'logs', `llm-bad-json-${Date.now()}.txt`);
-    mkdirSync(dirname(dumpPath), { recursive: true });
+    const logDir = join(homedir(), 'logs');
+    const dumpPath = join(logDir, `llm-bad-json-${Date.now()}.txt`);
+    mkdirSync(logDir, { recursive: true });
     writeFileSync(dumpPath, stdout);
+    try {
+      const dumps = readdirSync(logDir)
+        .filter(f => f.startsWith('llm-bad-json-') && f.endsWith('.txt'))
+        .sort();
+      for (const old of dumps.slice(0, Math.max(0, dumps.length - LLM_DUMP_MAX))) {
+        unlinkSync(join(logDir, old));
+      }
+    } catch { /* cleanup failure non-fatal */ }
     return dumpPath;
   } catch {
     return null;
