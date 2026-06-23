@@ -482,6 +482,49 @@ describe('auto-publish.ts integration (7 시나리오)', () => {
     expect(publishedPost.content).toContain('application/ld+json');
   });
 
+  it('Scenario 9b (JSON-LD #271): BlogPosting schema에 description·inLanguage·keywords 포함', async () => {
+    const { pickQueue } = await import('../../src/lib/trends');
+    const { checkAndResolve } = await import('../../src/lib/dedup');
+    const { callClaude } = await import('../../src/lib/llm');
+    const { review } = await import('../../src/lib/editor');
+    const { fetchForSlots } = await import('../../src/lib/images');
+    const { publishScheduled: bloggerPublish } = await import('../../src/lib/blogger');
+
+    const draft = JSON.parse(mockDraftJson({ meta_description: 'SEO 설명 텍스트' })) as Record<string, unknown>;
+    draft.labels = ['태그1', '태그2'];
+
+    vi.mocked(pickQueue).mockResolvedValue([mockCandidate()]);
+    vi.mocked(checkAndResolve).mockResolvedValue({ action: 'pass', reason: '신규' });
+    vi.mocked(callClaude).mockResolvedValue(JSON.stringify(draft));
+    vi.mocked(review).mockResolvedValue({ verdict: 'pass', score: 90 });
+    vi.mocked(fetchForSlots).mockResolvedValue(mockImageResults());
+    vi.mocked(bloggerPublish).mockResolvedValue({
+      externalId: 'bg-jsonld',
+      externalUrl: 'https://health-signal.blogspot.com/test-slug',
+      scheduledAt: '2026-06-24T00:00:00Z',
+    });
+
+    const { runMain } = await import('../auto-publish');
+    const code = await runMain(['node', 'auto-publish.ts', '--niche=HS', '--slot-count=1', '--mode=normal']);
+
+    expect(code).toBe(0);
+    const publishedPost = vi.mocked(bloggerPublish).mock.calls[0][1];
+    const content: string = publishedPost.content as string;
+
+    // JSON-LD block 존재
+    expect(content).toContain('application/ld+json');
+    // BlogPosting 타입
+    expect(content).toContain('"BlogPosting"');
+    // description 주입
+    expect(content).toContain('"SEO 설명 텍스트"');
+    // inLanguage 주입
+    expect(content).toContain('"inLanguage"');
+    expect(content).toContain('"ko"');
+    // keywords 주입
+    expect(content).toContain('"keywords"');
+    expect(content).toContain('태그1');
+  });
+
   it('Scenario 10 (5/25 RC): attempt 1 schema OK + revision_needed soft-pass-able + attempt 2 schema fail → salvage attempt 1', async () => {
     // 5/25 TS 가고시마 evidence: attempt 1 = schema OK + editor revision_needed score=79 (≥ SOFT_PASS_THRESHOLD 70),
     // attempt 2 = writer LLM drift (5 fields missing) → 기존 코드는 throw 가 soft-pass fallback 앞에서 발생해 영구 실패.

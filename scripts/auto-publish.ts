@@ -354,7 +354,7 @@ async function publishToPlatform(
   const faqItems = (draft.faq_schema as FaqItem[] | undefined ?? []).filter(
     (f): f is FaqItem => typeof f?.question === 'string' && typeof f?.answer === 'string',
   );
-  const contentWithSchema = injectJsonLd(draft.content_html, draft.title, niche, scheduledFor, faqItems);
+  const contentWithSchema = injectJsonLd(draft.content_html, draft.title, niche, scheduledFor, faqItems, draft.meta_description, draft.labels);
 
   return bloggerPublish(
     niche,
@@ -406,11 +406,13 @@ function injectJsonLd(
   niche: Niche,
   scheduledFor: Date,
   faqSchema: FaqItem[],
+  metaDescription?: string,
+  labels?: string[],
 ): string {
   const meta = NICHE_SITE_META[niche];
   const dateIso = scheduledFor.toISOString();
 
-  const articleSchema = {
+  const articleSchema: Record<string, unknown> = {
     '@context': 'https://schema.org',
     '@type': 'BlogPosting',
     headline: title,
@@ -430,7 +432,11 @@ function injectJsonLd(
       '@type': 'WebPage',
       '@id': meta.siteUrl,
     },
+    inLanguage: 'ko',
   };
+
+  if (metaDescription) articleSchema.description = metaDescription;
+  if (labels && labels.length > 0) articleSchema.keywords = labels.join(', ');
 
   const schemas: object[] = [articleSchema];
 
