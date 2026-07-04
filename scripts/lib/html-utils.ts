@@ -15,7 +15,7 @@ import type { ImageResult } from '../../src/lib/images';
  * 둘 다 신뢰 불가. 한글 따옴표/꺾쇠 등으로 attribute injection 또는 broken HTML 방지.
  */
 export function escAttr(s: string): string {
-  return s
+  return (s ?? '')
     .replace(/&/g, '&amp;')
     .replace(/"/g, '&quot;')
     .replace(/</g, '&lt;')

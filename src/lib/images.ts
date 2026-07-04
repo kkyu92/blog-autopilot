@@ -73,6 +73,7 @@ async function tryPixabay(
 export async function fetchForSlots(slots: ImageSlot[]): Promise<ImageResult[]> {
   return Promise.all(
     slots.map(async (slot) => {
+      const safeAltText = slot.alt_text ?? '';
       const pexels = await tryPexels(slot.search_query);
       if (pexels) {
         return {
@@ -80,7 +81,7 @@ export async function fetchForSlots(slots: ImageSlot[]): Promise<ImageResult[]> 
           image_url: pexels.url,
           photographer: pexels.photographer,
           source: 'pexels' as const,
-          alt_text: slot.alt_text,
+          alt_text: safeAltText,
         };
       }
 
@@ -91,7 +92,7 @@ export async function fetchForSlots(slots: ImageSlot[]): Promise<ImageResult[]> 
           image_url: pixabay.url,
           photographer: pixabay.photographer,
           source: 'pixabay' as const,
-          alt_text: slot.alt_text,
+          alt_text: safeAltText,
         };
       }
 
@@ -100,7 +101,7 @@ export async function fetchForSlots(slots: ImageSlot[]): Promise<ImageResult[]> 
         image_url: PLACEHOLDER_URL,
         photographer: null,
         source: 'placeholder' as const,
-        alt_text: slot.alt_text,
+        alt_text: safeAltText,
       };
     }),
   );
