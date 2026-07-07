@@ -23,9 +23,9 @@ export interface WellnessSignal {
 const FETCH_TIMEOUT_MS = 8000;
 
 const FEEDS = {
-  healthChosun: 'http://health.chosun.com/site/data/feed_rss.xml',
-  medipana: 'https://www.medipana.com/rss.asp',
-  koreaPolicy: 'https://www.korea.kr/rss/policy.xml',
+  healthChosun: `https://news.google.com/rss/search?q=${encodeURIComponent('웰빙 OR 건강습관 OR 다이어트 OR 수면건강 OR 스트레스관리')}&hl=ko&gl=KR&ceid=KR:ko`,
+  medipana: `https://news.google.com/rss/search?q=${encodeURIComponent('제약 OR 바이오 OR 의료기기 OR 임상시험 OR 신약')}&hl=ko&gl=KR&ceid=KR:ko`,
+  koreaPolicy: `https://news.google.com/rss/search?q=${encodeURIComponent('건강보험 OR 보건복지부 OR 질병관리청 OR 의료정책')}&hl=ko&gl=KR&ceid=KR:ko`,
   googleNewsHealth: `https://news.google.com/rss/search?q=${encodeURIComponent('건강 OR 의료 OR 영양 OR 운동 OR 질환')}&hl=ko&gl=KR&ceid=KR:ko`,
   googleNewsMedical: `https://news.google.com/rss/search?q=${encodeURIComponent('약 OR 처방 OR 치료 OR 백신 OR 면역')}&hl=ko&gl=KR&ceid=KR:ko`,
 };
