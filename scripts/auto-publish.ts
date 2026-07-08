@@ -242,8 +242,14 @@ async function writeAndReview(
       const presentKeys = Object.keys(parsed).slice(0, 10).join(',');
       console.warn(`[${niche}] writer attempt ${attempt} parsed keys: [${presentKeys || '(empty)'}]`);
       if (attempt < 2) {
-        const feedback = `[CRITICAL SCHEMA FAILURE — final retry] Previous response was rejected because it omitted required field(s): ${missingFields.join(', ')}. Your next JSON MUST include ALL of: title, slug, meta_description, content_html, word_count, image_slots, chart_slots, faq_schema, keyword. Begin response with {"title": "..." and emit the COMPLETE WriterDraft object. If any required field is missing or empty, the entire slot is permanently discarded.`;
-        console.warn(`[${niche}] writer attempt ${attempt} schema fail: missing ${missingFields.join(',')} — retry with revision_feedback`);
+        // 7/9 fix: ALL required fields missing = LLM returned error object, not partial draft.
+        // Rule 19 (added 7/8) likely caused LLM to refuse writing due to "no sourced numbers" — but
+        // Rule 16 fallback + hedging expressions IS compliant with Rule 19. Spell this out explicitly.
+        const allMissing = missingFields.length === REQUIRED_DRAFT_FIELDS.length;
+        const feedback = allMissing
+          ? `[CRITICAL: ERROR OBJECT DETECTED — final retry] Your previous response returned a non-draft JSON (keys: [${presentKeys || 'empty'}]). You likely returned {"error": "..."} instead of using the Rule 16 fallback strategy. IMPORTANT: Rule 19 does NOT justify returning an error object. Per Rule 16, when specific data for "${keyword}" is unavailable, use a fallback angle: (1) 입지·교통 분석형 — ${keyword} 단지 위치·교통·인프라 + 인천 부동산 시장 동향, (2) 청약 전략 가이드형 — 1순위 자격·가점·당첨 전략 가이드, (3) 지역 시장 현황형 — 해당 구·동 시세 동향 + 전망. All unknown numbers MUST use hedging: '약 ○○가구 규모(업계 추정)', '예상 분양가 X억대(시장 관측)' — this satisfies Rule 19. Your response MUST begin with {"title": " and include ALL required fields: title, slug, meta_description, content_html (1800+ words), word_count, image_slots, chart_slots, faq_schema, keyword.`
+          : `[CRITICAL SCHEMA FAILURE — final retry] Previous response was rejected because it omitted required field(s): ${missingFields.join(', ')}. Your next JSON MUST include ALL of: title, slug, meta_description, content_html, word_count, image_slots, chart_slots, faq_schema, keyword. Begin response with {"title": "..." and emit the COMPLETE WriterDraft object. If any required field is missing or empty, the entire slot is permanently discarded.`;
+        console.warn(`[${niche}] writer attempt ${attempt} schema fail: missing ${missingFields.join(',')}${allMissing ? ' (ALL — error object suspected)' : ''} — retry with revision_feedback`);
         lastFeedback = feedback;
         continue;
       }
