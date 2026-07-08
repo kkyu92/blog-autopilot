@@ -226,7 +226,9 @@ export async function review(input: EditorReviewInput): Promise<EditorReviewResu
     // (_resume_note + html_part2) 으로 반환 — review 자체가 incomplete 상태로 보아야 함. throw
     // 대신 revision_needed 처리해서 writeAndReview attempt 2에서 재시도 (5/2 flat-final_meta
     // drift 패밀리와 동일 회복 메커니즘).
-    const CHUNK_PATTERN_KEYS = ['_resume_note', '_continue', 'html_part1', 'html_part2', 'html_part3'];
+    // 7/9 issue #353 AS 부산 재개발 재건축 evidence: LLM이 final_html_remaining 단일 키만 반환하는
+    // 새 청크 드리프트 — 동일 revision_needed fallback으로 재시도 유도.
+    const CHUNK_PATTERN_KEYS = ['_resume_note', '_continue', 'html_part1', 'html_part2', 'html_part3', 'final_html_remaining'];
     if (CHUNK_PATTERN_KEYS.some((k) => k in p)) return 'revision_needed';
     throw new Error(
       `editor: missing status/verdict (raw keys: ${Object.keys(p).join(',')})`,
