@@ -1,8 +1,16 @@
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { gte } from 'drizzle-orm';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { callClaude } from './llm';
 import { publishedPosts } from './schema';
 import type { Niche } from './schema';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const PROMPT_PATH = path.resolve(__dirname, '../../prompts/agents/semantic-dedup.md');
+const SYSTEM_PROMPT = fs.readFileSync(PROMPT_PATH, 'utf-8');
 
 export interface SemanticDedupCandidate {
   niche: Niche;
@@ -28,18 +36,6 @@ export interface SemanticDedupResult {
 }
 
 type DrizzleDB = BetterSQLite3Database<Record<string, unknown>>;
-
-const SYSTEM_PROMPT = `당신은 블로그 키워드 중복 판별기입니다. 신규 후보 키워드와 최근 발행된 키워드 목록을 비교해서 의미상 동일 토픽인 쌍을 찾아주세요.
-
-판별 기준:
-- **지명/고유명사 + 핵심 토픽 일치 시 sub-angle 변형 무관 무조건 중복** (4/28 사고 케이스: "여의도 재건축 추진 현황 2026" vs "여의도 재건축 현황 맨해튼 벨트 전망" → 중복. 둘 다 "여의도 재건축" 동일 토픽이고 "추진 현황" vs "맨해튼 벨트 전망"은 sub-angle 변형. SEO cannibalization + 동일 독자 검색 의도 → 무조건 차단). "강남 재건축" vs "강남 재건축 투자 포인트" 도 중복.
-- 같은 핵심 토픽 + 같은 각도/접근 = 중복 (예: "춘곤증 극복 방법 5가지" vs "춘곤증 극복법" → 중복)
-- 같은 핵심 토픽이지만 명확히 다른 query intent = 중복 아님 (예: "황금연휴 여행" [여행 계획] vs "황금연휴 항공권 특가" [구매 의도] → 다른 의도 → 중복 아님). 단, sub-angle 변형(예: 시점·각도·범위 한정 수식어 추가)은 다른 의도가 아니므로 위 지명+토픽 룰 적용.
-- 다른 토픽이지만 상위 카테고리 공유 = 중복 아님 (예: "꽃가루 알레르기" vs "알레르기 비염" → 중복 아님. 알레르기 종류 자체가 다름)
-- 한자어 ↔ 외래어 동의어 인지 (예: "황금연휴" = "골든위크", "한미정상회담" = "한미 서밋")
-- niche 다르면 무조건 다른 토픽 (비교 자체 안 함)
-
-같은 niche 안에서만 비교. **지명/고유명사+토픽 일치 케이스는 확신 없어도 중복으로 판정** (false positive 위험 < cannibalization 위험). 그 외는 확신 없으면 중복 아님.`;
 
 const RESPONSE_FORMAT_HINT = `
 출력 형식 (JSON only):
