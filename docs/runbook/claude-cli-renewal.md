@@ -7,7 +7,14 @@
 영향: auto-publish 워크플로 시작 시 healthcheck가 Claude CLI 응답을 기다리는 경우,
 인증 만료 시 cron이 healthcheck fail → 전체 publish skip 위험.
 
-## 즉시 조치 (2분)
+## 주의: weekly/usage limit 은 다른 케이스
+
+stdout/stderr 에 `weekly limit` / `usage limit` 이 있으면 **인증 만료가 아니라 사용량 한도**.
+relogin 해도 소용 없음 — 메시지의 reset 시각까지 대기만 가능.
+(2026-07-24, 07-25 이틀 연속 이 케이스를 인증 실패로 오분류해 critical 알림 오발화 — 이후
+token-monitor-claude.yml 이 이 패턴을 감지해 별도 warning 심각도로 분리 dispatch)
+
+## 즉시 조치 (2분, 인증 만료인 경우만)
 
 1. **home-mbp 터미널에서 재로그인**
    ```bash

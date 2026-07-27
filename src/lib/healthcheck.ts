@@ -122,6 +122,7 @@ export function isTransient(reason?: string): boolean {
   if (reason.includes('missing')) return false;        // env 누락 — 즉시 fail
   if (/HTTP 4\d\d/i.test(reason)) return false;        // 401/403/400 등 영구
   if (/oauth|unauthorized/i.test(reason)) return false; // 토큰 만료/거부
+  if (/weekly limit|usage limit/i.test(reason)) return false; // 사용량 한도 — retry 무의미, reset 대기만 가능
   return true;                                          // 5xx / timeout / network 등
 }
 
