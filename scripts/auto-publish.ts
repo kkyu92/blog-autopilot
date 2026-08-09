@@ -888,17 +888,21 @@ export async function runMain(argv: string[] = process.argv): Promise<number> {
 
   // Step 1: healthcheck
   // claude-cli는 healthcheck 10s timeout에서 자주 fail하지만 slot-level (~18min)에서는 정상.
+  // Pixabay/Pexels도 마찬가지 — images.ts fetchForSlots()가 Pexels→Pixabay→placeholder
+  // fallback을 이미 갖고 있어 둘 다 죽어도 발행은 막히지 않음 (8/10 issue #416 root cause:
+  // Pixabay 일시적 timeout이 9 슬롯 전체를 차단).
   // 발행 자체를 막지 않고 WARN만 — lesson bb81938 회귀 4/28-17:56 UTC schedule 차단 root cause.
+  const WARN_ONLY_SERVICES = new Set(['claude-cli', 'Pixabay', 'Pexels']);
   const hc = await runAll();
   const failed = hc.results.filter(r => !r.ok);
-  const claudeCliFailed = failed.filter(r => r.service === 'claude-cli');
-  const blockingFailed = failed.filter(r => r.service !== 'claude-cli');
+  const warnOnlyFailed = failed.filter(r => WARN_ONLY_SERVICES.has(r.service));
+  const blockingFailed = failed.filter(r => !WARN_ONLY_SERVICES.has(r.service));
   console.log(
     `[auto-publish] healthcheck: ${blockingFailed.length === 0 ? 'PASS' : 'FAIL'}` +
-      (claudeCliFailed.length > 0 ? ' (claude-cli: WARN — proceeding)' : ''),
+      (warnOnlyFailed.length > 0 ? ` (${warnOnlyFailed.map(w => w.service).join(', ')}: WARN — proceeding)` : ''),
   );
-  for (const w of claudeCliFailed) {
-    console.warn(`  WARN ${w.service}: ${w.reason ?? 'unknown reason'} — slot-level retry will handle`);
+  for (const w of warnOnlyFailed) {
+    console.warn(`  WARN ${w.service}: ${w.reason ?? 'unknown reason'} — fallback/retry will handle`);
   }
   if (blockingFailed.length > 0) {
     for (const f of blockingFailed) {

@@ -332,6 +332,45 @@ describe('auto-publish.ts integration (7 시나리오)', () => {
     expect(rows).toHaveLength(0);
   });
 
+  it('Scenario 5b: Pixabay/Pexels healthcheck fail (일시적 timeout) → WARN, 발행 진행 (issue #416 root cause)', async () => {
+    const { runAll } = await import('../../src/lib/healthcheck');
+    const { pickQueue } = await import('../../src/lib/trends');
+    const { checkAndResolve } = await import('../../src/lib/dedup');
+    const { callClaude } = await import('../../src/lib/llm');
+    const { review } = await import('../../src/lib/editor');
+    const { fetchForSlots } = await import('../../src/lib/images');
+    const { publishScheduled: bloggerPublish } = await import('../../src/lib/blogger');
+
+    vi.mocked(runAll).mockResolvedValue({
+      allPassed: false,
+      results: [
+        { service: 'Pixabay', ok: false, reason: 'AbortError: This operation was aborted (after 3 attempts)' },
+        { service: 'Pexels', ok: false, reason: 'AbortError: This operation was aborted (after 3 attempts)' },
+        { service: 'Blogger-HS', ok: true },
+      ],
+    });
+    vi.mocked(pickQueue).mockResolvedValue([mockCandidate()]);
+    vi.mocked(checkAndResolve).mockResolvedValue({ action: 'pass', reason: '신규' });
+    vi.mocked(callClaude).mockResolvedValue(mockDraftJson());
+    vi.mocked(review).mockResolvedValue({ verdict: 'pass', score: 90 });
+    vi.mocked(fetchForSlots).mockResolvedValue(mockImageResults());
+    vi.mocked(bloggerPublish).mockResolvedValue({
+      externalId: 'wp-789',
+      externalUrl: 'https://ws.example.com/test-slug',
+      scheduledAt: '2026-04-27T00:00:00Z',
+    });
+
+    const { runMain } = await import('../auto-publish');
+    const code = await runMain(['node', 'auto-publish.ts', '--niche=HS', '--slot-count=1']);
+
+    expect(code).toBe(0);
+    expect(pickQueue).toHaveBeenCalled();
+
+    const rows = testDb.select().from(publishedPosts).all();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].status).toBe('published');
+  });
+
   it('Scenario 6: 모든 이미지 fail → placeholder 발행', async () => {
     const { pickQueue } = await import('../../src/lib/trends');
     const { checkAndResolve } = await import('../../src/lib/dedup');
