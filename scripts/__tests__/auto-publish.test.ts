@@ -801,4 +801,40 @@ describe('auto-publish.ts integration (7 시나리오)', () => {
     // bloggerPublish 2회 호출 확인 (slug 충돌 회피는 DB INSERT 측 책임 — Blogger API에는 slug 필드 없음)
     expect(bloggerPublish).toHaveBeenCalledTimes(2);
   });
+
+  it('Scenario 12 (issue #417 RC): 한 niche pickQueue throw → 다른 niche는 정상 발행 (0/N 재발 방지)', async () => {
+    const { pickQueue } = await import('../../src/lib/trends');
+    const { checkAndResolve } = await import('../../src/lib/dedup');
+    const { callClaude } = await import('../../src/lib/llm');
+    const { review } = await import('../../src/lib/editor');
+    const { fetchForSlots } = await import('../../src/lib/images');
+    const { publishScheduled: bloggerPublish } = await import('../../src/lib/blogger');
+
+    // AS niche's LLM response is malformed (e.g. missing priority_score) → pickQueue rejects.
+    // HS/TS must still publish instead of the whole run dying with 0 posts.
+    vi.mocked(pickQueue).mockImplementation(async ({ niche }) => {
+      if (niche === 'AS') throw new Error('KeywordCandidate.priority_score required');
+      return [mockCandidate({ keyword: `${niche}-kw` })];
+    });
+    vi.mocked(checkAndResolve).mockResolvedValue({ action: 'pass', reason: '신규' });
+    vi.mocked(callClaude).mockResolvedValue(mockDraftJson());
+    vi.mocked(review).mockResolvedValue({ verdict: 'pass', score: 90 });
+    vi.mocked(fetchForSlots).mockResolvedValue(mockImageResults());
+    vi.mocked(bloggerPublish).mockResolvedValue({
+      externalId: 'wp-999',
+      externalUrl: 'https://ws.example.com/test-slug',
+      scheduledAt: '2026-04-27T00:00:00Z',
+    });
+
+    const { runMain } = await import('../auto-publish');
+    const code = await runMain(['node', 'auto-publish.ts', '--niche=all', '--slot-count=1']);
+
+    expect(code).toBe(0);
+    expect(pickQueue).toHaveBeenCalledTimes(3); // HS, TS, AS all attempted
+
+    const rows = testDb.select().from(publishedPosts).all();
+    expect(rows).toHaveLength(2); // HS + TS published; AS skipped
+    expect(rows.map((r) => r.niche).sort()).toEqual(['HS', 'TS']);
+    expect(rows.every((r) => r.status === 'published')).toBe(true);
+  });
 });

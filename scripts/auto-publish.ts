@@ -90,7 +90,16 @@ async function pickAllQueues(niches: Niche[], slotCount: number): Promise<NicheQ
   const queues: NicheQueue[] = [];
   for (const niche of niches) {
     const recentKeywords = (recentByNiche[niche] ?? []).map((r) => r.keyword);
-    const keywords = await pickQueue({ niche, count: candidateCount, recent_published_keywords: recentKeywords });
+    let keywords: KeywordCandidate[];
+    try {
+      keywords = await pickQueue({ niche, count: candidateCount, recent_published_keywords: recentKeywords });
+    } catch (err) {
+      // 8/11 사고 root cause: 한 niche의 LLM 응답이 malformed(priority_score 누락 등)면
+      // pickQueue가 throw → 이미 성공한 다른 niche 큐까지 통째로 버려지고 0/N 발행되는 사고 재발.
+      // niche 단위로 격리해 나머지 niche는 정상 발행되도록 함.
+      console.warn(`[auto-publish] WARN ${niche} pickQueue failed, skipping niche: ${errMessage(err)}`);
+      continue;
+    }
     console.log(`[auto-publish] queue ${niche}: ${keywords.length} keywords (recent_inject: ${recentKeywords.length})`);
     if (keywords.length === 0) {
       console.warn(`[auto-publish] WARN ${niche} queue empty, skipping niche`);
