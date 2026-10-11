@@ -41,7 +41,7 @@ GitHub Actions 화면 또는 `gh` CLI로 즉시 실행 가능:
 ```bash
 gh workflow run auto-publish.yml \
   --field niche=all \
-  --field slot_count=4 \
+  --field slot_count=2 \
   --field mode=normal \
   --field runner=home
 ```
@@ -49,7 +49,7 @@ gh workflow run auto-publish.yml \
 | 파라미터 | 옵션 | 기본값 |
 |---|---|---|
 | `niche` | `all` / `HS` / `TS` / `AS` | `all` |
-| `slot_count` | 숫자 | `4` |
+| `slot_count` | 숫자 | `2` (2026-10-10 GSC 색인 대응으로 4→2 축소, §10 참조) |
 | `mode` | `normal` / `healthcheck-only` | `normal` |
 | `runner` | `home` / `office` | `home` |
 
@@ -60,9 +60,9 @@ gh workflow run auto-publish.yml \
 | 항목 | 값 |
 |---|---|
 | 대상 niche 수 | 3개 (HS, TS, AS) |
-| niche당 슬롯 수 | 4개 |
-| **일일 목표 발행 수** | **12건** |
-| 예약 발행 시간대 (KST) | 09:00 / 11:00 / 13:00 / 15:00 / 17:00 / 19:00 중 4개 배정 |
+| niche당 슬롯 수 | 2개 (2026-10-10 이전엔 4개 — §10 참조) |
+| **일일 목표 발행 수** | **6건** (2026-10-10 이전엔 12건) |
+| 예약 발행 시간대 (KST) | 09:00 / 11:00 / 13:00 / 15:00 / 17:00 / 19:00 중 2개 배정 |
 
 슬롯 시간은 niche 내에서 중복 없이 배정. cron이 새벽 01:17에 실행돼도 발행 예약 시각은 당일 낮~저녁.
 
@@ -173,7 +173,7 @@ RSS 소스 오류는 키워드 트렌드 수집 실패일 뿐 발행 중단 아�
 | `src/lib/editor.ts` | 품질 검토 AI |
 | `prompts/agents/content-writer.md` | 글 작성 프롬프트 |
 
-## 2026-10-10 GSC 0% 색인 대응
+## 10. 2026-10-10 GSC 0% 색인 대응
 
 **증상:** AS/HS/TS 3개 사이트 합계 1199페이지 sitemap 제출, 색인 0건 (5개월째).
 URL Inspection: 홈페이지조차 `"Crawled - currently not indexed"`, 신규 글은
