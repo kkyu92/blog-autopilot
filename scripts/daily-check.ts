@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 // scripts/daily-check.ts
-// KST 07:17 cron — 오늘 12게시물 달성 검증. 부족 시 자동 보충 dispatch (fire-and-forget). RC 분석 + 리포트.
+// KST 07:17 cron — 오늘 6게시물 달성 검증. 부족 시 자동 보충 dispatch (fire-and-forget). RC 분석 + 리포트.
 //
 // flow:
 //   1. 오늘 KST cron run 찾기 (auto-publish.yml, started ~6h ago)
@@ -13,10 +13,11 @@ import { execSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const NICHES = ['HS', 'TS', 'AS'] as const;
-const TARGET_PER_NICHE = 4;
-const TARGET_TOTAL = 12;
+export const TARGET_PER_NICHE = 2;
+export const TARGET_TOTAL = 6;
 const MAX_FILL_DISPATCHES = 3;
 
 type Niche = (typeof NICHES)[number];
@@ -261,8 +262,18 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((err) => {
-  console.error(`[daily-check] fatal: ${(err as Error).message}`);
-  console.error((err as Error).stack);
-  process.exit(1);
-});
+const isMain = (() => {
+  try {
+    return process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
+  } catch {
+    return false;
+  }
+})();
+
+if (isMain) {
+  main().catch((err) => {
+    console.error(`[daily-check] fatal: ${(err as Error).message}`);
+    console.error((err as Error).stack);
+    process.exit(1);
+  });
+}
