@@ -16,37 +16,96 @@ const STANDARD_DISCLAIMER_HTML =
   '<p style="margin:0;">이 글은 정보 제공 목적이며, 전문 의료/법률/세무 상담을 대체하지 않습니다. 정책·법안·의학 정보는 변경될 수 있으므로 최신 정보를 직접 확인하시기 바랍니다.</p>' +
   '</div>';
 
-const AUTHOR_BOX_BY_NICHE: Record<'HS' | 'TS' | 'AS', string> = {
-  AS:
-    '<div style="margin-top:40px;padding:20px 24px;background:#F8F9FA;border-radius:8px;border:1px solid #E8E8E8;">' +
-    '<p style="margin:0 0 4px 0;font-size:13px;font-weight:600;color:#888888;letter-spacing:0.04em;">글쓴이</p>' +
-    '<p style="margin:0 0 6px 0;font-size:15px;font-weight:700;color:#1A1A1A;">시그널 에디터 | apt-signal</p>' +
-    '<p style="margin:0;font-size:14px;color:#555555;line-height:1.7;">수도권 아파트 분양·청약 시장을 분석하는 부동산 정보 블로그 apt-signal 운영자입니다. ' +
-    '<a href="https://rt.molit.go.kr" target="_blank" rel="noopener noreferrer" style="color:#4285F4;">국토교통부 실거래가 데이터</a>와 ' +
-    '<a href="https://www.applyhome.co.kr" target="_blank" rel="noopener noreferrer" style="color:#4285F4;">청약홈 통계</a>를 기반으로 콘텐츠를 작성합니다.</p>' +
-    '</div>',
-  HS:
-    '<div style="margin-top:40px;padding:20px 24px;background:#F8F9FA;border-radius:8px;border:1px solid #E8E8E8;">' +
-    '<p style="margin:0 0 4px 0;font-size:13px;font-weight:600;color:#888888;letter-spacing:0.04em;">글쓴이</p>' +
-    '<p style="margin:0 0 6px 0;font-size:15px;font-weight:700;color:#1A1A1A;">헬스 에디터 | health-signal</p>' +
-    '<p style="margin:0;font-size:14px;color:#555555;line-height:1.7;">' +
-    '<a href="https://www.mohw.go.kr" target="_blank" rel="noopener noreferrer" style="color:#4285F4;">보건복지부</a>·' +
-    '<a href="https://www.kdca.go.kr" target="_blank" rel="noopener noreferrer" style="color:#4285F4;">질병관리청</a> 공식 가이드라인과 의학 연구를 기반으로 건강 정보를 큐레이션하는 health-signal 운영자입니다. ' +
-    '이 블로그의 콘텐츠는 전문가 상담을 대체하지 않으며, 정확한 정보 전달을 목표로 합니다.</p>' +
-    '</div>',
-  TS:
-    '<div style="margin-top:40px;padding:20px 24px;background:#F8F9FA;border-radius:8px;border:1px solid #E8E8E8;">' +
-    '<p style="margin:0 0 4px 0;font-size:13px;font-weight:600;color:#888888;letter-spacing:0.04em;">글쓴이</p>' +
-    '<p style="margin:0 0 6px 0;font-size:15px;font-weight:700;color:#1A1A1A;">트립 에디터 | trip-signal</p>' +
-    '<p style="margin:0;font-size:14px;color:#555555;line-height:1.7;">국내외 여행 정보와 실용적인 여행 팁을 큐레이션하는 trip-signal 운영자입니다. ' +
-    '<a href="https://www.visitkorea.or.kr" target="_blank" rel="noopener noreferrer" style="color:#4285F4;">한국관광공사</a> 공식 데이터와 직접 수집한 여행 정보를 바탕으로 콘텐츠를 제작합니다.</p>' +
-    '</div>',
+const AUTHOR_BOX_VARIANTS_BY_NICHE: Record<'HS' | 'TS' | 'AS', string[]> = {
+  AS: [
+    '<div data-author-box="AS" style="margin-top:40px;padding:20px 24px;background:#F8F9FA;border-radius:8px;border:1px solid #E8E8E8;">' +
+      '<p style="margin:0 0 4px 0;font-size:13px;font-weight:600;color:#888888;letter-spacing:0.04em;">글쓴이</p>' +
+      '<p style="margin:0 0 6px 0;font-size:15px;font-weight:700;color:#1A1A1A;">시그널 에디터 | apt-signal</p>' +
+      '<p style="margin:0;font-size:14px;color:#555555;line-height:1.7;">수도권 아파트 분양·청약 시장을 분석하는 부동산 정보 블로그 apt-signal 운영자입니다. ' +
+      '<a href="https://rt.molit.go.kr" target="_blank" rel="noopener noreferrer" style="color:#4285F4;">국토교통부 실거래가 데이터</a>와 ' +
+      '<a href="https://www.applyhome.co.kr" target="_blank" rel="noopener noreferrer" style="color:#4285F4;">청약홈 통계</a>를 기반으로 콘텐츠를 작성합니다.</p>' +
+      '</div>',
+    '<div data-author-box="AS" style="margin-top:40px;padding:20px 24px;background:#F8F9FA;border-radius:8px;border:1px solid #E8E8E8;">' +
+      '<p style="margin:0 0 4px 0;font-size:13px;font-weight:600;color:#888888;letter-spacing:0.04em;">글쓴이</p>' +
+      '<p style="margin:0 0 6px 0;font-size:15px;font-weight:700;color:#1A1A1A;">시그널 에디터 | apt-signal</p>' +
+      '<p style="margin:0;font-size:14px;color:#555555;line-height:1.7;">부동산 정보 블로그 apt-signal을 운영하며, 수도권 아파트 분양·청약 흐름을 꾸준히 정리하고 있습니다. ' +
+      '콘텐츠의 근거는 <a href="https://rt.molit.go.kr" target="_blank" rel="noopener noreferrer" style="color:#4285F4;">국토교통부 실거래가 데이터</a>와 ' +
+      '<a href="https://www.applyhome.co.kr" target="_blank" rel="noopener noreferrer" style="color:#4285F4;">청약홈 통계</a>입니다.</p>' +
+      '</div>',
+    '<div data-author-box="AS" style="margin-top:40px;padding:20px 24px;background:#F8F9FA;border-radius:8px;border:1px solid #E8E8E8;">' +
+      '<p style="margin:0 0 4px 0;font-size:13px;font-weight:600;color:#888888;letter-spacing:0.04em;">글쓴이</p>' +
+      '<p style="margin:0 0 6px 0;font-size:15px;font-weight:700;color:#1A1A1A;">시그널 에디터 | apt-signal</p>' +
+      '<p style="margin:0;font-size:14px;color:#555555;line-height:1.7;">apt-signal 운영자로서 수도권 아파트 분양가와 청약 경쟁률 변화를 꾸준히 추적합니다. ' +
+      '모든 수치는 <a href="https://rt.molit.go.kr" target="_blank" rel="noopener noreferrer" style="color:#4285F4;">국토교통부 실거래가 공개 데이터</a>와 ' +
+      '<a href="https://www.applyhome.co.kr" target="_blank" rel="noopener noreferrer" style="color:#4285F4;">청약홈 통계</a>에서 가져옵니다.</p>' +
+      '</div>',
+  ],
+  HS: [
+    '<div data-author-box="HS" style="margin-top:40px;padding:20px 24px;background:#F8F9FA;border-radius:8px;border:1px solid #E8E8E8;">' +
+      '<p style="margin:0 0 4px 0;font-size:13px;font-weight:600;color:#888888;letter-spacing:0.04em;">글쓴이</p>' +
+      '<p style="margin:0 0 6px 0;font-size:15px;font-weight:700;color:#1A1A1A;">헬스 에디터 | health-signal</p>' +
+      '<p style="margin:0;font-size:14px;color:#555555;line-height:1.7;">' +
+      '<a href="https://www.mohw.go.kr" target="_blank" rel="noopener noreferrer" style="color:#4285F4;">보건복지부</a>·' +
+      '<a href="https://www.kdca.go.kr" target="_blank" rel="noopener noreferrer" style="color:#4285F4;">질병관리청</a> 공식 가이드라인과 의학 연구를 기반으로 건강 정보를 큐레이션하는 health-signal 운영자입니다. ' +
+      '이 블로그의 콘텐츠는 전문가 상담을 대체하지 않으며, 정확한 정보 전달을 목표로 합니다.</p>' +
+      '</div>',
+    '<div data-author-box="HS" style="margin-top:40px;padding:20px 24px;background:#F8F9FA;border-radius:8px;border:1px solid #E8E8E8;">' +
+      '<p style="margin:0 0 4px 0;font-size:13px;font-weight:600;color:#888888;letter-spacing:0.04em;">글쓴이</p>' +
+      '<p style="margin:0 0 6px 0;font-size:15px;font-weight:700;color:#1A1A1A;">헬스 에디터 | health-signal</p>' +
+      '<p style="margin:0;font-size:14px;color:#555555;line-height:1.7;">health-signal을 운영하며 ' +
+      '<a href="https://www.mohw.go.kr" target="_blank" rel="noopener noreferrer" style="color:#4285F4;">보건복지부</a>·' +
+      '<a href="https://www.kdca.go.kr" target="_blank" rel="noopener noreferrer" style="color:#4285F4;">질병관리청</a>의 공식 가이드라인과 의학 연구 자료를 바탕으로 건강 정보를 정리합니다. ' +
+      '전문가 상담을 대신할 수 없다는 점을 분명히 밝힙니다.</p>' +
+      '</div>',
+    '<div data-author-box="HS" style="margin-top:40px;padding:20px 24px;background:#F8F9FA;border-radius:8px;border:1px solid #E8E8E8;">' +
+      '<p style="margin:0 0 4px 0;font-size:13px;font-weight:600;color:#888888;letter-spacing:0.04em;">글쓴이</p>' +
+      '<p style="margin:0 0 6px 0;font-size:15px;font-weight:700;color:#1A1A1A;">헬스 에디터 | health-signal</p>' +
+      '<p style="margin:0;font-size:14px;color:#555555;line-height:1.7;">health-signal 운영자입니다. ' +
+      '<a href="https://www.kdca.go.kr" target="_blank" rel="noopener noreferrer" style="color:#4285F4;">질병관리청</a>·' +
+      '<a href="https://www.mohw.go.kr" target="_blank" rel="noopener noreferrer" style="color:#4285F4;">보건복지부</a> 발표 자료와 의학 연구 결과를 교차 확인해 건강 정보를 전달하며, 실제 진료·상담을 대체하지 않습니다.</p>' +
+      '</div>',
+  ],
+  TS: [
+    '<div data-author-box="TS" style="margin-top:40px;padding:20px 24px;background:#F8F9FA;border-radius:8px;border:1px solid #E8E8E8;">' +
+      '<p style="margin:0 0 4px 0;font-size:13px;font-weight:600;color:#888888;letter-spacing:0.04em;">글쓴이</p>' +
+      '<p style="margin:0 0 6px 0;font-size:15px;font-weight:700;color:#1A1A1A;">트립 에디터 | trip-signal</p>' +
+      '<p style="margin:0;font-size:14px;color:#555555;line-height:1.7;">국내외 여행 정보와 실용적인 여행 팁을 큐레이션하는 trip-signal 운영자입니다. ' +
+      '<a href="https://www.visitkorea.or.kr" target="_blank" rel="noopener noreferrer" style="color:#4285F4;">한국관광공사</a> 공식 데이터와 직접 수집한 여행 정보를 바탕으로 콘텐츠를 제작합니다.</p>' +
+      '</div>',
+    '<div data-author-box="TS" style="margin-top:40px;padding:20px 24px;background:#F8F9FA;border-radius:8px;border:1px solid #E8E8E8;">' +
+      '<p style="margin:0 0 4px 0;font-size:13px;font-weight:600;color:#888888;letter-spacing:0.04em;">글쓴이</p>' +
+      '<p style="margin:0 0 6px 0;font-size:15px;font-weight:700;color:#1A1A1A;">트립 에디터 | trip-signal</p>' +
+      '<p style="margin:0;font-size:14px;color:#555555;line-height:1.7;">trip-signal을 운영하며 국내외 여행지 정보와 실용 팁을 정리합니다. ' +
+      '<a href="https://www.visitkorea.or.kr" target="_blank" rel="noopener noreferrer" style="color:#4285F4;">한국관광공사</a> 공식 데이터와 현지 정보를 교차 확인해 콘텐츠를 만듭니다.</p>' +
+      '</div>',
+    '<div data-author-box="TS" style="margin-top:40px;padding:20px 24px;background:#F8F9FA;border-radius:8px;border:1px solid #E8E8E8;">' +
+      '<p style="margin:0 0 4px 0;font-size:13px;font-weight:600;color:#888888;letter-spacing:0.04em;">글쓴이</p>' +
+      '<p style="margin:0 0 6px 0;font-size:15px;font-weight:700;color:#1A1A1A;">트립 에디터 | trip-signal</p>' +
+      '<p style="margin:0;font-size:14px;color:#555555;line-height:1.7;">여행 정보 블로그 trip-signal 운영자입니다. ' +
+      '<a href="https://www.visitkorea.or.kr" target="_blank" rel="noopener noreferrer" style="color:#4285F4;">한국관광공사</a> 통계와 직접 조사한 여행 정보를 바탕으로, 실제 도움이 되는 여행 팁을 전달하려 합니다.</p>' +
+      '</div>',
+  ],
 };
 
 // 5/4 ADMIN view 검증: factcheck "표준 wording 부재" soft-warn은 본문에 의미상 동등한 다른 wording의
 // disclaimer가 있어도 발생. broader idempotent check — '면책 고지' / '면책고지' (이모지 변형 포함) 매칭이면 skip.
 const DISCLAIMER_PATTERNS = ['면책 고지', '면책고지'];
-const AUTHOR_BOX_PATTERN = 'apt-signal 운영자|health-signal 운영자|trip-signal 운영자';
+
+// 10/10 GSC 0% 색인 대응: author box 문구를 니치당 3종 로테이션하면서 idempotent 체크가
+// 특정 한국어 문구 매칭에 의존하면 variant마다 다시 손봐야 함. 고정 HTML 마커로 전환.
+function authorBoxMarker(niche: 'HS' | 'TS' | 'AS'): string {
+  return `data-author-box="${niche}"`;
+}
+
+// djb2 — seed 문자열(글 제목)을 니치당 3개 variant 중 하나로 결정론적으로 매핑.
+// 암호화 용도 아님, 단순 분산 목적이라 djb2로 충분 (attempt 1/2 retry에서도 동일 제목이면 동일 variant).
+function hashToIndex(seed: string, length: number): number {
+  let hash = 5381;
+  for (let i = 0; i < seed.length; i++) {
+    hash = (hash * 33) ^ seed.charCodeAt(i);
+  }
+  return Math.abs(hash) % length;
+}
 
 function injectStandardDisclaimer(html: string): string {
   if (DISCLAIMER_PATTERNS.some((p) => html.includes(p))) return html; // idempotent
@@ -55,9 +114,11 @@ function injectStandardDisclaimer(html: string): string {
   return html.slice(0, lastDivIdx) + STANDARD_DISCLAIMER_HTML + html.slice(lastDivIdx);
 }
 
-function injectAuthorBox(html: string, niche: 'HS' | 'TS' | 'AS'): string {
-  if (new RegExp(AUTHOR_BOX_PATTERN).test(html)) return html; // idempotent
-  return html + AUTHOR_BOX_BY_NICHE[niche];
+export function injectAuthorBox(html: string, niche: 'HS' | 'TS' | 'AS', seed: string): string {
+  if (html.includes(authorBoxMarker(niche))) return html; // idempotent
+  const variants = AUTHOR_BOX_VARIANTS_BY_NICHE[niche];
+  const variant = variants[hashToIndex(seed, variants.length)];
+  return html + variant;
 }
 
 export interface EditorReviewInput {
@@ -124,7 +185,7 @@ export async function review(input: EditorReviewInput): Promise<EditorReviewResu
   let factcheckCriticalDescriptions: string[] = [];
 
   {
-    const injected = injectAuthorBox(draft.content_html, niche);
+    const injected = injectAuthorBox(draft.content_html, niche, draft.title);
     if (injected !== draft.content_html) {
       authorBoxInserted = true;
       modifiedHtml = injected;
@@ -168,7 +229,7 @@ export async function review(input: EditorReviewInput): Promise<EditorReviewResu
     if (fc.disclaimer_added && fc.modified_html) {
       // factcheck returned its own modified_html — re-inject author box on top if needed
       disclaimerInserted = true;
-      const withAuthorBox = injectAuthorBox(fc.modified_html, niche);
+      const withAuthorBox = injectAuthorBox(fc.modified_html, niche, draft.title);
       modifiedHtml = withAuthorBox;
     } else if (fc.verdict === 'needs_revision') {
       // 5/3~5/4 evidence (자연실험 9건 발행 중 AS 78/85/88 누락):

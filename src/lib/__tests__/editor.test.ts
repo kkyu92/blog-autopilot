@@ -643,3 +643,36 @@ describe('editor.review', () => {
     expect(result.verdict).toBe('revision_needed');
   });
 });
+
+describe('injectAuthorBox — 니치별 3종 로테이션', () => {
+  it('AS 니치: data-author-box="AS" 마커를 포함한 박스를 추가한다', async () => {
+    const { injectAuthorBox } = await import('../editor');
+    const result = injectAuthorBox('<p>본문</p>', 'AS', '청약 가점 계산법');
+    expect(result).toContain('data-author-box="AS"');
+    expect(result.startsWith('<p>본문</p>')).toBe(true);
+  });
+
+  it('이미 마커가 있으면 재주입하지 않는다 (idempotent, attempt 2 retry 대비)', async () => {
+    const { injectAuthorBox } = await import('../editor');
+    const once = injectAuthorBox('<p>본문</p>', 'HS', '숙면에 좋은 음식');
+    const twice = injectAuthorBox(once, 'HS', '숙면에 좋은 음식');
+    expect(twice).toBe(once);
+  });
+
+  it('서로 다른 제목(seed)이면 3종 중 2개 이상의 variant가 나와야 한다 (완전 동일 반복 방지)', async () => {
+    const { injectAuthorBox } = await import('../editor');
+    const seeds = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l'];
+    const variants = new Set(
+      seeds.map((seed) => injectAuthorBox('<p>본문</p>', 'TS', seed)),
+    );
+    expect(variants.size).toBeGreaterThan(1);
+  });
+
+  it('niche별로 variant 텍스트가 섞이지 않는다 (AS variant에 health-signal 문구 없음)', async () => {
+    const { injectAuthorBox } = await import('../editor');
+    const result = injectAuthorBox('<p>본문</p>', 'AS', 'any-seed');
+    expect(result).not.toContain('health-signal');
+    expect(result).not.toContain('trip-signal');
+    expect(result).toContain('apt-signal');
+  });
+});
